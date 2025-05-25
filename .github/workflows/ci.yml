@@ -241,7 +241,7 @@ jobs:
       - name: Checkout development Branch
         uses: actions/checkout@v4
         with:
-          ref: develop  # Ensure we are on development
+          ref: development  # Ensure we are on development
           fetch-depth: 0  # Fetch full history for git operations
 
       - name: Set Up Python
