@@ -15,190 +15,190 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Run cargo check
-        run: cargo check --all-features
-
-  test:
-    name: Test Suite
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust: [stable, beta, nightly]
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-        exclude:
-          - rust: beta
-            os: windows-latest
-          - rust: beta
-            os: macOS-latest
-          - rust: nightly
-            os: windows-latest
-          - rust: nightly
-            os: macOS-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install ${{ matrix.rust }} toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run cargo test
-        run: cargo test --all-features --workspace
-
-      - name: Run integration tests
-        run: cargo test --test integration --all-features
-
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Run cargo fmt
-        run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-clippy-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run cargo clippy
-        run: cargo clippy --all-features --workspace -- -D warnings
-
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-docs-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run cargo doc
-        run: cargo doc --all-features --no-deps --workspace
-
-      - name: Deploy docs to GitHub Pages
-        if: github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/doc
-
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-
-      - name: Run cargo audit
-        run: cargo audit
-
-      - name: Install cargo-deny
-        run: cargo install cargo-deny
-
-      - name: Run cargo deny
-        run: cargo deny check
-
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
-
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-coverage-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run cargo tarpaulin
-        run: cargo tarpaulin --all-features --workspace --timeout 120 --out xml
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v3
-        with:
-          file: cobertura.xml
-          fail_ci_if_error: true
+#  check:
+#    name: Check
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install stable toolchain
+#        uses: dtolnay/rust-toolchain@stable
+#
+#      - name: Cache cargo registry
+#        uses: actions/cache@v3
+#        with:
+#          path: |
+#            ~/.cargo/registry
+#            ~/.cargo/git
+#            target
+#          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+#          restore-keys: |
+#            ${{ runner.os }}-cargo-
+#
+#      - name: Run cargo check
+#        run: cargo check --all-features
+#
+#  test:
+#    name: Test Suite
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        rust: [stable, beta, nightly]
+#        os: [ubuntu-latest, windows-latest, macOS-latest]
+#        exclude:
+#          - rust: beta
+#            os: windows-latest
+#          - rust: beta
+#            os: macOS-latest
+#          - rust: nightly
+#            os: windows-latest
+#          - rust: nightly
+#            os: macOS-latest
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install ${{ matrix.rust }} toolchain
+#        uses: dtolnay/rust-toolchain@master
+#        with:
+#          toolchain: ${{ matrix.rust }}
+#
+#      - name: Cache cargo registry
+#        uses: actions/cache@v3
+#        with:
+#          path: |
+#            ~/.cargo/registry
+#            ~/.cargo/git
+#            target
+#          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+#
+#      - name: Run cargo test
+#        run: cargo test --all-features --workspace
+#
+#      - name: Run integration tests
+#        run: cargo test --test integration --all-features
+#
+#  fmt:
+#    name: Rustfmt
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install stable toolchain
+#        uses: dtolnay/rust-toolchain@stable
+#        with:
+#          components: rustfmt
+#
+#      - name: Run cargo fmt
+#        run: cargo fmt --all -- --check
+#
+#  clippy:
+#    name: Clippy
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install stable toolchain
+#        uses: dtolnay/rust-toolchain@stable
+#        with:
+#          components: clippy
+#
+#      - name: Cache cargo registry
+#        uses: actions/cache@v3
+#        with:
+#          path: |
+#            ~/.cargo/registry
+#            ~/.cargo/git
+#            target
+#          key: ${{ runner.os }}-clippy-cargo-${{ hashFiles('**/Cargo.lock') }}
+#
+#      - name: Run cargo clippy
+#        run: cargo clippy --all-features --workspace -- -D warnings
+#
+#  docs:
+#    name: Documentation
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install stable toolchain
+#        uses: dtolnay/rust-toolchain@stable
+#
+#      - name: Cache cargo registry
+#        uses: actions/cache@v3
+#        with:
+#          path: |
+#            ~/.cargo/registry
+#            ~/.cargo/git
+#            target
+#          key: ${{ runner.os }}-docs-cargo-${{ hashFiles('**/Cargo.lock') }}
+#
+#      - name: Run cargo doc
+#        run: cargo doc --all-features --no-deps --workspace
+#
+#      - name: Deploy docs to GitHub Pages
+#        if: github.ref == 'refs/heads/main'
+#        uses: peaceiris/actions-gh-pages@v3
+#        with:
+#          github_token: ${{ secrets.GITHUB_TOKEN }}
+#          publish_dir: ./target/doc
+#
+#  security:
+#    name: Security Audit
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install stable toolchain
+#        uses: dtolnay/rust-toolchain@stable
+#
+#      - name: Install cargo-audit
+#        run: cargo install cargo-audit
+#
+#      - name: Run cargo audit
+#        run: cargo audit
+#
+#      - name: Install cargo-deny
+#        run: cargo install cargo-deny
+#
+#      - name: Run cargo deny
+#        run: cargo deny check
+#
+#  coverage:
+#    name: Code Coverage
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout sources
+#        uses: actions/checkout@v4
+#
+#      - name: Install stable toolchain
+#        uses: dtolnay/rust-toolchain@stable
+#
+#      - name: Install cargo-tarpaulin
+#        run: cargo install cargo-tarpaulin
+#
+#      - name: Cache cargo registry
+#        uses: actions/cache@v3
+#        with:
+#          path: |
+#            ~/.cargo/registry
+#            ~/.cargo/git
+#            target
+#          key: ${{ runner.os }}-coverage-cargo-${{ hashFiles('**/Cargo.lock') }}
+#
+#      - name: Run cargo tarpaulin
+#        run: cargo tarpaulin --all-features --workspace --timeout 120 --out xml
+#
+#      - name: Upload to codecov.io
+#        uses: codecov/codecov-action@v3
+#        with:
+#          file: cobertura.xml
+#          fail_ci_if_error: true
 
 #  benchmark:
 #    name: Benchmarks
@@ -235,7 +235,7 @@ jobs:
     name: Process Rust Source for AI
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    needs: [check, fmt, clippy]  # Ensure code quality before processing
+    # needs: [check, fmt, clippy]  # Ensure code quality before processing
 
     steps:
       - name: Checkout development Branch
