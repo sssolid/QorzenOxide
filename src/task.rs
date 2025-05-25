@@ -1,21 +1,12 @@
 // src/task.rs
 
 //! Async task management system with progress tracking and lifecycle management
-//!
-//! This module provides a comprehensive task management system that supports:
-//! - Async task execution with progress tracking
-//! - Task priorities and scheduling
-//! - Task cancellation and timeout handling
-//! - Task result management and persistence
-//! - Task dependencies and workflows
-//! - Resource management and concurrency limits
-//! - Task monitoring and metrics
 
 use std::collections::HashMap;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,22 +24,14 @@ use crate::event::{Event, EventBusManager};
 use crate::manager::{Manager, ManagedState, ManagerStatus};
 use crate::types::{CorrelationId, Metadata};
 
-/// Task execution status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskStatus {
-    /// Task is pending execution
     Pending,
-    /// Task is currently running
     Running,
-    /// Task completed successfully
     Completed,
-    /// Task failed with an error
     Failed,
-    /// Task was cancelled
     Cancelled,
-    /// Task timed out
     TimedOut,
-    /// Task is paused
     Paused,
 }
 
@@ -66,16 +49,11 @@ impl fmt::Display for TaskStatus {
     }
 }
 
-/// Task priority levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum TaskPriority {
-    /// Low priority tasks
     Low = 0,
-    /// Normal priority tasks
     Normal = 50,
-    /// High priority tasks
     High = 100,
-    /// Critical priority tasks
     Critical = 200,
 }
 
@@ -85,24 +63,15 @@ impl Default for TaskPriority {
     }
 }
 
-/// Task category for organization and resource management
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TaskCategory {
-    /// Core system tasks
     Core,
-    /// Plugin tasks
     Plugin,
-    /// User interface tasks
     Ui,
-    /// I/O operations
     Io,
-    /// Background processing
     Background,
-    /// User-initiated tasks
     User,
-    /// Maintenance tasks
     Maintenance,
-    /// Custom category
     Custom(String),
 }
 
@@ -121,20 +90,13 @@ impl fmt::Display for TaskCategory {
     }
 }
 
-/// Task progress information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskProgress {
-    /// Completion percentage (0-100)
     pub percent: u8,
-    /// Current progress message
     pub message: String,
-    /// Current step number
     pub current_step: Option<u32>,
-    /// Total number of steps
     pub total_steps: Option<u32>,
-    /// When progress was last updated
     pub updated_at: DateTime<Utc>,
-    /// Additional progress metadata
     pub metadata: Metadata,
 }
 
@@ -152,7 +114,6 @@ impl Default for TaskProgress {
 }
 
 impl TaskProgress {
-    /// Create new progress with percentage and message
     pub fn new(percent: u8, message: impl Into<String>) -> Self {
         Self {
             percent: percent.min(100),
@@ -162,7 +123,6 @@ impl TaskProgress {
         }
     }
 
-    /// Create progress with steps
     pub fn with_steps(current: u32, total: u32, message: impl Into<String>) -> Self {
         let percent = if total > 0 {
             ((current as f64 / total as f64) * 100.0) as u8
@@ -180,52 +140,37 @@ impl TaskProgress {
         }
     }
 
-    /// Update progress percentage
     pub fn set_percent(&mut self, percent: u8) {
         self.percent = percent.min(100);
         self.updated_at = Utc::now();
     }
 
-    /// Update progress message
     pub fn set_message(&mut self, message: impl Into<String>) {
         self.message = message.into();
         self.updated_at = Utc::now();
     }
 
-    /// Add metadata
     pub fn add_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
         self.metadata.insert(key.into(), value);
         self.updated_at = Utc::now();
     }
 }
 
-/// Task result container
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskResult {
-    /// Whether the task succeeded
     pub success: bool,
-    /// Result data (if successful)
     pub data: Option<serde_json::Value>,
-    /// Error information (if failed)
     pub error: Option<String>,
-    /// Task execution duration
     pub duration: Duration,
-    /// Resource usage information
     pub resource_usage: ResourceUsage,
-    /// Additional result metadata
     pub metadata: Metadata,
 }
 
-/// Resource usage tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceUsage {
-    /// Peak memory usage in bytes
     pub peak_memory_bytes: u64,
-    /// CPU time used
     pub cpu_time_ms: u64,
-    /// Number of file operations
     pub file_operations: u32,
-    /// Network bytes transferred
     pub network_bytes: u64,
 }
 
@@ -240,7 +185,6 @@ impl Default for ResourceUsage {
     }
 }
 
-/// Progress reporter trait for tasks
 pub trait ProgressReporter: Send + Sync + fmt::Debug {
     fn report(&self, progress: TaskProgress);
     fn report_percent(&self, percent: u8, message: String) {
@@ -251,86 +195,58 @@ pub trait ProgressReporter: Send + Sync + fmt::Debug {
     }
 }
 
-/// Task execution context passed to task functions
 #[derive(Debug)]
 pub struct TaskContext {
-    /// Unique task identifier
     pub task_id: Uuid,
-    /// Task name
     pub name: String,
-    /// Task category
     pub category: TaskCategory,
-    /// Plugin ID if task belongs to a plugin
     pub plugin_id: Option<String>,
-    /// Correlation ID for tracking related operations
     pub correlation_id: Option<CorrelationId>,
-    /// Progress reporter
     pub progress: Arc<dyn ProgressReporter>,
-    /// Cancellation token
     pub cancellation_token: tokio_util::sync::CancellationToken,
-    /// Task metadata
     pub metadata: Metadata,
 }
 
 impl TaskContext {
-    /// Check if task should be cancelled
     pub fn is_cancelled(&self) -> bool {
         self.cancellation_token.is_cancelled()
     }
 
-    /// Wait for cancellation
     pub async fn cancelled(&self) {
         self.cancellation_token.cancelled().await;
     }
 
-    /// Report progress
     pub fn report_progress(&self, progress: TaskProgress) {
         self.progress.report(progress);
     }
 
-    /// Report percentage progress
     pub fn report_percent(&self, percent: u8, message: impl Into<String>) {
         self.progress.report_percent(percent, message.into());
     }
 
-    /// Report step progress
     pub fn report_step(&self, current: u32, total: u32, message: impl Into<String>) {
         self.progress.report_step(current, total, message.into());
     }
 }
 
-/// Task function type
-pub type TaskFunction = Box<
-    dyn Fn(TaskContext) -> Pin<Box<dyn Future<Output = Result<serde_json::Value>> + Send>>
-    + Send
-    + Sync
+pub type TaskFunction = Arc<
+dyn Fn(TaskContext) -> Pin<Box<dyn Future<Output = Result<serde_json::Value>> + Send>>
++ Send
++ Sync
 >;
 
-/// Task definition
 pub struct TaskDefinition {
-    /// Unique task identifier
     pub id: Uuid,
-    /// Task name
     pub name: String,
-    /// Task category
     pub category: TaskCategory,
-    /// Task priority
     pub priority: TaskPriority,
-    /// Plugin ID if task belongs to a plugin
     pub plugin_id: Option<String>,
-    /// Task dependencies (task IDs that must complete first)
     pub dependencies: Vec<Uuid>,
-    /// Task timeout duration
     pub timeout: Duration,
-    /// Maximum retry attempts
     pub max_retries: u32,
-    /// Whether task can be cancelled
     pub cancellable: bool,
-    /// Task metadata
     pub metadata: Metadata,
-    /// Correlation ID
     pub correlation_id: Option<CorrelationId>,
-    /// Task function
     pub function: TaskFunction,
 }
 
@@ -353,49 +269,29 @@ impl fmt::Debug for TaskDefinition {
     }
 }
 
-/// Task execution information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskInfo {
-    /// Task definition ID
     pub id: Uuid,
-    /// Task name
     pub name: String,
-    /// Task category
     pub category: TaskCategory,
-    /// Task priority
     pub priority: TaskPriority,
-    /// Current status
     pub status: TaskStatus,
-    /// Plugin ID if applicable
     pub plugin_id: Option<String>,
-    /// Task dependencies
     pub dependencies: Vec<Uuid>,
-    /// When task was created
     pub created_at: DateTime<Utc>,
-    /// When task started execution
     pub started_at: Option<DateTime<Utc>>,
-    /// When task completed/failed
     pub completed_at: Option<DateTime<Utc>>,
-    /// Current progress
     pub progress: TaskProgress,
-    /// Task result (if completed)
     pub result: Option<TaskResult>,
-    /// Number of retry attempts
     pub retry_count: u32,
-    /// Maximum retry attempts
     pub max_retries: u32,
-    /// Task timeout
     pub timeout: Duration,
-    /// Whether task is cancellable
     pub cancellable: bool,
-    /// Correlation ID
     pub correlation_id: Option<CorrelationId>,
-    /// Task metadata
     pub metadata: Metadata,
 }
 
 impl TaskInfo {
-    /// Create task info from definition
     pub fn from_definition(definition: &TaskDefinition) -> Self {
         Self {
             id: definition.id,
@@ -419,7 +315,6 @@ impl TaskInfo {
         }
     }
 
-    /// Get task duration if completed
     pub fn duration(&self) -> Option<Duration> {
         if let (Some(started), Some(completed)) = (self.started_at, self.completed_at) {
             Some((completed - started).to_std().ok()?)
@@ -428,7 +323,6 @@ impl TaskInfo {
         }
     }
 
-    /// Check if task is in a terminal state
     pub fn is_terminal(&self) -> bool {
         matches!(
             self.status,
@@ -436,14 +330,12 @@ impl TaskInfo {
         )
     }
 
-    /// Check if task can be retried
     pub fn can_retry(&self) -> bool {
         matches!(self.status, TaskStatus::Failed | TaskStatus::TimedOut)
             && self.retry_count < self.max_retries
     }
 }
 
-/// Task execution wrapper
 #[derive(Debug)]
 struct TaskExecution {
     info: TaskInfo,
@@ -452,32 +344,20 @@ struct TaskExecution {
     progress_sender: broadcast::Sender<TaskProgress>,
 }
 
-/// Task manager statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskManagerStats {
-    /// Total tasks created
     pub total_created: u64,
-    /// Total tasks completed
     pub total_completed: u64,
-    /// Total tasks failed
     pub total_failed: u64,
-    /// Total tasks cancelled
     pub total_cancelled: u64,
-    /// Currently running tasks
     pub currently_running: u32,
-    /// Currently pending tasks
     pub currently_pending: u32,
-    /// Tasks by category
     pub by_category: HashMap<String, u64>,
-    /// Tasks by priority
     pub by_priority: HashMap<TaskPriority, u64>,
-    /// Average execution time
     pub avg_execution_time_ms: f64,
-    /// Resource usage totals
     pub total_resource_usage: ResourceUsage,
 }
 
-/// Task events for the event system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskCreatedEvent {
     pub task_id: Uuid,
@@ -564,7 +444,6 @@ impl Event for TaskProgressEvent {
     }
 }
 
-/// Progress reporter implementation
 #[derive(Debug)]
 struct TaskProgressReporter {
     task_id: Uuid,
@@ -573,11 +452,11 @@ struct TaskProgressReporter {
 
 impl ProgressReporter for TaskProgressReporter {
     fn report(&self, progress: TaskProgress) {
+        tracing::debug!("Task {} progress: {}% - {}", self.task_id, progress.percent, progress.message);
         let _ = self.progress_sender.send(progress);
     }
 }
 
-/// Main task manager implementation
 #[derive(Debug)]
 pub struct TaskManager {
     state: ManagedState,
@@ -588,14 +467,12 @@ pub struct TaskManager {
     concurrency_semaphore: Arc<Semaphore>,
     event_bus: Option<Arc<EventBusManager>>,
     worker_handles: Vec<tokio::task::JoinHandle<()>>,
-    task_queue: Arc<RwLock<Vec<Uuid>>>, // Simple FIFO queue, would use priority queue in production
+    shutdown_flag: Arc<tokio::sync::RwLock<bool>>,
 }
 
 impl TaskManager {
-    /// Create a new task manager
     pub fn new(config: TaskConfig) -> Self {
-        let concurrency_semaphore = Arc::new(Semaphore::new(config.max_concurrent));
-
+        let max_concurrent = config.max_concurrent;
         Self {
             state: ManagedState::new(Uuid::new_v4(), "task_manager"),
             config,
@@ -613,22 +490,22 @@ impl TaskManager {
                 total_resource_usage: ResourceUsage::default(),
             })),
             task_counter: Arc::new(AtomicU64::new(0)),
-            concurrency_semaphore,
+            concurrency_semaphore: Arc::new(Semaphore::new(max_concurrent)),
             event_bus: None,
             worker_handles: Vec::new(),
-            task_queue: Arc::new(RwLock::new(Vec::new())),
+            shutdown_flag: Arc::new(tokio::sync::RwLock::new(false)),
         }
     }
 
-    /// Set event bus for publishing task events
     pub fn set_event_bus(&mut self, event_bus: Arc<EventBusManager>) {
         self.event_bus = Some(event_bus);
     }
 
-    /// Submit a task for execution
     pub async fn submit_task(&self, definition: TaskDefinition) -> Result<Uuid> {
         let task_id = definition.id;
         let task_info = TaskInfo::from_definition(&definition);
+
+        tracing::info!("Submitting task {} ({})", task_info.name, task_id);
 
         // Check dependencies
         for dep_id in &task_info.dependencies {
@@ -665,16 +542,7 @@ impl TaskManager {
 
         // Add to tasks collection
         self.tasks.insert(task_id, execution);
-
-        // Add to task queue
-        {
-            let mut queue = self.task_queue.write().await;
-            queue.push(task_id);
-            // In a real implementation, this would be a priority queue
-            queue.sort_by_key(|id| {
-                self.tasks.get(id).map(|task| task.info.priority).unwrap_or(TaskPriority::Normal)
-            });
-        }
+        tracing::debug!("Task {} added to collection, total tasks: {}", task_id, self.tasks.len());
 
         // Update statistics
         {
@@ -683,6 +551,7 @@ impl TaskManager {
             stats.currently_pending += 1;
             *stats.by_category.entry(task_info.category.to_string()).or_insert(0) += 1;
             *stats.by_priority.entry(task_info.priority).or_insert(0) += 1;
+            tracing::debug!("Stats updated: {} pending tasks", stats.currently_pending);
         }
 
         // Publish task created event
@@ -699,10 +568,10 @@ impl TaskManager {
             let _ = event_bus.publish(event).await;
         }
 
+        tracing::info!("Task {} submitted successfully", task_id);
         Ok(task_id)
     }
 
-    /// Cancel a task
     pub async fn cancel_task(&self, task_id: Uuid) -> Result<bool> {
         if let Some(mut task) = self.tasks.get_mut(&task_id) {
             if !task.info.cancellable {
@@ -723,9 +592,9 @@ impl TaskManager {
                 let mut stats = self.stats.write().await;
                 stats.total_cancelled += 1;
                 if task.info.status == TaskStatus::Running {
-                    stats.currently_running -= 1;
+                    stats.currently_running = stats.currently_running.saturating_sub(1);
                 } else {
-                    stats.currently_pending -= 1;
+                    stats.currently_pending = stats.currently_pending.saturating_sub(1);
                 }
             }
 
@@ -738,12 +607,10 @@ impl TaskManager {
         }
     }
 
-    /// Get task information
     pub async fn get_task_info(&self, task_id: Uuid) -> Option<TaskInfo> {
         self.tasks.get(&task_id).map(|task| task.info.clone())
     }
 
-    /// List tasks with optional filtering
     pub async fn list_tasks(
         &self,
         status_filter: Option<TaskStatus>,
@@ -778,32 +645,28 @@ impl TaskManager {
         }
     }
 
-    /// Wait for task completion
     pub async fn wait_for_task(&self, task_id: Uuid, timeout_duration: Option<Duration>) -> Result<TaskInfo> {
+        tracing::info!("Waiting for task {} with timeout {:?}", task_id, timeout_duration);
+
         if let Some(task) = self.tasks.get(&task_id) {
             if task.info.is_terminal() {
+                tracing::info!("Task {} already completed with status: {:?}", task_id, task.info.status);
                 return Ok(task.info.clone());
             }
 
-            // Subscribe to progress updates to detect completion
-            let mut progress_receiver = task.progress_sender.subscribe();
+            let progress_receiver = task.progress_sender.subscribe();
+            drop(task); // Release the DashMap reference
 
-            let wait_future = async {
-                loop {
-                    if let Ok(_progress) = progress_receiver.recv().await {
-                        if let Some(updated_task) = self.tasks.get(&task_id) {
-                            if updated_task.info.is_terminal() {
-                                return Ok(updated_task.info.clone());
-                            }
-                        }
-                    }
-                }
-            };
+            let wait_future = self.wait_for_completion(task_id, progress_receiver);
 
             if let Some(timeout_duration) = timeout_duration {
-                timeout(timeout_duration, wait_future)
-                    .await
-                    .map_err(|_| Error::timeout("Task wait timeout"))?
+                match timeout(timeout_duration, wait_future).await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        tracing::error!("Task {} wait timed out after {:?}", task_id, timeout_duration);
+                        Err(Error::timeout("Task wait timeout"))
+                    }
+                }
             } else {
                 wait_future.await
             }
@@ -812,12 +675,51 @@ impl TaskManager {
         }
     }
 
-    /// Get task manager statistics
+    async fn wait_for_completion(&self, task_id: Uuid, mut progress_receiver: broadcast::Receiver<TaskProgress>) -> Result<TaskInfo> {
+        loop {
+            // Check if task is completed
+            if let Some(updated_task) = self.tasks.get(&task_id) {
+                if updated_task.info.is_terminal() {
+                    tracing::info!("Task {} completed with status: {:?}", task_id, updated_task.info.status);
+                    return Ok(updated_task.info.clone());
+                }
+            }
+
+            // Wait for progress update or timeout
+            match tokio::time::timeout(Duration::from_millis(500), progress_receiver.recv()).await {
+                Ok(Ok(progress)) => {
+                    tracing::debug!("Task {} progress: {}% - {}", task_id, progress.percent, progress.message);
+                    continue;
+                }
+                Ok(Err(_)) => {
+                    // Channel closed, check final status
+                    if let Some(updated_task) = self.tasks.get(&task_id) {
+                        if updated_task.info.is_terminal() {
+                            return Ok(updated_task.info.clone());
+                        }
+                    }
+                    tracing::warn!("Progress channel closed for task {}", task_id);
+                    break;
+                }
+                Err(_) => {
+                    // Timeout on progress, check task status anyway
+                    if let Some(updated_task) = self.tasks.get(&task_id) {
+                        tracing::debug!("Task {} current status: {:?}", task_id, updated_task.info.status);
+                        if updated_task.info.is_terminal() {
+                            return Ok(updated_task.info.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        Err(Error::task(Some(task_id), "Task completion wait failed"))
+    }
+
     pub async fn get_stats(&self) -> TaskManagerStats {
         self.stats.read().await.clone()
     }
 
-    /// Clean up completed tasks older than specified duration
     pub async fn cleanup_old_tasks(&self, max_age: Duration) -> u64 {
         let cutoff_time = Utc::now() - chrono::Duration::from_std(max_age).unwrap_or_default();
         let mut removed_count = 0u64;
@@ -846,112 +748,138 @@ impl TaskManager {
         removed_count
     }
 
-    /// Start task execution workers
     async fn start_workers(&mut self) -> Result<()> {
-        let worker_count = 4; // Could be configurable
+        let worker_count = 4;
+        tracing::info!("Starting {} task workers", worker_count);
 
         for worker_id in 0..worker_count {
             let tasks = Arc::clone(&self.tasks);
             let stats = Arc::clone(&self.stats);
-            let task_queue = Arc::clone(&self.task_queue);
             let semaphore = Arc::clone(&self.concurrency_semaphore);
             let event_bus = self.event_bus.clone();
+            let shutdown_flag = Arc::clone(&self.shutdown_flag);
 
             let handle = tokio::spawn(async move {
-                Self::task_worker(worker_id, tasks, stats, task_queue, semaphore, event_bus).await;
+                Self::task_worker(worker_id, tasks, stats, semaphore, event_bus, shutdown_flag).await;
             });
 
             self.worker_handles.push(handle);
         }
 
+        tracing::info!("Started {} task workers", worker_count);
         Ok(())
     }
 
-    /// Task execution worker
     async fn task_worker(
         worker_id: usize,
         tasks: Arc<DashMap<Uuid, TaskExecution>>,
         stats: Arc<RwLock<TaskManagerStats>>,
-        task_queue: Arc<RwLock<Vec<Uuid>>>,
         semaphore: Arc<Semaphore>,
         event_bus: Option<Arc<EventBusManager>>,
+        shutdown_flag: Arc<tokio::sync::RwLock<bool>>,
     ) {
-        tracing::debug!("Task worker {} started", worker_id);
+        tracing::info!("Task worker {} started", worker_id);
 
         loop {
-            // Get next task from queue
-            let task_id = {
-                let mut queue = task_queue.write().await;
-                queue.pop()
+            // Check shutdown flag
+            if *shutdown_flag.read().await {
+                tracing::info!("Task worker {} shutting down", worker_id);
+                break;
+            }
+
+            // Try to find and claim a pending task atomically
+            let claimed_task_id = {
+                let mut claimed = None;
+                for mut entry in tasks.iter_mut() {
+                    let task_id = *entry.key();
+                    let task_ref = entry.value_mut(); // ✅ mutable access
+
+                    if task_ref.info.status == TaskStatus::Pending {
+                        task_ref.info.status = TaskStatus::Running;
+                        task_ref.info.started_at = Some(Utc::now());
+                        claimed = Some(task_id);
+                        break;
+                    }
+                }
+                claimed
             };
 
-            if let Some(task_id) = task_id {
+            if let Some(task_id) = claimed_task_id {
+                tracing::info!("Worker {} claimed task {}", worker_id, task_id);
+
                 // Acquire semaphore permit
                 if let Ok(permit) = semaphore.acquire().await {
-                    if let Some(mut task_entry) = tasks.get_mut(&task_id) {
-                        let task = task_entry.value_mut();
+                    // Extract the task data we need for execution
+                    let task_execution_data = {
+                        if let Some(task_entry) = tasks.get(&task_id) {
+                            let task = task_entry.value();
 
-                        // Update task status to running
-                        let old_status = task.info.status;
-                        task.info.status = TaskStatus::Running;
-                        task.info.started_at = Some(Utc::now());
+                            // Update statistics
+                            {
+                                let mut stats_guard = stats.write().await;
+                                stats_guard.currently_pending = stats_guard.currently_pending.saturating_sub(1);
+                                stats_guard.currently_running += 1;
+                                tracing::debug!("Stats: {} pending, {} running", stats_guard.currently_pending, stats_guard.currently_running);
+                            }
 
-                        // Update statistics
-                        {
-                            let mut stats_guard = stats.write().await;
-                            stats_guard.currently_pending -= 1;
-                            stats_guard.currently_running += 1;
-                        }
+                            // Publish status change event
+                            if let Some(event_bus) = &event_bus {
+                                let event = TaskStatusChangedEvent {
+                                    task_id,
+                                    name: task.info.name.clone(),
+                                    old_status: TaskStatus::Pending,
+                                    new_status: TaskStatus::Running,
+                                    timestamp: Utc::now(),
+                                    source: "task_manager".to_string(),
+                                    metadata: task.info.metadata.clone(),
+                                };
+                                let _ = event_bus.publish(event).await;
+                            }
 
-                        // Publish status change event
-                        if let Some(event_bus) = &event_bus {
-                            let event = TaskStatusChangedEvent {
+                            // Create context for task execution
+                            let context = TaskContext {
                                 task_id,
                                 name: task.info.name.clone(),
-                                old_status,
-                                new_status: TaskStatus::Running,
-                                timestamp: Utc::now(),
-                                source: "task_manager".to_string(),
+                                category: task.info.category.clone(),
+                                plugin_id: task.info.plugin_id.clone(),
+                                correlation_id: task.info.correlation_id,
+                                progress: Arc::new(TaskProgressReporter {
+                                    task_id,
+                                    progress_sender: task.progress_sender.clone(),
+                                }),
+                                cancellation_token: task.cancellation_token.clone(),
                                 metadata: task.info.metadata.clone(),
                             };
-                            let _ = event_bus.publish(event).await;
+
+                            Some((
+                                Arc::clone(&task.definition.function),
+                                context,
+                                task.info.timeout,
+                                task.progress_sender.clone(),
+                            ))
+                        } else {
+                            None
                         }
+                    };
 
-                        // Execute the task
+                    if let Some((function, context, task_timeout, progress_sender)) = task_execution_data {
+                        // Execute the task function
                         let start_time = Instant::now();
-                        let progress_reporter = Arc::new(TaskProgressReporter {
-                            task_id,
-                            progress_sender: task.progress_sender.clone(),
-                        });
+                        tracing::info!("Worker {} executing task {} with timeout {:?}", worker_id, task_id, task_timeout);
 
-                        let _context = TaskContext {
-                            task_id,
-                            name: task.info.name.clone(),
-                            category: task.info.category.clone(),
-                            plugin_id: task.info.plugin_id.clone(),
-                            correlation_id: task.info.correlation_id,
-                            progress: progress_reporter,
-                            cancellation_token: task.cancellation_token.clone(),
-                            metadata: task.info.metadata.clone(),
-                        };
+                        // Call the function to get the future
+                        let future = function(context);
 
-                        // Extract function to avoid borrow issues
-                        let task_timeout = task.info.timeout;
-                        // Note: In a real implementation, we'd need to handle the function execution properly
-                        // This is simplified due to the complexity of storing and executing functions
-
-                        // Simulate task execution
-                        let execution_result = timeout(task_timeout, async {
-                            // In real implementation, execute task.definition.function(context).await
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                            Ok::<serde_json::Value, Error>(serde_json::Value::String("Task completed".to_string()))
-                        }).await;
-
+                        // Execute with timeout
+                        let execution_result = timeout(task_timeout, future).await;
                         let execution_duration = start_time.elapsed();
+
+                        tracing::info!("Task {} execution completed in {:?}", task_id, execution_duration);
 
                         // Update task with result
                         let (new_status, result) = match execution_result {
                             Ok(Ok(data)) => {
+                                tracing::info!("Task {} completed successfully", task_id);
                                 let result = TaskResult {
                                     success: true,
                                     data: Some(data),
@@ -963,6 +891,7 @@ impl TaskManager {
                                 (TaskStatus::Completed, Some(result))
                             }
                             Ok(Err(error)) => {
+                                tracing::error!("Task {} failed: {}", task_id, error);
                                 let result = TaskResult {
                                     success: false,
                                     data: None,
@@ -974,6 +903,7 @@ impl TaskManager {
                                 (TaskStatus::Failed, Some(result))
                             }
                             Err(_) => {
+                                tracing::error!("Task {} timed out", task_id);
                                 let result = TaskResult {
                                     success: false,
                                     data: None,
@@ -987,14 +917,23 @@ impl TaskManager {
                         };
 
                         // Update task info
-                        task.info.status = new_status;
-                        task.info.completed_at = Some(Utc::now());
-                        task.info.result = result;
+                        if let Some(mut task_entry) = tasks.get_mut(&task_id) {
+                            let task = task_entry.value_mut();
+                            task.info.status = new_status;
+                            task.info.completed_at = Some(Utc::now());
+                            task.info.result = result;
+
+                            // Send final progress update
+                            let final_progress = TaskProgress::new(100, "Task completed");
+                            let _ = progress_sender.send(final_progress);
+
+                            tracing::info!("Task {} final status: {:?}", task_id, new_status);
+                        }
 
                         // Update statistics
                         {
                             let mut stats_guard = stats.write().await;
-                            stats_guard.currently_running -= 1;
+                            stats_guard.currently_running = stats_guard.currently_running.saturating_sub(1);
                             match new_status {
                                 TaskStatus::Completed => stats_guard.total_completed += 1,
                                 TaskStatus::Failed => stats_guard.total_failed += 1,
@@ -1003,24 +942,28 @@ impl TaskManager {
                             }
 
                             // Update average execution time
-                            let total_tasks = stats_guard.total_completed + stats_guard.total_failed;
-                            if total_tasks > 0 {
-                                stats_guard.avg_execution_time_ms =
-                                    (stats_guard.avg_execution_time_ms * (total_tasks - 1) as f64 +
-                                        execution_duration.as_millis() as f64) / total_tasks as f64;
+                            let total_completed = stats_guard.total_completed + stats_guard.total_failed;
+                            if total_completed > 0 {
+                                stats_guard.avg_execution_time_ms = (stats_guard.avg_execution_time_ms
+                                    * (total_completed - 1) as f64
+                                    + execution_duration.as_millis() as f64)
+                                    / total_completed as f64;
                             }
+
+                            tracing::debug!("Updated stats: {} completed, {} failed, {} running",
+                                stats_guard.total_completed, stats_guard.total_failed, stats_guard.currently_running);
                         }
 
                         // Publish status change event
                         if let Some(event_bus) = &event_bus {
                             let event = TaskStatusChangedEvent {
                                 task_id,
-                                name: task.info.name.clone(),
+                                name: tasks.get(&task_id).map(|t| t.info.name.clone()).unwrap_or_default(),
                                 old_status: TaskStatus::Running,
                                 new_status,
                                 timestamp: Utc::now(),
                                 source: "task_manager".to_string(),
-                                metadata: task.info.metadata.clone(),
+                                metadata: HashMap::new(),
                             };
                             let _ = event_bus.publish(event).await;
                         }
@@ -1029,13 +972,14 @@ impl TaskManager {
                     drop(permit); // Release semaphore
                 }
             } else {
-                // No tasks in queue, wait a bit
+                // No pending tasks, wait a bit
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
+
+        tracing::info!("Task worker {} stopped", worker_id);
     }
 
-    /// Publish task status change event
     async fn publish_status_change_event(&self, task_info: &TaskInfo, old_status: TaskStatus, new_status: TaskStatus) {
         if let Some(event_bus) = &self.event_bus {
             let event = TaskStatusChangedEvent {
@@ -1051,12 +995,18 @@ impl TaskManager {
         }
     }
 
-    /// Stop all workers
     async fn stop_workers(&mut self) {
+        tracing::info!("Stopping task workers");
+
+        // Set shutdown flag
+        *self.shutdown_flag.write().await = true;
+
+        // Wait for workers to finish
         for handle in self.worker_handles.drain(..) {
-            handle.abort();
-            let _ = handle.await;
+            let _ = tokio::time::timeout(Duration::from_secs(5), handle).await;
         }
+
+        tracing::info!("All task workers stopped");
     }
 }
 
@@ -1073,15 +1023,20 @@ impl Manager for TaskManager {
     async fn initialize(&mut self) -> Result<()> {
         self.state.set_state(crate::manager::ManagerState::Initializing).await;
 
+        tracing::info!("Initializing task manager");
+
         // Start task execution workers
         self.start_workers().await?;
 
         self.state.set_state(crate::manager::ManagerState::Running).await;
+        tracing::info!("Task manager initialized successfully");
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
         self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+
+        tracing::info!("Shutting down task manager");
 
         // Cancel all running tasks
         let running_tasks: Vec<Uuid> = self.tasks
@@ -1107,6 +1062,7 @@ impl Manager for TaskManager {
         self.cleanup_old_tasks(Duration::from_secs(0)).await;
 
         self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        tracing::info!("Task manager shutdown complete");
         Ok(())
     }
 
@@ -1125,7 +1081,6 @@ impl Manager for TaskManager {
     }
 }
 
-/// Task builder for convenient task creation
 pub struct TaskBuilder {
     name: String,
     category: TaskCategory,
@@ -1140,7 +1095,6 @@ pub struct TaskBuilder {
 }
 
 impl TaskBuilder {
-    /// Create a new task builder
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -1156,67 +1110,57 @@ impl TaskBuilder {
         }
     }
 
-    /// Set task category
     pub fn category(mut self, category: TaskCategory) -> Self {
         self.category = category;
         self
     }
 
-    /// Set task priority
     pub fn priority(mut self, priority: TaskPriority) -> Self {
         self.priority = priority;
         self
     }
 
-    /// Set plugin ID
     pub fn plugin_id(mut self, plugin_id: impl Into<String>) -> Self {
         self.plugin_id = Some(plugin_id.into());
         self
     }
 
-    /// Add dependency
     pub fn dependency(mut self, task_id: Uuid) -> Self {
         self.dependencies.push(task_id);
         self
     }
 
-    /// Set timeout
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
-    /// Set max retries
     pub fn max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = max_retries;
         self
     }
 
-    /// Set cancellable
     pub fn cancellable(mut self, cancellable: bool) -> Self {
         self.cancellable = cancellable;
         self
     }
 
-    /// Add metadata
     pub fn metadata(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         self.metadata.insert(key.into(), value);
         self
     }
 
-    /// Set correlation ID
     pub fn correlation_id(mut self, correlation_id: CorrelationId) -> Self {
         self.correlation_id = Some(correlation_id);
         self
     }
 
-    /// Build the task definition with a function
     pub fn build<F, Fut>(self, function: F) -> TaskDefinition
     where
         F: Fn(TaskContext) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<serde_json::Value>> + Send + 'static,
     {
-        let task_function: TaskFunction = Box::new(move |ctx| Box::pin(function(ctx)));
+        let task_function: TaskFunction = Arc::new(move |ctx| Box::pin(function(ctx)));
 
         TaskDefinition {
             id: Uuid::new_v4(),
@@ -1273,21 +1217,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_task_submission() {
+    async fn test_task_submission_and_execution() {
         let config = TaskConfig::default();
         let mut manager = TaskManager::new(config);
         manager.initialize().await.unwrap();
 
         let task = TaskBuilder::new("test_task")
-            .build(|_ctx| async {
+            .timeout(Duration::from_secs(10))
+            .build(|ctx| async move {
+                ctx.report_percent(50, "Half way done");
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                ctx.report_percent(100, "Complete");
                 Ok(serde_json::Value::String("completed".to_string()))
             });
 
         let task_id = manager.submit_task(task).await.unwrap();
 
-        let task_info = manager.get_task_info(task_id).await.unwrap();
+        let task_info = manager.wait_for_task(task_id, Some(Duration::from_secs(5))).await.unwrap();
         assert_eq!(task_info.name, "test_task");
-        assert_eq!(task_info.status, TaskStatus::Pending);
+        assert_eq!(task_info.status, TaskStatus::Completed);
 
         manager.shutdown().await.unwrap();
     }

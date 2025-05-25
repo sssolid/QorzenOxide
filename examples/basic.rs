@@ -25,13 +25,10 @@ use qorzen_core::config::AppConfig;
 #[command(name = "basic")]
 #[command(about = "Basic Qorzen Example", long_about = None)]
 struct Args {
-    /// Path to config file
     #[arg(long, default_value = "config.yaml")]
     config: String,
 }
 
-
-/// Custom event for our example
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OrderProcessedEvent {
     order_id: String,
@@ -144,17 +141,10 @@ async fn main() -> Result<()> {
 async fn demonstrate_configuration(config: &AppConfig) -> Result<()> {
     println!("  📝 Configuration Management:");
 
-    // In a real application, you'd access the config manager from the app
-    // For this example, we'll create a standalone config manager
-    // let mut config_manager = qorzen_core::config::ConfigManager::new();
-    // config_manager.initialize().await?;
-    // 
-    // let config = config_manager.get_config().await;
     println!("     App Name: {}", config.app.name);
     println!("     Environment: {}", config.app.environment);
     println!("     Debug Mode: {}", config.app.debug);
 
-    // config_manager.shutdown().await?;
     Ok(())
 }
 
@@ -178,7 +168,7 @@ async fn demonstrate_file_operations() -> Result<()> {
 
     let json = serde_json::to_string_pretty(&sample_config)
         .map_err(|e| Error::new(ErrorKind::Serialization(e.to_string()), "Failed to serialize sample config"))?;
-    
+
     file_manager.write_file(
         "config/service.json",
         json.as_bytes(),
@@ -199,7 +189,7 @@ async fn demonstrate_file_operations() -> Result<()> {
 
     // Create a copy
     let copy_path = file_manager.copy_file(
-        "config/service.json", 
+        "config/service.json",
         "config/service_backup.json",
         Option::from(FileOperationOptions {
             create_parents: true,
@@ -207,7 +197,7 @@ async fn demonstrate_file_operations() -> Result<()> {
         }),
     ).await?;
     println!("     ✓ Copied bytes: {}", copy_path);
-    
+
     // Clean up config files
     file_manager.delete_file("config/service.json").await?;
     file_manager.delete_file("config/service_backup.json").await?;
@@ -233,21 +223,20 @@ async fn demonstrate_task_management() -> Result<()> {
     let high_priority_task = TaskBuilder::new("high_priority_calculation")
         .category(TaskCategory::Core)
         .priority(TaskPriority::High)
-        .build({
-            move |ctx| {
-                let counter = Arc::clone(&high_counter);
-                async move {
-                    ctx.report_percent(0, "Starting high priority calculation");
+        .timeout(Duration::from_secs(30)) // Increased timeout
+        .build(move |ctx| {
+            let counter = Arc::clone(&high_counter);
+            async move {
+                ctx.report_percent(0, "Starting high priority calculation");
 
-                    for i in 1..=5 {
-                        counter.fetch_add(1, Ordering::SeqCst);
-                        ctx.report_percent(i * 20, format!("Processing step {}/5", i));
-                        sleep(Duration::from_millis(50)).await;
-                    }
-
-                    ctx.report_percent(100, "High priority calculation complete");
-                    Ok(serde_json::Value::String("High priority result".to_string()))
+                for i in 1..=5 {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    ctx.report_percent(i * 20, format!("Processing step {}/5", i));
+                    sleep(Duration::from_millis(50)).await;
                 }
+
+                ctx.report_percent(100, "High priority calculation complete");
+                Ok(serde_json::Value::String("High priority result".to_string()))
             }
         });
 
@@ -258,28 +247,27 @@ async fn demonstrate_task_management() -> Result<()> {
     let background_task = TaskBuilder::new("background_processing")
         .category(TaskCategory::Background)
         .priority(TaskPriority::Low)
-        .build({
-            move |ctx| {
-                let counter = Arc::clone(&background_counter);
-                async move {
-                    ctx.report_percent(0, "Starting background processing");
+        .timeout(Duration::from_secs(30)) // Increased timeout
+        .build(move |ctx| {
+            let counter = Arc::clone(&background_counter);
+            async move {
+                ctx.report_percent(0, "Starting background processing");
 
-                    for i in 1..=10 {
-                        if ctx.is_cancelled() {
-                            return Err(qorzen_core::error::Error::task(
-                                Some(ctx.task_id),
-                                "Task was cancelled",
-                            ));
-                        }
-
-                        counter.fetch_add(1, Ordering::SeqCst);
-                        ctx.report_step(i, 10, format!("Processing item {}", i));
-                        sleep(Duration::from_millis(20)).await;
+                for i in 1..=10 {
+                    if ctx.is_cancelled() {
+                        return Err(qorzen_core::error::Error::task(
+                            Some(ctx.task_id),
+                            "Task was cancelled",
+                        ));
                     }
 
-                    ctx.report_percent(100, "Background processing complete");
-                    Ok(serde_json::Value::Number(counter.load(Ordering::SeqCst).into()))
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    ctx.report_step(i, 10, format!("Processing item {}", i));
+                    sleep(Duration::from_millis(20)).await;
                 }
+
+                ctx.report_percent(100, "Background processing complete");
+                Ok(serde_json::Value::Number(counter.load(Ordering::SeqCst).into()))
             }
         });
 
@@ -287,7 +275,7 @@ async fn demonstrate_task_management() -> Result<()> {
 
     // Wait for all tasks to complete
     for task_id in task_ids {
-        let task_info = task_manager.wait_for_task(task_id, Some(Duration::from_secs(5))).await?;
+        let task_info = task_manager.wait_for_task(task_id, Some(Duration::from_secs(15))).await?;
         println!(
             "     ✓ Task '{}' completed with status: {:?}",
             task_info.name, task_info.status
@@ -295,6 +283,14 @@ async fn demonstrate_task_management() -> Result<()> {
 
         if let Some(duration) = task_info.duration() {
             println!("       Duration: {:?}", duration);
+        }
+
+        if let Some(result) = &task_info.result {
+            if result.success {
+                println!("       Result: {:?}", result.data);
+            } else {
+                println!("       Error: {:?}", result.error);
+            }
         }
     }
 
