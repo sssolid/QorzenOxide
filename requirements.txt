@@ -1,0 +1,15 @@
+# Core dependencies
+pydantic>=2.0.0,<3.0.0
+structlog>=23.0.0,<24.0.0
+
+# Type checking and development tools
+mypy>=1.5.0,<2.0.0
+types-setuptools>=68.0.0
+black>=23.0.0,<24.0.0
+ruff>=0.0.287,<1.0.0
+isort>=5.12.0,<6.0.0
+
+# Testing
+pytest>=7.4.0,<8.0.0
+pytest-cov>=4.1.0,<5.0.0
+hypothesis>=6.82.0,<7.0.0

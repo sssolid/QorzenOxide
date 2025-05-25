@@ -27,8 +27,8 @@ RUN rm -rf src
 # Copy source code
 COPY src ./src
 COPY examples ./examples
-COPY benches ./benches
-COPY tests ./tests
+# COPY benches ./benches
+# COPY tests ./tests
 
 # Build the application
 RUN cargo build --release --bin qorzen
@@ -79,8 +79,8 @@ EXPOSE 8000 9090
 CMD ["qorzen", "run", "--headless"]
 
 # Metadata
-LABEL maintainer="Your Name <your.email@example.com>"
+LABEL maintainer="Ryan Serra <ryan_serra@hotmail.com>"
 LABEL version="0.1.0"
 LABEL description="Qorzen Core - A modular plugin-based system"
-LABEL org.opencontainers.image.source="https://github.com/yourusername/qorzen-core"
+LABEL org.opencontainers.image.source="https://github.com/sssolid/QorzenOxide"
 LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
