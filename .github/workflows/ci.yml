@@ -438,18 +438,18 @@ jobs:
 #        env:
 #          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  deploy:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    needs: [docker]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
-    steps:
-      - name: Deploy to production
-        run: |
-          echo "Deploying to production..."
-          # Add your deployment steps here
-          # This could include:
-          # - Updating Kubernetes deployments
-          # - Triggering CD pipelines
-          # - Notifying deployment systems
+#  deploy:
+#    name: Deploy to Production
+#    runs-on: ubuntu-latest
+#    needs: [docker]
+#    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+#    environment: production
+#    steps:
+#      - name: Deploy to production
+#        run: |
+#          echo "Deploying to production..."
+#          # Add your deployment steps here
+#          # This could include:
+#          # - Updating Kubernetes deployments
+#          # - Triggering CD pipelines
+#          # - Notifying deployment systems
