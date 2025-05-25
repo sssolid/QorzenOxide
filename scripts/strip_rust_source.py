@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """Rust source code stripper for AI processing optimization.
 
-This module provides functionality to strip Rust source code of unnecessary
-elements like documentation comments, excessive whitespace, and formatting
-while preserving all functional code.
+This module provides functionality to strip Rust source code of documentation
+comments while preserving all functional code and regular comments.
 """
 
 from __future__ import annotations
 
-import logging
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import List, Set, Union
 
-import structlog
 from pydantic import BaseModel, Field, validator
 
 
@@ -29,23 +26,8 @@ class FileProcessingError(RustStripperError):
     pass
 
 
-class ValidationError(RustStripperError):
-    """Exception raised when input validation fails."""
-    pass
-
-
 class StripperConfig(BaseModel):
-    """Configuration for the Rust source code stripper.
-
-    Attributes:
-        source_dir: Path to the source directory to process
-        output_dir: Path to the output directory for processed files
-        preserve_cargo_toml: Whether to preserve Cargo.toml files
-        preserve_readme: Whether to preserve README files
-        max_consecutive_blank_lines: Maximum consecutive blank lines to keep
-        file_extensions: Set of file extensions to process
-        exclude_patterns: Set of glob patterns to exclude from processing
-    """
+    """Configuration for the Rust source code stripper."""
 
     source_dir: Path = Field(default=Path("."))
     output_dir: Path = Field(default=Path("processed_project"))
@@ -72,16 +54,7 @@ class StripperConfig(BaseModel):
 
 @dataclass
 class ProcessingStats:
-    """Statistics for file processing operations.
-
-    Attributes:
-        files_processed: Number of files successfully processed
-        files_skipped: Number of files skipped
-        files_failed: Number of files that failed processing
-        bytes_removed: Total bytes removed from source files
-        lines_removed: Total lines removed from source files
-        errors: List of processing errors encountered
-    """
+    """Statistics for file processing operations."""
 
     files_processed: int = 0
     files_skipped: int = 0
@@ -97,47 +70,19 @@ class ProcessingStats:
 
 
 class RustSourceStripper:
-    """Main class for stripping Rust source code files.
-
-    This class handles the processing of Rust source files to remove
-    documentation comments, excessive whitespace, and other non-functional
-    elements while preserving code functionality.
-    """
+    """Main class for stripping Rust source code files."""
 
     def __init__(self, config: StripperConfig) -> None:
-        """Initialize the Rust source stripper.
-
-        Args:
-            config: Configuration object for the stripper
-
-        Raises:
-            ValidationError: If configuration validation fails
-        """
+        """Initialize the Rust source stripper."""
         self.config = config
         self.stats = ProcessingStats()
-        self.logger = structlog.get_logger(__name__)
 
-        # Compile regex patterns for performance
-        self._doc_comment_pattern = re.compile(
-            r'^\s*///.*$|^\s*/\*\*.*?\*/\s*$',
-            re.MULTILINE | re.DOTALL
-        )
-        self._block_comment_pattern = re.compile(
-            r'/\*\*.*?\*/',
-            re.DOTALL
-        )
-        self._excessive_whitespace_pattern = re.compile(r'\n\s*\n\s*\n+')
+        # Simple patterns for whitespace cleanup
         self._trailing_whitespace_pattern = re.compile(r'[ \t]+$', re.MULTILINE)
+        self._excessive_whitespace_pattern = re.compile(r'\n\s*\n\s*\n+')
 
     def process_project(self) -> ProcessingStats:
-        """Process the entire Rust project.
-
-        Returns:
-            ProcessingStats object containing processing results
-
-        Raises:
-            FileProcessingError: If critical processing operations fail
-        """
+        """Process the entire Rust project."""
         try:
             self._create_output_directory()
             self._process_all_files()
@@ -146,14 +91,14 @@ class RustSourceStripper:
 
         except Exception as e:
             error_msg = f"Failed to process project: {e}"
-            self.logger.error(error_msg)
+            print(f"ERROR: {error_msg}")
             raise FileProcessingError(error_msg) from e
 
     def _create_output_directory(self) -> None:
         """Create the output directory structure."""
         try:
             self.config.output_dir.mkdir(parents=True, exist_ok=True)
-            self.logger.info("Created output directory", path=str(self.config.output_dir))
+            print(f"Created output directory: {self.config.output_dir}")
 
         except OSError as e:
             raise FileProcessingError(f"Failed to create output directory: {e}") from e
@@ -167,14 +112,10 @@ class RustSourceStripper:
             except Exception as e:
                 error_msg = f"Failed to process {file_path}: {e}"
                 self.stats.add_error(error_msg)
-                self.logger.error(error_msg)
+                print(f"ERROR: {error_msg}")
 
     def _get_files_to_process(self) -> List[Path]:
-        """Get list of files to process based on configuration.
-
-        Returns:
-            List of Path objects for files to process
-        """
+        """Get list of files to process based on configuration."""
         files_to_process: List[Path] = []
 
         for file_path in self.config.source_dir.rglob("*"):
@@ -185,18 +126,11 @@ class RustSourceStripper:
             ):
                 files_to_process.append(file_path)
 
-        self.logger.info("Found files to process", count=len(files_to_process))
+        print(f"Found {len(files_to_process)} files to process")
         return files_to_process
 
     def _should_process_file(self, file_path: Path) -> bool:
-        """Determine if a file should be processed.
-
-        Args:
-            file_path: Path to the file to check
-
-        Returns:
-            True if the file should be processed, False otherwise
-        """
+        """Determine if a file should be processed."""
         # Check file extension
         if file_path.suffix not in self.config.file_extensions:
             return False
@@ -211,14 +145,7 @@ class RustSourceStripper:
         return True
 
     def _is_excluded(self, file_path: Path) -> bool:
-        """Check if a file matches any exclusion patterns.
-
-        Args:
-            file_path: Path to check against exclusion patterns
-
-        Returns:
-            True if the file should be excluded, False otherwise
-        """
+        """Check if a file matches any exclusion patterns."""
         relative_path = file_path.relative_to(self.config.source_dir)
 
         for pattern in self.config.exclude_patterns:
@@ -228,14 +155,7 @@ class RustSourceStripper:
         return False
 
     def _process_single_file(self, file_path: Path) -> None:
-        """Process a single file.
-
-        Args:
-            file_path: Path to the file to process
-
-        Raises:
-            FileProcessingError: If file processing fails
-        """
+        """Process a single file."""
         try:
             # Read original file
             original_content = self._read_file_content(file_path)
@@ -259,29 +179,16 @@ class RustSourceStripper:
             self._write_processed_file(file_path, processed_content)
 
             self.stats.files_processed += 1
-            self.logger.debug(
-                "Processed file",
-                file=str(file_path),
-                original_size=original_size,
-                processed_size=processed_size,
-                reduction_percent=round((1 - processed_size / original_size) * 100, 2)
-            )
+
+            if original_size > 0:
+                reduction_percent = round((1 - processed_size / original_size) * 100, 2)
+                print(f"Processed {file_path.name}: {original_size} -> {processed_size} bytes ({reduction_percent}% reduction)")
 
         except Exception as e:
             raise FileProcessingError(f"Failed to process {file_path}: {e}") from e
 
     def _read_file_content(self, file_path: Path) -> str:
-        """Read content from a file with proper encoding handling.
-
-        Args:
-            file_path: Path to the file to read
-
-        Returns:
-            File content as string
-
-        Raises:
-            FileProcessingError: If file reading fails
-        """
+        """Read content from a file with proper encoding handling."""
         try:
             # Try UTF-8 first, fallback to latin-1 for problematic files
             for encoding in ['utf-8', 'latin-1']:
@@ -296,42 +203,67 @@ class RustSourceStripper:
             raise FileProcessingError(f"Failed to read {file_path}: {e}") from e
 
     def _strip_rust_file(self, content: str) -> str:
-        """Strip a Rust source file of unnecessary elements.
+        """Strip a Rust source file of ONLY documentation comments."""
+        lines = content.split('\n')
+        processed_lines = []
+        in_doc_block = False
 
-        Args:
-            content: Original file content
+        for line in lines:
+            stripped_line = line.strip()
 
-        Returns:
-            Stripped content
-        """
-        # Remove documentation comments (/// and /** */)
-        content = self._doc_comment_pattern.sub('', content)
-        content = self._block_comment_pattern.sub('', content)
+            # Handle block doc comments
+            if not in_doc_block:
+                # Look for start of block doc comment
+                doc_start = line.find('/**')
+                if doc_start != -1:
+                    # Check if it ends on the same line
+                    doc_end = line.find('*/', doc_start + 3)
+                    if doc_end != -1:
+                        # Single line block doc comment - remove it
+                        before = line[:doc_start]
+                        after = line[doc_end + 2:]
+                        new_line = before + after
+                        if new_line.strip():
+                            processed_lines.append(new_line)
+                    else:
+                        # Multi-line block doc comment starts
+                        before = line[:doc_start]
+                        if before.strip():
+                            processed_lines.append(before)
+                        in_doc_block = True
+                elif stripped_line.startswith('///'):
+                    # Line doc comment - skip it entirely
+                    continue
+                else:
+                    # Regular line - keep it
+                    processed_lines.append(line)
+            else:
+                # We're in a block doc comment
+                doc_end = line.find('*/')
+                if doc_end != -1:
+                    # End of block doc comment
+                    after = line[doc_end + 2:]
+                    if after.strip():
+                        processed_lines.append(after)
+                    in_doc_block = False
+                # Otherwise skip this line (it's part of the doc comment)
 
-        # Remove trailing whitespace
+        # Join lines back together
+        content = '\n'.join(processed_lines)
+
+        # Clean up whitespace
         content = self._trailing_whitespace_pattern.sub('', content)
-
-        # Normalize blank lines
         content = self._normalize_blank_lines(content)
-
-        # Remove leading/trailing whitespace from the entire file
         content = content.strip()
 
-        # Ensure file ends with single newline
+        # Ensure file ends with newline
         if content and not content.endswith('\n'):
             content += '\n'
 
         return content
 
     def _strip_generic_file(self, content: str) -> str:
-        """Strip a generic file of unnecessary whitespace.
-
-        Args:
-            content: Original file content
-
-        Returns:
-            Stripped content
-        """
+        """Strip a generic file of unnecessary whitespace."""
         # For non-Rust files, just normalize whitespace
         content = self._trailing_whitespace_pattern.sub('', content)
         content = self._normalize_blank_lines(content)
@@ -343,29 +275,14 @@ class RustSourceStripper:
         return content
 
     def _normalize_blank_lines(self, content: str) -> str:
-        """Normalize excessive blank lines.
-
-        Args:
-            content: Content to normalize
-
-        Returns:
-            Content with normalized blank lines
-        """
+        """Normalize excessive blank lines."""
         max_lines = self.config.max_consecutive_blank_lines
-        replacement = '\n' * (max_lines + 1)  # +1 for the content line
+        replacement = '\n' * (max_lines + 1)
 
         return self._excessive_whitespace_pattern.sub(replacement, content)
 
     def _write_processed_file(self, original_path: Path, content: str) -> None:
-        """Write processed content to output file.
-
-        Args:
-            original_path: Original file path
-            content: Processed content to write
-
-        Raises:
-            FileProcessingError: If file writing fails
-        """
+        """Write processed content to output file."""
         try:
             # Calculate relative path from source directory
             relative_path = original_path.relative_to(self.config.source_dir)
@@ -382,61 +299,40 @@ class RustSourceStripper:
 
     def _log_final_stats(self) -> None:
         """Log final processing statistics."""
-        self.logger.info(
-            "Processing completed",
-            files_processed=self.stats.files_processed,
-            files_skipped=self.stats.files_skipped,
-            files_failed=self.stats.files_failed,
-            bytes_removed=self.stats.bytes_removed,
-            lines_removed=self.stats.lines_removed,
-            total_errors=len(self.stats.errors)
-        )
-
-
-def setup_logging() -> None:
-    """Set up structured logging configuration."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    )
-
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer()
-        ],
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
+        print(f"\nProcessing completed:")
+        print(f"  Files processed: {self.stats.files_processed}")
+        print(f"  Files skipped: {self.stats.files_skipped}")
+        print(f"  Files failed: {self.stats.files_failed}")
+        print(f"  Bytes removed: {self.stats.bytes_removed}")
+        print(f"  Lines removed: {self.stats.lines_removed}")
+        if self.stats.errors:
+            print(f"  Errors: {len(self.stats.errors)}")
 
 
 def main() -> int:
-    """Main entry point for the script.
-
-    Returns:
-        Exit code (0 for success, 1 for failure)
-    """
-    setup_logging()
-    logger = structlog.get_logger(__name__)
-
+    """Main entry point for the script."""
     try:
-        # Load configuration
-        config = StripperConfig()
-
-        logger.info(
-            "Starting Rust source code stripping",
-            source_dir=str(config.source_dir),
-            output_dir=str(config.output_dir)
+        # Configure for current project structure
+        config = StripperConfig(
+            source_dir=Path("."),
+            output_dir=Path("processed_project"),
+            preserve_cargo_toml=True,
+            preserve_readme=False,
+            max_consecutive_blank_lines=1,
+            file_extensions={".rs", ".toml"},
+            exclude_patterns={
+                "target/*",
+                "*.lock",
+                ".git/*",
+                "processed_project/*",
+                ".github/*",
+                "docs/*"
+            }
         )
+
+        print("Starting Rust source code stripping...")
+        print(f"Source directory: {config.source_dir}")
+        print(f"Output directory: {config.output_dir}")
 
         # Create and run stripper
         stripper = RustSourceStripper(config)
@@ -444,16 +340,16 @@ def main() -> int:
 
         # Report results
         if stats.files_failed > 0:
-            logger.warning(f"Processing completed with {stats.files_failed} failures")
+            print(f"\nProcessing completed with {stats.files_failed} failures")
             for error in stats.errors:
-                logger.error("Processing error", error=error)
+                print(f"Error: {error}")
             return 1
 
-        logger.info("Processing completed successfully")
+        print("\nProcessing completed successfully!")
         return 0
 
     except Exception as e:
-        logger.error("Script execution failed", error=str(e))
+        print(f"Script execution failed: {e}")
         return 1
 
 
