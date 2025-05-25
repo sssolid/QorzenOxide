@@ -1,4 +1,4 @@
-# Qorzen Core
+# Qorzen Oxide
 
 A high-performance, modular plugin-based system built in Rust with comprehensive async core managers and type-safe architecture.
 
@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
     app.initialize().await?;
     
     // Application is now running with all core managers
-    println!("Qorzen Core is running!");
+    println!("Qorzen Oxide is running!");
     
     // Wait for shutdown signal
     app.wait_for_shutdown().await?;
@@ -76,7 +76,7 @@ async fn main() -> qorzen_core::Result<()> {
 
 ## Configuration
 
-Qorzen Core uses a hierarchical configuration system supporting YAML, JSON, and TOML formats:
+Qorzen Oxide uses a hierarchical configuration system supporting YAML, JSON, and TOML formats:
 
 ```yaml
 # config.yaml
@@ -132,7 +132,7 @@ export QORZEN_DEBUG=true
 
 ## Command Line Interface
 
-Qorzen Core includes a comprehensive CLI:
+Qorzen Oxide includes a comprehensive CLI:
 
 ```bash
 # Run the application
@@ -321,7 +321,7 @@ config_manager.reload().await?;
 
 ## Error Handling
 
-Qorzen Core provides comprehensive error handling with context and recovery:
+Qorzen Oxide provides comprehensive error handling with context and recovery:
 
 ```rust
 use qorzen_core::error::{Error, ErrorKind, ErrorSeverity, ResultExt};
@@ -440,7 +440,7 @@ at your option.
 
 ## Performance
 
-Qorzen Core is designed for high performance and low overhead:
+Qorzen Oxide is designed for high performance and low overhead:
 
 - **Zero-copy** operations where possible
 - **Lock-free** data structures for hot paths
@@ -470,9 +470,9 @@ Configuration Access: ~10M reads/sec
 
 ## Support
 
-- Documentation: [docs.rs/qorzen-core](https://docs.rs/qorzen-core)
-- Issues: [GitHub Issues](https://github.com/yourusername/qorzen-core/issues)
-- Discussions: [GitHub Discussions](https://github.com/yourusername/qorzen-core/discussions)
+- Documentation: [docs.rs/QorzenOxide](https://docs.rs/QorzenOxide)
+- Issues: [GitHub Issues](https://github.com/sssolid/QorzenOxide/issues)
+- Discussions: [GitHub Discussions](https://github.com/sssolid/QorzenOxide/discussions)
 
 ## Acknowledgments
 
