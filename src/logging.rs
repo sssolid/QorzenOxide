@@ -16,7 +16,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
 use tracing::{Event, Subscriber};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
@@ -34,58 +34,35 @@ use crate::config::{LoggingConfig, LogFormat};
 use crate::error::{Error, ErrorKind, Result, ResultExt};
 use crate::manager::{Manager, ManagedState, ManagerStatus};
 
-/// Log entry structure for structured logging
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
-    /// Unique identifier for this log entry
     pub id: Uuid,
-    /// Log level
     pub level: LogLevel,
-    /// Timestamp when the log was created
     pub timestamp: DateTime<Utc>,
-    /// Source component that generated the log
     pub source: String,
-    /// Log message
     pub message: String,
-    /// Target/module name
     pub target: String,
-    /// File name where the log was generated
     pub file: Option<String>,
-    /// Line number where the log was generated
     pub line: Option<u32>,
-    /// Correlation ID for tracking related operations
     pub correlation_id: Option<Uuid>,
-    /// Structured fields/metadata
     pub fields: HashMap<String, serde_json::Value>,
-    /// Span information for tracing
     pub span: Option<SpanInfo>,
 }
 
-/// Span information for distributed tracing
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpanInfo {
-    /// Span ID
     pub id: String,
-    /// Parent span ID
     pub parent_id: Option<String>,
-    /// Span name
     pub name: String,
-    /// Span fields
     pub fields: HashMap<String, serde_json::Value>,
 }
 
-/// Log level enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum LogLevel {
-    /// Trace level (most verbose)
     Trace,
-    /// Debug level
     Debug,
-    /// Info level
     Info,
-    /// Warning level
     Warn,
-    /// Error level
     Error,
 }
 
@@ -113,37 +90,25 @@ impl From<LogLevel> for tracing::Level {
     }
 }
 
-/// Log statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogStats {
-    /// Total number of log entries processed
     pub total_entries: u64,
-    /// Entries by log level
     pub entries_by_level: HashMap<LogLevel, u64>,
-    /// Average entries per second
     pub avg_entries_per_second: f64,
-    /// Current log file size in bytes
     pub current_file_size: u64,
-    /// Number of rotated files
     pub rotated_files: u32,
-    /// Last rotation time
     pub last_rotation: Option<DateTime<Utc>>,
 }
 
-/// Custom log writer trait for implementing custom log outputs
 #[async_trait]
 pub trait LogWriter: Send + Sync + std::fmt::Debug {
-    /// Write a log entry
     async fn write(&self, entry: &LogEntry) -> Result<()>;
 
-    /// Flush any buffered log entries
     async fn flush(&self) -> Result<()>;
 
-    /// Close the writer and release resources
     async fn close(&self) -> Result<()>;
 }
 
-/// Database log writer for storing logs in a database
 #[derive(Debug)]
 pub struct DatabaseLogWriter {
     // Database connection would go here
@@ -151,7 +116,6 @@ pub struct DatabaseLogWriter {
 }
 
 impl DatabaseLogWriter {
-    /// Create a new database log writer
     pub fn new(table_name: impl Into<String>) -> Self {
         Self {
             table_name: table_name.into(),
@@ -179,7 +143,6 @@ impl LogWriter for DatabaseLogWriter {
     }
 }
 
-/// HTTP log writer for sending logs to external services
 #[derive(Debug)]
 pub struct HttpLogWriter {
     endpoint: String,
@@ -188,7 +151,6 @@ pub struct HttpLogWriter {
 }
 
 impl HttpLogWriter {
-    /// Create a new HTTP log writer
     pub fn new(endpoint: impl Into<String>) -> Self {
         Self {
             endpoint: endpoint.into(),
@@ -197,7 +159,6 @@ impl HttpLogWriter {
         }
     }
 
-    /// Add a header to all requests
     pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(key.into(), value.into());
         self
@@ -243,17 +204,16 @@ impl LogWriter for HttpLogWriter {
     }
 }
 
-/// Custom tracing layer that integrates with our logging system
 #[derive(Clone, Debug)]
 struct QorzenLayer {
-    writers: Arc<RwLock<Vec<Arc<dyn LogWriter>>>>,
+    entry_sender: mpsc::UnboundedSender<LogEntry>,
     stats: Arc<RwLock<LogStats>>,
 }
 
 impl QorzenLayer {
-    fn new() -> Self {
+    fn new(entry_sender: mpsc::UnboundedSender<LogEntry>) -> Self {
         Self {
-            writers: Arc::new(RwLock::new(Vec::new())),
+            entry_sender,
             stats: Arc::new(RwLock::new(LogStats {
                 total_entries: 0,
                 entries_by_level: HashMap::new(),
@@ -263,10 +223,6 @@ impl QorzenLayer {
                 last_rotation: None,
             })),
         }
-    }
-
-    async fn add_writer(&self, writer: Arc<dyn LogWriter>) {
-        self.writers.write().await.push(writer);
     }
 
     async fn get_stats(&self) -> LogStats {
@@ -296,49 +252,49 @@ where
             span: None, // Would extract current span info
         };
 
-        // Write to all configured writers asynchronously
-        let writers = self.writers.clone();
+        // Send entry through channel - this won't panic if the receiver is dropped
+        if self.entry_sender.send(entry).is_err() {
+            eprintln!("Failed to send log entry: receiver dropped");
+        }
+
+        // Update stats synchronously to avoid tokio calls
         let stats = self.stats.clone();
-
-        tokio::spawn(async move {
-            let writers_guard = writers.read().await;
-            for writer in writers_guard.iter() {
-                if let Err(e) = writer.write(&entry).await {
-                    eprintln!("Failed to write log entry: {}", e);
-                }
+        std::thread::spawn(move || {
+            if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                rt.spawn(async move {
+                    let mut stats_guard = stats.write().await;
+                    stats_guard.total_entries += 1;
+                    *stats_guard.entries_by_level.entry(level).or_insert(0) += 1;
+                });
             }
-
-            // Update statistics
-            let mut stats_guard = stats.write().await;
-            stats_guard.total_entries += 1;
-            *stats_guard.entries_by_level.entry(level).or_insert(0) += 1;
         });
     }
 }
 
-/// Main logging manager
 #[derive(Debug)]
 pub struct LoggingManager {
     state: ManagedState,
     config: LoggingConfig,
-    custom_layer: QorzenLayer,
+    custom_layer: Option<QorzenLayer>,
     _guards: Vec<WorkerGuard>, // Keep guards alive
     writers: Vec<Arc<dyn LogWriter>>,
+    entry_sender: Option<mpsc::UnboundedSender<LogEntry>>,
+    writer_task_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl LoggingManager {
-    /// Create a new logging manager
     pub fn new(config: LoggingConfig) -> Self {
         Self {
             state: ManagedState::new(Uuid::new_v4(), "logging_manager"),
             config,
-            custom_layer: QorzenLayer::new(),
+            custom_layer: None,
             _guards: Vec::new(),
             writers: Vec::new(),
+            entry_sender: None,
+            writer_task_handle: None,
         }
     }
 
-    /// Setup tracing subscriber based on configuration
     async fn setup_tracing(&mut self) -> Result<()> {
         let filter = EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| EnvFilter::new(&self.config.level));
@@ -404,8 +360,32 @@ impl LoggingManager {
             registry.with(Identity::new().boxed())
         };
 
+        // Setup custom layer with channel
+        let (entry_sender, mut entry_receiver) = mpsc::unbounded_channel::<LogEntry>();
+        let custom_layer = QorzenLayer::new(entry_sender.clone());
+
+        self.entry_sender = Some(entry_sender);
+        self.custom_layer = Some(custom_layer.clone());
+
+        // Start the writer task
+        let writers = Arc::new(RwLock::new(self.writers.clone()));
+        let writers_clone = Arc::clone(&writers);
+
+        let writer_task = tokio::spawn(async move {
+            while let Some(entry) = entry_receiver.recv().await {
+                let writers_guard = writers_clone.read().await;
+                for writer in writers_guard.iter() {
+                    if let Err(e) = writer.write(&entry).await {
+                        eprintln!("Failed to write log entry: {}", e);
+                    }
+                }
+            }
+        });
+
+        self.writer_task_handle = Some(writer_task);
+
         // Add our custom layer
-        let registry = registry.with(self.custom_layer.clone());
+        let registry = registry.with(custom_layer);
 
         // Initialize the global subscriber
         registry.init();
@@ -413,26 +393,32 @@ impl LoggingManager {
         Ok(())
     }
 
-    /// Add a custom log writer
     pub async fn add_writer(&mut self, writer: Arc<dyn LogWriter>) -> Result<()> {
-        self.custom_layer.add_writer(writer.clone()).await;
         self.writers.push(writer);
         Ok(())
     }
 
-    /// Get logging statistics
     pub async fn get_stats(&self) -> LogStats {
-        self.custom_layer.get_stats().await
+        if let Some(layer) = &self.custom_layer {
+            layer.get_stats().await
+        } else {
+            LogStats {
+                total_entries: 0,
+                entries_by_level: HashMap::new(),
+                avg_entries_per_second: 0.0,
+                current_file_size: 0,
+                rotated_files: 0,
+                last_rotation: None,
+            }
+        }
     }
 
-    /// Update log level at runtime
     pub async fn set_log_level(&mut self, level: LogLevel) -> Result<()> {
         // This would update the filter in a real implementation
         tracing::info!("Log level updated to: {:?}", level);
         Ok(())
     }
 
-    /// Flush all log writers
     pub async fn flush(&self) -> Result<()> {
         for writer in &self.writers {
             writer.flush().await.with_context(|| "Failed to flush log writer".to_string())?;
@@ -440,7 +426,6 @@ impl LoggingManager {
         Ok(())
     }
 
-    /// Create a logger with context
     pub fn create_logger(&self, component: impl Into<String>) -> Logger {
         Logger::new(component.into())
     }
@@ -489,6 +474,12 @@ impl Manager for LoggingManager {
             writer.close().await.with_context(|| "Failed to close log writer".to_string())?;
         }
 
+        // Stop the writer task
+        if let Some(handle) = self.writer_task_handle.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
+
         self.state.set_state(crate::manager::ManagerState::Shutdown).await;
         Ok(())
     }
@@ -507,7 +498,6 @@ impl Manager for LoggingManager {
     }
 }
 
-/// Component-specific logger with context
 #[derive(Debug, Clone)]
 pub struct Logger {
     component: String,
@@ -516,7 +506,6 @@ pub struct Logger {
 }
 
 impl Logger {
-    /// Create a new logger for a component
     pub fn new(component: String) -> Self {
         Self {
             component,
@@ -525,44 +514,36 @@ impl Logger {
         }
     }
 
-    /// Set correlation ID for all logs from this logger
     pub fn with_correlation_id(mut self, correlation_id: Uuid) -> Self {
         self.correlation_id = Some(correlation_id);
         self
     }
 
-    /// Add metadata that will be included in all logs
     pub fn with_metadata(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         self.metadata.insert(key.into(), value);
         self
     }
 
-    /// Log a trace message
     pub fn trace(&self, message: impl AsRef<str>) {
         self.log(LogLevel::Trace, message.as_ref(), &HashMap::new());
     }
 
-    /// Log a debug message
     pub fn debug(&self, message: impl AsRef<str>) {
         self.log(LogLevel::Debug, message.as_ref(), &HashMap::new());
     }
 
-    /// Log an info message
     pub fn info(&self, message: impl AsRef<str>) {
         self.log(LogLevel::Info, message.as_ref(), &HashMap::new());
     }
 
-    /// Log a warning message
     pub fn warn(&self, message: impl AsRef<str>) {
         self.log(LogLevel::Warn, message.as_ref(), &HashMap::new());
     }
 
-    /// Log an error message
     pub fn error(&self, message: impl AsRef<str>) {
         self.log(LogLevel::Error, message.as_ref(), &HashMap::new());
     }
 
-    /// Log with additional fields
     pub fn log_with_fields(
         &self,
         level: LogLevel,
@@ -572,7 +553,6 @@ impl Logger {
         self.log(level, message.as_ref(), fields);
     }
 
-    /// Internal log method
     fn log(&self, level: LogLevel, message: &str, fields: &HashMap<String, serde_json::Value>) {
         // Combine metadata and fields
         let mut all_fields = self.metadata.clone();
@@ -594,7 +574,6 @@ impl Logger {
     }
 }
 
-/// Convenient macros for logging with the component logger
 #[macro_export]
 macro_rules! log_trace {
     ($logger:expr, $($arg:tt)*) => {

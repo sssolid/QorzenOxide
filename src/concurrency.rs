@@ -29,23 +29,16 @@ use crate::config::ConcurrencyConfig;
 use crate::error::{Error, ErrorKind, ConcurrencyOperation, Result, ResultExt};
 use crate::manager::{Manager, ManagedState, ManagerStatus};
 
-/// Thread pool types for different workload categories
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThreadPoolType {
-    /// CPU-intensive computational tasks
     Compute,
-    /// I/O operations (file, network)
     Io,
-    /// Blocking operations that might block threads
     Blocking,
-    /// Background maintenance tasks
     Background,
-    /// Custom thread pool
     Custom(u8),
 }
 
 impl ThreadPoolType {
-    /// Get the default thread count for this pool type
     pub fn default_thread_count(self) -> usize {
         match self {
             Self::Compute => num_cpus::get(),
@@ -56,7 +49,6 @@ impl ThreadPoolType {
         }
     }
 
-    /// Get the queue capacity for this pool type
     pub fn default_queue_capacity(self) -> usize {
         match self {
             Self::Compute => 1000,
@@ -68,24 +60,15 @@ impl ThreadPoolType {
     }
 }
 
-/// Thread pool configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadPoolConfig {
-    /// Number of threads in the pool
     pub thread_count: usize,
-    /// Maximum number of queued tasks
     pub queue_capacity: usize,
-    /// Thread stack size
     pub stack_size: Option<usize>,
-    /// Thread priority (platform-specific)
     pub priority: Option<i32>,
-    /// Thread name prefix
     pub name_prefix: String,
-    /// Whether threads should be marked as daemon threads
     pub daemon: bool,
-    /// Keep-alive time for idle threads
     pub keep_alive: Duration,
-    /// Enable work stealing between threads
     pub work_stealing: bool,
 }
 
@@ -104,33 +87,21 @@ impl Default for ThreadPoolConfig {
     }
 }
 
-/// Work item for thread pool execution
 type WorkItem = Box<dyn FnOnce() + Send + 'static>;
 
-/// Thread pool statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadPoolStats {
-    /// Pool type
     pub pool_type: ThreadPoolType,
-    /// Number of active threads
     pub active_threads: usize,
-    /// Number of idle threads
     pub idle_threads: usize,
-    /// Current queue size
     pub queue_size: usize,
-    /// Total tasks executed
     pub total_executed: u64,
-    /// Total tasks rejected
     pub total_rejected: u64,
-    /// Average task execution time
     pub avg_execution_time_ms: f64,
-    /// Peak queue size
     pub peak_queue_size: usize,
-    /// Thread utilization percentage
     pub utilization_percent: f64,
 }
 
-/// Thread worker state
 #[derive(Debug)]
 struct ThreadWorker {
     id: usize,
@@ -177,7 +148,6 @@ impl ThreadWorkerStats {
     }
 }
 
-/// Thread pool implementation
 #[derive(Debug)]
 pub struct ThreadPool {
     pool_type: ThreadPoolType,
@@ -191,7 +161,6 @@ pub struct ThreadPool {
 }
 
 impl ThreadPool {
-    /// Create a new thread pool
     pub fn new(pool_type: ThreadPoolType, config: ThreadPoolConfig) -> Result<Self> {
         let global_queue = Arc::new(SegQueue::new());
         let shutdown_signal = Arc::new(parking_lot::Mutex::new(false));
@@ -272,7 +241,6 @@ impl ThreadPool {
         })
     }
 
-    /// Submit a task to the thread pool
     pub fn submit<F>(&self, task: F) -> Result<()>
     where
         F: FnOnce() + Send + 'static,
@@ -311,7 +279,6 @@ impl ThreadPool {
         Ok(())
     }
 
-    /// Submit an async task to the thread pool and return a future
     pub async fn submit_async<F, R>(&self, task: F) -> Result<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -337,12 +304,10 @@ impl ThreadPool {
         })
     }
 
-    /// Get current thread pool statistics
     pub fn stats(&self) -> ThreadPoolStats {
         self.stats.read().clone()
     }
 
-    /// Shutdown the thread pool gracefully
     pub fn shutdown(mut self, timeout: Duration) -> Result<()> {
         // Signal shutdown
         *self.shutdown_signal.lock() = true;
@@ -364,7 +329,8 @@ impl ThreadPool {
                 };
 
                 if join_result.is_err() {
-                    tracing::warn!("Worker thread {} did not shut down gracefully", worker.id);
+                    // Use eprintln instead of tracing to avoid the tokio runtime issue
+                    eprintln!("Worker thread {} did not shut down gracefully", worker.id);
                 }
             }
         }
@@ -372,7 +338,6 @@ impl ThreadPool {
         Ok(())
     }
 
-    /// Worker thread main loop
     fn worker_thread(
         worker_id: usize,
         local_queue: Arc<SegQueue<WorkItem>>,
@@ -382,7 +347,8 @@ impl ThreadPool {
         task_counter: Arc<AtomicU64>,
         work_stealing: bool,
     ) {
-        tracing::debug!("Worker thread {} started", worker_id);
+        // Use eprintln instead of tracing to avoid tokio runtime issues
+        eprintln!("Worker thread {} started", worker_id);
 
         while !*shutdown_signal.lock() {
             // Try to get work from local queue first
@@ -410,7 +376,7 @@ impl ThreadPool {
                 task_counter.fetch_add(1, Ordering::Relaxed);
 
                 if execution_result.is_err() {
-                    tracing::error!("Task panicked in worker thread {}", worker_id);
+                    eprintln!("Task panicked in worker thread {}", worker_id);
                 }
             } else {
                 // No work available, sleep briefly
@@ -418,10 +384,9 @@ impl ThreadPool {
             }
         }
 
-        tracing::debug!("Worker thread {} shutting down", worker_id);
+        eprintln!("Worker thread {} shutting down", worker_id);
     }
 
-    /// Update thread pool statistics
     fn update_stats(&self) {
         let mut stats = self.stats.write();
 
@@ -468,15 +433,11 @@ impl ThreadPool {
     }
 }
 
-/// Async work coordinator for managing async tasks across thread pools
 #[derive(Debug)]
 pub struct AsyncWorkCoordinator {
-    /// Semaphore for limiting concurrent async operations
     semaphore: Arc<Semaphore>,
-    /// Channel for coordinating work between async and sync contexts
     work_sender: mpsc::UnboundedSender<AsyncWorkItem>,
     work_receiver: Arc<parking_lot::Mutex<mpsc::UnboundedReceiver<AsyncWorkItem>>>,
-    /// Statistics
     stats: Arc<RwLock<AsyncCoordinatorStats>>,
 }
 
@@ -495,18 +456,13 @@ impl fmt::Debug for AsyncWorkItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AsyncCoordinatorStats {
-    /// Total async tasks coordinated
     pub total_coordinated: u64,
-    /// Currently active permits
     pub active_permits: usize,
-    /// Maximum concurrent operations
     pub max_concurrent: usize,
-    /// Average coordination time
     pub avg_coordination_time_ms: f64,
 }
 
 impl AsyncWorkCoordinator {
-    /// Create a new async work coordinator
     pub fn new(max_concurrent: usize) -> Self {
         let (work_sender, work_receiver) = mpsc::unbounded_channel();
         let semaphore = Arc::new(Semaphore::new(max_concurrent));
@@ -524,7 +480,6 @@ impl AsyncWorkCoordinator {
         }
     }
 
-    /// Coordinate execution of a task
     pub async fn coordinate<F, R>(&self, task: F) -> Result<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -584,7 +539,6 @@ impl AsyncWorkCoordinator {
         Ok(result)
     }
 
-    /// Update coordinator statistics
     fn update_stats(&self, coordination_time: Duration) {
         let mut stats = self.stats.write();
         stats.total_coordinated += 1;
@@ -595,13 +549,11 @@ impl AsyncWorkCoordinator {
             (total_time + coordination_time.as_millis() as f64) / stats.total_coordinated as f64;
     }
 
-    /// Get coordinator statistics
     pub fn stats(&self) -> AsyncCoordinatorStats {
         self.stats.read().clone()
     }
 }
 
-/// Main concurrency manager
 #[derive(Debug)]
 pub struct ConcurrencyManager {
     state: ManagedState,
@@ -612,7 +564,6 @@ pub struct ConcurrencyManager {
 }
 
 impl ConcurrencyManager {
-    /// Create a new concurrency manager
     pub fn new(config: ConcurrencyConfig) -> Result<Self> {
         let runtime_handle = tokio::runtime::Handle::current();
         let async_coordinator = AsyncWorkCoordinator::new(config.thread_pool_size * 2);
@@ -655,7 +606,6 @@ impl ConcurrencyManager {
         })
     }
 
-    /// Execute a CPU-intensive task
     pub async fn execute_compute<F, R>(&self, task: F) -> Result<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -673,7 +623,6 @@ impl ConcurrencyManager {
         compute_pool.submit_async(task).await
     }
 
-    /// Execute an I/O task
     pub async fn execute_io<F, R>(&self, task: F) -> Result<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -691,7 +640,6 @@ impl ConcurrencyManager {
         io_pool.submit_async(task).await
     }
 
-    /// Execute a blocking task
     pub async fn execute_blocking<F, R>(&self, task: F) -> Result<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -709,7 +657,6 @@ impl ConcurrencyManager {
         blocking_pool.submit_async(task).await
     }
 
-    /// Spawn a task on the async runtime
     pub fn spawn<F>(&self, future: F) -> tokio::task::JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
@@ -718,7 +665,6 @@ impl ConcurrencyManager {
         self.runtime_handle.spawn(future)
     }
 
-    /// Spawn a blocking task
     pub fn spawn_blocking<F, R>(&self, task: F) -> tokio::task::JoinHandle<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -727,12 +673,10 @@ impl ConcurrencyManager {
         self.runtime_handle.spawn_blocking(task)
     }
 
-    /// Get thread pool statistics
     pub fn get_thread_pool_stats(&self, pool_type: ThreadPoolType) -> Option<ThreadPoolStats> {
         self.thread_pools.get(&pool_type).map(|pool| pool.stats())
     }
 
-    /// Get all thread pool statistics
     pub fn get_all_thread_pool_stats(&self) -> HashMap<ThreadPoolType, ThreadPoolStats> {
         self.thread_pools
             .iter()
@@ -740,12 +684,10 @@ impl ConcurrencyManager {
             .collect()
     }
 
-    /// Get async coordinator statistics
     pub fn get_async_coordinator_stats(&self) -> AsyncCoordinatorStats {
         self.async_coordinator.stats()
     }
 
-    /// Create a custom thread pool
     pub fn create_custom_pool(
         &mut self,
         pool_id: u8,
@@ -757,7 +699,6 @@ impl ConcurrencyManager {
         Ok(())
     }
 
-    /// Execute task on custom thread pool
     pub async fn execute_custom<F, R>(&self, pool_id: u8, task: F) -> Result<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -811,7 +752,7 @@ impl Manager for ConcurrencyManager {
 
         for (pool_type, pool) in pools_to_shutdown {
             if let Err(e) = pool.shutdown(shutdown_timeout) {
-                tracing::error!("Failed to shutdown {:?} thread pool: {}", pool_type, e);
+                eprintln!("Failed to shutdown {:?} thread pool: {}", pool_type, e);
             }
         }
 
@@ -855,14 +796,12 @@ impl Manager for ConcurrencyManager {
     }
 }
 
-/// Utility functions for common concurrency patterns
 pub mod utils {
     use std::pin::Pin;
     use super::*;
     use std::sync::Arc;
     use tokio::sync::Barrier;
 
-    /// Execute multiple tasks concurrently and wait for all to complete
     pub async fn join_all<F, R>(tasks: Vec<F>) -> Vec<Result<R>>
     where
         F: Future<Output = Result<R>> + Send + 'static,
@@ -887,7 +826,6 @@ pub mod utils {
         results
     }
 
-    /// Execute tasks with a concurrency limit
     pub async fn execute_with_limit<F, R>(
         tasks: Vec<F>,
         limit: usize,
@@ -933,7 +871,6 @@ pub mod utils {
         results
     }
 
-    /// Synchronize multiple tasks at a barrier
     pub async fn synchronize_at_barrier(
         tasks: Vec<Box<dyn FnOnce(Arc<Barrier>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send>>,
     ) -> Result<()> {
