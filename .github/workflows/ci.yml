@@ -234,7 +234,7 @@ jobs:
   process_source:
     name: Process Rust Source for AI
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
     # needs: [check, fmt, clippy]  # Ensure code quality before processing
 
     steps:
