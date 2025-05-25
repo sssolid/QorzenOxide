@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tokio::time::{interval, sleep};
@@ -29,7 +30,14 @@ use qorzen_core::{
     types::Metadata,
 };
 
-/// Custom service that acts like a plugin
+#[derive(Parser, Debug)]
+#[command(name = "advanced")]
+#[command(about = "Advanced Qorzen Example", long_about = None)]
+struct Args {
+    #[arg(long, default_value = "config.yaml")]
+    config: String,
+}
+
 #[derive(Debug)]
 struct DataProcessingService {
     state: ManagedState,
@@ -84,7 +92,6 @@ struct ProcessedItem {
     processing_time_ms: u64,
 }
 
-/// Events for the data processing service
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DataReceivedEvent {
     batch_id: String,
@@ -310,7 +317,6 @@ impl Manager for DataProcessingService {
     }
 }
 
-/// Monitoring service that watches other services
 #[derive(Debug)]
 struct MonitoringService {
     state: ManagedState,
@@ -472,23 +478,26 @@ impl Manager for MonitoringService {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Setup enhanced logging for the advanced example
-    tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .with_target(false)
-        .init();
+    let args = Args::parse();
 
     println!("🚀 Starting Qorzen Core Advanced Example");
 
-    // Initialize the application
-    let mut app = ApplicationCore::new();
+    // Initialize the application with config file (same as basic example)
+    let mut app = ApplicationCore::with_config_file(&args.config);
     app.initialize().await?;
 
     let app_arc = Arc::new(app);
 
     println!("✅ Application initialized successfully");
 
-    // Create and register custom services
+    // Get the configuration
+    let config = app_arc.get_config().await?;
+    println!("📝 Using configuration:");
+    println!("   App name: {}", config.app.name);
+    println!("   Environment: {}", config.app.environment);
+    println!("   Debug mode: {}", config.app.debug);
+
+    // Create and initialize custom services with proper error handling
     let mut data_service = DataProcessingService::new(DataProcessingConfig {
         batch_size: 5,
         processing_interval_ms: 2000,
@@ -496,12 +505,14 @@ async fn main() -> Result<()> {
         enable_validation: true,
     });
 
-    let mut monitoring_service = Some(MonitoringService::new());
+    let mut monitoring_service = MonitoringService::new();
 
     // Initialize services
+    println!("🔧 Initializing custom services...");
+
     data_service.initialize().await?;
-    monitoring_service.as_mut().unwrap().initialize().await?;
-    monitoring_service.as_mut().unwrap().start_monitoring(Arc::clone(&app_arc)).await?;
+    monitoring_service.initialize().await?;
+    monitoring_service.start_monitoring(Arc::clone(&app_arc)).await?;
 
     println!("✅ Custom services initialized");
 
@@ -511,7 +522,7 @@ async fn main() -> Result<()> {
     // Simulate running for a period to see processing and monitoring
     for i in 1..=10 {
         display_monitoring_status(
-            monitoring_service.as_ref().unwrap(),
+            &monitoring_service,
             i,
             &data_service
         ).await?;
@@ -529,24 +540,26 @@ async fn main() -> Result<()> {
     println!("    Total processed: {}", data_stats.total_processed);
     println!("    Total errors: {}", data_stats.total_errors);
     println!("    Processing rate: {:.2}/sec", data_stats.processing_rate_per_second);
-    
-    show_final_monitoring_summary(monitoring_service.as_ref().unwrap()).await?;
+
+    show_final_monitoring_summary(&monitoring_service).await?;
 
     let app_health = app_arc.get_health().await;
     println!("  Application Health: {:?}", app_health.status);
 
+    // Show application stats
+    let app_stats = app_arc.get_stats().await;
+    println!("  Application Stats:");
+    println!("    Version: {}", app_stats.version);
+    println!("    Uptime: {:?}", app_stats.uptime);
+    println!("    Managers: {}/{}", app_stats.initialized_managers, app_stats.manager_count);
+
     // Shutdown services
     println!("\n🛑 Shutting down services...");
     data_service.shutdown().await?;
-    if let Some(mut svc) = monitoring_service.take() {
-        svc.shutdown().await?;
-    }
+    monitoring_service.shutdown().await?;
 
-    // Shutdown application (we need to get mutable access back)
+    // Note: We can't shutdown app_arc directly since it's an Arc
     // In a real implementation, you'd handle this more elegantly
-    println!("🛑 Shutting down application...");
-    // app_arc.shutdown().await?; // Can't call this on Arc<T>
-
     println!("✅ Advanced example completed successfully");
 
     Ok(())
@@ -592,6 +605,7 @@ async fn show_final_monitoring_summary(monitoring_service: &MonitoringService) -
 async fn demonstrate_complex_task_workflow() -> Result<()> {
     println!("  🎯 Executing complex task workflow...");
 
+    // Create a new task manager instance for this workflow
     let config = qorzen_core::config::TaskConfig::default();
     let mut task_manager = qorzen_core::task::TaskManager::new(config);
     task_manager.initialize().await?;
