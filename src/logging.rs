@@ -377,7 +377,7 @@ impl LoggingManager {
         let registry = registry.with(custom_layer);
 
         // Initialize the global subscriber
-        registry.init();
+        registry.try_init().ok();
 
         Ok(())
     }

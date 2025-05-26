@@ -391,6 +391,18 @@ impl std::error::Error for Error {
     }
 }
 
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        let msg = err.to_string();
+
+        let mut error = Error::new(ErrorKind::Io, msg);
+        error.source = "std::io::Error".to_string();
+        error.severity = ErrorSeverity::High;
+
+        error
+    }
+}
+
 /// Extension trait for Results to add context
 pub trait ResultExt<T> {
     /// Adds context to an error
