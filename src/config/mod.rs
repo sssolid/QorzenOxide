@@ -28,6 +28,9 @@ use crate::event::{Event, EventBusManager};
 use crate::manager::{ManagedState, Manager, ManagerStatus};
 use crate::types::Metadata;
 
+pub mod tiered;
+pub use tiered::{ConfigurationTier, TieredConfigManager, MemoryConfigStore};
+
 /// Configuration change event
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigChangeEvent {
@@ -61,6 +64,21 @@ impl Event for ConfigChangeEvent {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.timestamp
+    }
+}
+
+/// Settings schema for plugin configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SettingsSchema {
+    /// Schema version
+    pub version: String,
+    /// Schema definition (JSON Schema)
+    pub schema: Value,
+    /// Default values
+    pub defaults: Value,
 }
 
 /// Configuration validation error
@@ -246,7 +264,7 @@ pub enum LogFormat {
 pub struct ConsoleLogConfig {
     /// Whether console logging is enabled
     pub enabled: bool,
-    // Optional override to global logging
+    /// Optional override to global logging
     pub level: String,
     /// Whether to use colored output
     pub colored: bool,

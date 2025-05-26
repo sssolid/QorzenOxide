@@ -15,7 +15,7 @@ use crate::auth::{Permission, User};
 use crate::error::{Error, Result};
 use crate::event::{Event, EventBusManager};
 use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
-use crate::platform::{DatabaseProvider, FileSystemProvider, StorageProvider};
+use crate::platform::{DatabaseProvider, FileSystemProvider};
 use crate::config::SettingsSchema;
 
 /// Plugin information
@@ -107,7 +107,7 @@ pub enum ComponentType {
 }
 
 /// Menu item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MenuItem {
     pub id: String,
     pub label: String,
@@ -196,6 +196,7 @@ pub struct EventHandler {
 }
 
 /// Plugin context provided to plugins
+#[derive(Clone)]
 pub struct PluginContext {
     pub plugin_id: String,
     pub config: PluginConfig,
@@ -244,6 +245,7 @@ impl PluginApiClient {
 }
 
 /// Plugin database access (isolated)
+#[derive(Clone)]
 pub struct PluginDatabase {
     plugin_id: String,
     provider: Arc<dyn DatabaseProvider>,
@@ -307,6 +309,7 @@ impl PluginDatabase {
 }
 
 /// Plugin file system access (sandboxed)
+#[derive(Clone)]
 pub struct PluginFileSystem {
     plugin_id: String,
     provider: Arc<dyn FileSystemProvider>,
@@ -391,7 +394,7 @@ impl PluginSandbox {
 
 /// Main plugin trait
 #[async_trait]
-pub trait Plugin: Send + Sync {
+pub trait Plugin: Send + Sync + std::fmt::Debug {
     /// Returns plugin information
     fn info(&self) -> PluginInfo;
 
@@ -423,7 +426,7 @@ pub trait Plugin: Send + Sync {
     fn event_handlers(&self) -> Vec<EventHandler>;
 
     /// Renders a UI component
-    fn render_component(&self, component_id: &str, props: serde_json::Value) -> Result<Element>;
+    fn render_component(&self, component_id: &str, props: serde_json::Value) -> Result<VNode>;
 
     /// Handles an API request
     async fn handle_api_request(&self, route_id: &str, request: ApiRequest) -> Result<ApiResponse>;
@@ -444,7 +447,7 @@ pub struct ApiRequest {
 }
 
 /// API response structure
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiResponse {
     pub status_code: u16,
     pub headers: HashMap<String, String>,
@@ -749,7 +752,7 @@ impl PluginManager {
         plugin_id: &str,
         component_id: &str,
         props: serde_json::Value,
-    ) -> Result<Element> {
+    ) -> Result<VNode> {
         let plugin = self
             .registry
             .get(plugin_id)
@@ -936,7 +939,7 @@ mod tests {
             &self,
             _component_id: &str,
             _props: serde_json::Value,
-        ) -> Result<Element> {
+        ) -> Result<VNode> {
             Err(Error::plugin(
                 &self.info.id,
                 "Component rendering not implemented",

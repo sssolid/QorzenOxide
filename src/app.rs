@@ -8,7 +8,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, Mutex, RwLock};
 use tokio::time::{interval, timeout};
 use uuid::Uuid;
 
@@ -98,7 +98,7 @@ pub struct ApplicationCore {
     platform_manager: Option<PlatformManager>,
 
     // Core configuration and settings
-    config_manager: Option<TieredConfigManager>,
+    config_manager: Option<Arc<Mutex<TieredConfigManager>>>,
 
     // Enhanced core managers
     logging_manager: Option<LoggingManager>,
@@ -236,7 +236,7 @@ impl ApplicationCore {
         );
 
         config_manager.initialize().await?;
-        self.config_manager = Some(config_manager);
+        self.config_manager = Some(Arc::new(Mutex::new(config_manager)));
         Ok(())
     }
 
@@ -244,7 +244,8 @@ impl ApplicationCore {
         tracing::info!("Initializing logging manager");
         let config = if let Some(config_manager) = &self.config_manager {
             // Get logging config from configuration system
-            config_manager
+            let manager = config_manager.lock().await;
+            manager
                 .get("logging")
                 .await
                 .unwrap_or(None)
@@ -262,7 +263,8 @@ impl ApplicationCore {
     async fn init_concurrency_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing concurrency manager");
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager
+            let manager = config_manager.lock().await;
+            manager
                 .get("concurrency")
                 .await
                 .unwrap_or(None)
@@ -280,7 +282,8 @@ impl ApplicationCore {
     async fn init_event_bus_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing event bus manager");
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager
+            let manager = config_manager.lock().await;
+            manager
                 .get("event_bus")
                 .await
                 .unwrap_or(None)
@@ -308,7 +311,8 @@ impl ApplicationCore {
     async fn init_file_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing file manager");
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager
+            let manager = config_manager.lock().await;
+            manager
                 .get("files")
                 .await
                 .unwrap_or(None)
@@ -332,7 +336,8 @@ impl ApplicationCore {
     async fn init_task_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing task manager");
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager
+            let manager = config_manager.lock().await;
+            manager
                 .get("tasks")
                 .await
                 .unwrap_or(None)
@@ -356,7 +361,8 @@ impl ApplicationCore {
     async fn init_account_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing account manager");
         let security_policy = if let Some(config_manager) = &self.config_manager {
-            config_manager
+            let manager = config_manager.lock().await;
+            manager
                 .get("security")
                 .await
                 .unwrap_or(None)
@@ -400,13 +406,17 @@ impl ApplicationCore {
         self.start_health_monitoring().await?;
 
         // Start configuration sync (if enabled)
-        if let Some(config_manager) = &self.config_manager {
-            let config_manager_clone = config_manager.clone();
+        if let Some(config_manager) = self.config_manager.as_ref().cloned() {
             tokio::spawn(async move {
-                let mut interval = interval(Duration::from_secs(300)); // 5 minutes
+                let mut interval = interval(Duration::from_secs(300));
                 loop {
                     interval.tick().await;
-                    if let Err(e) = config_manager_clone.sync().await {
+                    let result = {
+                        let mut manager = config_manager.lock().await;
+                        manager.sync().await
+                    };
+
+                    if let Err(e) = result {
                         tracing::error!("Configuration sync failed: {}", e);
                     }
                 }
@@ -528,7 +538,8 @@ impl ApplicationCore {
         }
 
         if let Some(mut config_manager) = self.config_manager.take() {
-            let _ = timeout(Duration::from_secs(2), config_manager.shutdown()).await;
+            let mut manager = config_manager.lock().await;
+            let _ = timeout(Duration::from_secs(2), manager.shutdown()).await;
         }
 
         if let Some(mut platform_manager) = self.platform_manager.take() {
@@ -569,7 +580,8 @@ impl ApplicationCore {
         }
 
         if let Some(config_manager) = &self.config_manager {
-            let health = config_manager.health_check().await;
+            let manager = config_manager.lock().await;
+            let health = manager.health_check().await;
             if health != HealthStatus::Healthy {
                 overall_healthy = false;
             }

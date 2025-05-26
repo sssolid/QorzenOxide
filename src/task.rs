@@ -521,18 +521,21 @@ impl TaskManager {
                 if !dep_task.info.is_terminal() {
                     return Err(Error::task(
                         Some(task_id),
+                        Some(format!("dep_{}", dep_id)),
                         format!("Dependency task {} is not completed", dep_id),
                     ));
                 }
                 if dep_task.info.status != TaskStatus::Completed {
                     return Err(Error::task(
                         Some(task_id),
+                        Some(format!("dep_{}", dep_id)),
                         format!("Dependency task {} failed", dep_id),
                     ));
                 }
             } else {
                 return Err(Error::task(
                     Some(task_id),
+                    Some(format!("dep_{}", dep_id)),
                     format!("Dependency task {} not found", dep_id),
                 ));
             }
@@ -590,7 +593,7 @@ impl TaskManager {
     pub async fn cancel_task(&self, task_id: Uuid) -> Result<bool> {
         if let Some(mut task) = self.tasks.get_mut(&task_id) {
             if !task.info.cancellable {
-                return Err(Error::task(Some(task_id), "Task is not cancellable"));
+                return Err(Error::task(Some(task_id), None, "Task is not cancellable"));
             }
 
             if task.info.is_terminal() {
@@ -623,7 +626,7 @@ impl TaskManager {
 
             Ok(true)
         } else {
-            Err(Error::task(Some(task_id), "Task not found"))
+            Err(Error::task(Some(task_id), None, "Task not found"))
         }
     }
 
@@ -708,7 +711,7 @@ impl TaskManager {
                 wait_future.await
             }
         } else {
-            Err(Error::task(Some(task_id), "Task not found"))
+            Err(Error::task(Some(task_id), None, "Task not found"))
         }
     }
 
@@ -767,7 +770,7 @@ impl TaskManager {
             }
         }
 
-        Err(Error::task(Some(task_id), "Task completion wait failed"))
+        Err(Error::task(Some(task_id), None,"Task completion wait failed"))
     }
 
     pub async fn get_stats(&self) -> TaskManagerStats {

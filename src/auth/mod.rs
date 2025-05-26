@@ -44,15 +44,15 @@ pub struct Role {
 }
 
 /// Permission definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Permission {
     pub resource: String, // "user.profile", "plugin.inventory", "system.config"
-    pub action: String,   // "read", "write", "delete", "execute"
+    pub action: String, // "read", "write", "delete", "execute"
     pub scope: PermissionScope,
 }
 
 /// Permission scope
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PermissionScope {
     Own,                // User's own resources
     Department(String), // Department-specific resources

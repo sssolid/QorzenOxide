@@ -87,7 +87,7 @@ fn setup_logging(cli: &Cli) {
     tracing_subscriber::fmt()
         .with_max_level(level)
         .with_target(false)
-        .init();
+        .try_init().ok();
 }
 
 async fn run_application(cli: &Cli, headless: bool) -> Result<()> {
@@ -124,21 +124,14 @@ async fn run_application(cli: &Cli, headless: bool) -> Result<()> {
         // Launch Dioxus application
         #[cfg(target_arch = "wasm32")]
         {
-            dioxus::web::launch::launch(App, vec![], Default::default());
+            #[cfg(feature = "web")]
+            dioxus::launch(App);
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            use dioxus::desktop::{Config, WindowBuilder};
-
-            let config = Config::new().with_window(
-                WindowBuilder::new()
-                    .with_title("Qorzen Oxide")
-                    .with_resizable(true)
-                    .with_inner_size(dioxus::desktop::tao::dpi::LogicalSize::new(1200.0, 800.0)),
-            );
-
-            dioxus::desktop::launch_with_props(App, (), config);
+            #[cfg(feature = "desktop")]
+            dioxus::launch(App);
         }
     }
 

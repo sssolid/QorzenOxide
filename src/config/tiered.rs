@@ -404,7 +404,10 @@ impl TieredConfigManager {
     {
         // Check cache first
         if let Some(cached_value) = self.cache.read().await.get(key) {
-            return Ok(Some(serde_json::from_value(cached_value.clone())?));
+            return Ok(Some(
+                serde_json::from_value(cached_value.clone())
+                    .map_err(|e| Error::config(&format!("Deserialization failed: {e}")))?
+            ));
         }
 
         // Collect values from all tiers
@@ -429,12 +432,13 @@ impl TieredConfigManager {
         self.cache.write().await.insert(key.to_string(), merged_value.clone());
 
         // Deserialize and return
-        let result: T = serde_json::from_value(merged_value)?;
+        let result: T = serde_json::from_value(merged_value)
+            .map_err(|e| Error::config("Failed to deserialize merged value"))?;
         Ok(Some(result))
     }
 
     /// Sets a configuration value in a specific tier
-    pub async fn set(&self, key: &str, value: Value, tier: ConfigurationTier) -> Result<()> {
+    pub async fn set(&mut self, key: &str, value: Value, tier: ConfigurationTier) -> Result<()> {
         // Validate the value
         let validation_errors = self.validation_rules.validate(key, &value);
         if validation_errors.iter().any(|e| matches!(e.severity, ValidationSeverity::Error)) {

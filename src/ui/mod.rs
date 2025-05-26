@@ -14,7 +14,7 @@ use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements}
 use crate::plugin::{MenuItem, PluginManager};
 
 /// UI layout configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct UILayout {
     pub layout_id: String,
     pub name: String,
@@ -37,7 +37,7 @@ pub enum Platform {
 }
 
 /// Header configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct HeaderConfig {
     pub show_logo: bool,
     pub show_user_menu: bool,
@@ -57,7 +57,7 @@ pub struct QuickAction {
 }
 
 /// Sidebar configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct SidebarConfig {
     pub show: bool,
     pub collapsible: bool,
@@ -67,7 +67,7 @@ pub struct SidebarConfig {
 }
 
 /// Navigation item
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct NavigationItem {
     pub id: String,
     pub label: String,
@@ -97,7 +97,7 @@ pub struct PluginPanel {
 }
 
 /// Main content area configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct MainContentConfig {
     pub padding: String,
     pub max_width: Option<String>,
@@ -105,7 +105,7 @@ pub struct MainContentConfig {
 }
 
 /// Footer configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct FooterConfig {
     pub show: bool,
     pub content: String,
@@ -121,7 +121,7 @@ pub struct FooterLink {
 }
 
 /// Responsive breakpoint configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct BreakpointConfig {
     pub mobile: u32,  // 0-767px
     pub tablet: u32,  // 768-1023px
@@ -130,7 +130,7 @@ pub struct BreakpointConfig {
 }
 
 /// Theme configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Theme {
     pub id: String,
     pub name: String,
@@ -142,7 +142,7 @@ pub struct Theme {
 }
 
 /// Color palette
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ColorPalette {
     pub primary: String,
     pub secondary: String,
@@ -159,7 +159,7 @@ pub struct ColorPalette {
 }
 
 /// Typography configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Typography {
     pub font_family: String,
     pub font_size_base: String,
@@ -170,7 +170,7 @@ pub struct Typography {
 }
 
 /// Spacing configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Spacing {
     pub unit: String,
     pub xs: String,
@@ -181,7 +181,7 @@ pub struct Spacing {
 }
 
 /// Shadow configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Shadows {
     pub sm: String,
     pub md: String,
@@ -190,7 +190,7 @@ pub struct Shadows {
 }
 
 /// Animation configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Animations {
     pub duration_fast: String,
     pub duration_normal: String,
@@ -522,7 +522,7 @@ impl Manager for UILayoutManager {
 }
 
 /// Simple UI components for demo purposes
-pub fn app() -> Element {
+pub fn App() -> Element {
     rsx! {
         div {
             class: "qorzen-app",
