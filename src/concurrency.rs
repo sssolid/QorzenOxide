@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot, Semaphore};
 use uuid::Uuid;
 
-use crate::config::ConcurrencyConfig;
+use crate::r#mod::ConcurrencyConfig;
 use crate::error::{Error, ErrorKind, ConcurrencyOperation, Result, ResultExt};
 use crate::manager::{Manager, ManagedState, ManagerStatus};
 

@@ -139,7 +139,7 @@ Let's create a complete example: a "Product Catalog" plugin for an e-commerce ap
 
 ```rust
 // src/lib.rs
-use qorzen_core::{
+use qorzen_oxide::{
     plugin::{Plugin, PluginInfo, PluginContext, PluginDependency},
     manager::{Manager, ManagedState, ManagerStatus},
     error::{Result, Error},
@@ -731,7 +731,7 @@ impl EventHandler for ProductPriceChangeHandler {
 ```rust
 // src/ui/mod.rs
 use dioxus::prelude::*;
-use qorzen_core::{
+use qorzen_oxide::{
     ui::{UIComponent, UIComponentType},
     types::Permission,
 };
@@ -964,7 +964,7 @@ async fn fetch_products() -> Result<Vec<Product>, Error> {
 
 ```rust
 // src/api/handlers.rs
-use qorzen_core::{
+use qorzen_oxide::{
     api::{ApiHandler, ApiRequest, ApiResponse, HttpMethod},
     error::{Result, Error},
     types::Permission,

@@ -21,7 +21,7 @@ use tokio::sync::RwLock;
 use tokio::time::{interval, sleep};
 use uuid::Uuid;
 
-use qorzen_core::{
+use qorzen_oxide::{
     app::ApplicationCore,
     error::{Error, ErrorKind, Result},
     event::{Event, EventFilter},
@@ -258,7 +258,7 @@ impl Manager for DataProcessingService {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(qorzen_core::manager::ManagerState::Initializing).await;
+        self.state.set_state(qorzen_oxide::manager::ManagerState::Initializing).await;
 
         tracing::info!("Initializing Data Processing Service");
         tracing::info!("  Batch size: {}", self.config.batch_size);
@@ -268,20 +268,20 @@ impl Manager for DataProcessingService {
         // Start the processing loop
         self.start_processing_loop().await?;
 
-        self.state.set_state(qorzen_core::manager::ManagerState::Running).await;
+        self.state.set_state(qorzen_oxide::manager::ManagerState::Running).await;
         tracing::info!("Data Processing Service initialized successfully");
 
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(qorzen_core::manager::ManagerState::ShuttingDown).await;
+        self.state.set_state(qorzen_oxide::manager::ManagerState::ShuttingDown).await;
 
         tracing::info!("Shutting down Data Processing Service");
 
         // In a real implementation, you'd stop the processing loop gracefully
 
-        self.state.set_state(qorzen_core::manager::ManagerState::Shutdown).await;
+        self.state.set_state(qorzen_oxide::manager::ManagerState::Shutdown).await;
         tracing::info!("Data Processing Service shutdown complete");
 
         Ok(())
@@ -451,16 +451,16 @@ impl Manager for MonitoringService {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(qorzen_core::manager::ManagerState::Initializing).await;
+        self.state.set_state(qorzen_oxide::manager::ManagerState::Initializing).await;
         tracing::info!("Monitoring Service initialized");
-        self.state.set_state(qorzen_core::manager::ManagerState::Running).await;
+        self.state.set_state(qorzen_oxide::manager::ManagerState::Running).await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(qorzen_core::manager::ManagerState::ShuttingDown).await;
+        self.state.set_state(qorzen_oxide::manager::ManagerState::ShuttingDown).await;
         tracing::info!("Monitoring Service shutdown");
-        self.state.set_state(qorzen_core::manager::ManagerState::Shutdown).await;
+        self.state.set_state(qorzen_oxide::manager::ManagerState::Shutdown).await;
         Ok(())
     }
 
@@ -606,8 +606,8 @@ async fn demonstrate_complex_task_workflow() -> Result<()> {
     println!("  🎯 Executing complex task workflow...");
 
     // Create a new task manager instance for this workflow
-    let config = qorzen_core::config::TaskConfig::default();
-    let mut task_manager = qorzen_core::task::TaskManager::new(config);
+    let config = qorzen_oxide::r#mod::TaskConfig::default();
+    let mut task_manager = qorzen_oxide::task::TaskManager::new(config);
     task_manager.initialize().await?;
 
     // Create a workflow with dependencies

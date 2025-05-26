@@ -30,7 +30,7 @@ use tracing_subscriber::{
 use tracing_subscriber::layer::Identity;
 use uuid::Uuid;
 
-use crate::config::{LoggingConfig, LogFormat};
+use crate::r#mod::{LoggingConfig, LogFormat};
 use crate::error::{Error, ErrorKind, Result, ResultExt};
 use crate::manager::{Manager, ManagedState, ManagerStatus};
 

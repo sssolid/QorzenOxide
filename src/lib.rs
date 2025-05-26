@@ -18,7 +18,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use qorzen_core::{ApplicationCore, Result};
+//! use qorzen_oxide::{ApplicationCore, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
@@ -52,7 +52,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub mod types;
-pub mod config;
+pub mod r#mod;
 pub mod error;
 pub mod event;
 pub mod file;
@@ -62,6 +62,10 @@ pub mod task;
 pub mod concurrency;
 pub mod app;
 pub mod utils;
+pub mod auth;
+pub mod ui;
+pub mod plugin;
+pub mod platform;
 
 // Re-export commonly used types
 pub use app::ApplicationCore;

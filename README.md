@@ -37,7 +37,7 @@ qorzen-core = "0.1.0"
 ### Basic Usage
 
 ```rust
-use qorzen_core::{ApplicationCore, Result};
+use qorzen_oxide::{ApplicationCore, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -60,10 +60,10 @@ async fn main() -> Result<()> {
 ### With Configuration File
 
 ```rust
-use qorzen_core::ApplicationCore;
+use qorzen_oxide::ApplicationCore;
 
 #[tokio::main]
-async fn main() -> qorzen_core::Result<()> {
+async fn main() -> qorzen_oxide::Result<()> {
     let mut app = ApplicationCore::with_config_file("config.yaml");
     app.initialize().await?;
     
@@ -165,7 +165,7 @@ qorzen manager status task_manager
 ### Event System
 
 ```rust
-use qorzen_core::event::{Event, EventBusManager, EventFilter};
+use qorzen_oxide::event::{Event, EventBusManager, EventFilter};
 
 // Subscribe to events
 let event_bus = app.get_event_bus().await?;
@@ -188,7 +188,7 @@ struct UserCreatedEvent {
 impl Event for UserCreatedEvent {
     fn event_type(&self) -> &'static str { "user.created" }
     fn source(&self) -> &str { "user_service" }
-    fn metadata(&self) -> &qorzen_core::types::Metadata { &HashMap::new() }
+    fn metadata(&self) -> &qorzen_oxide::types::Metadata { &HashMap::new() }
     fn as_any(&self) -> &dyn std::any::Any { self }
 }
 
@@ -203,7 +203,7 @@ event_bus.publish(event).await?;
 ### Task Management
 
 ```rust
-use qorzen_core::task::{TaskBuilder, TaskCategory, TaskPriority};
+use qorzen_oxide::task::{TaskBuilder, TaskCategory, TaskPriority};
 
 let task_manager = app.get_task_manager().await?;
 
@@ -241,7 +241,7 @@ println!("Task completed: {:?}", result.status);
 ### File Management
 
 ```rust
-use qorzen_core::file::{FileManager, DirectoryType, FileOperationOptions};
+use qorzen_oxide::file::{FileManager, DirectoryType, FileOperationOptions};
 
 let file_manager = app.get_file_manager().await?;
 
@@ -324,7 +324,7 @@ config_manager.reload().await?;
 Qorzen Oxide provides comprehensive error handling with context and recovery:
 
 ```rust
-use qorzen_core::error::{Error, ErrorKind, ErrorSeverity, ResultExt};
+use qorzen_oxide::error::{Error, ErrorKind, ErrorSeverity, ResultExt};
 
 // Create specific error types
 let config_error = Error::config("Invalid database configuration")

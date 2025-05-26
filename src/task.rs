@@ -18,7 +18,7 @@ use tokio::sync::{broadcast, RwLock, Semaphore};
 use tokio::time::{timeout, Instant};
 use uuid::Uuid;
 
-use crate::config::TaskConfig;
+use crate::r#mod::TaskConfig;
 use crate::error::{Error, Result};
 use crate::event::{Event, EventBusManager};
 use crate::manager::{Manager, ManagedState, ManagerStatus};

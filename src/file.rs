@@ -26,7 +26,7 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
-use crate::config::FileConfig;
+use crate::r#mod::FileConfig;
 use crate::error::{Error, FileOperation, Result, ResultExt};
 use crate::event::{Event, EventBusManager};
 use crate::manager::{Manager, ManagedState, ManagerStatus};

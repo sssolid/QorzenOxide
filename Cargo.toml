@@ -1,103 +1,90 @@
-# Cargo.toml
 [package]
-name = "qorzen-core"
+name = "qorzen-oxide"
 version = "0.1.0"
 edition = "2021"
-authors = ["Ryan Serra <ryan_serra@hotmail.com>"]
-description = "A modular plugin-based system with async core managers"
+description = "A cross-platform, plugin-based application framework built with Rust and Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sssolid/QorzenOxide"
-readme = "README.md"
-keywords = ["async", "plugin", "system", "manager", "event-driven"]
-categories = ["asynchronous", "development-tools"]
+homepage = "https://qorzen.dev"
+authors = ["Qorzen Team <team@qorzen.dev>"]
 
 [dependencies]
-# Async runtime and utilities
-tokio = { version = "1.40", features = ["full"] }
-tokio-util = "0.7"
-futures = "0.3"
+# Core framework
+dioxus = "0.4"
+# Optional runtimes
+dioxus-desktop = { version = "0.4", optional = true }
+dioxus-web = { version = "0.4", optional = true }
+# Optional router
+dioxus-router = { version = "0.4", optional = true }
+tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
-
-# Serialization and configuration
+uuid = { version = "1.0", features = ["v4", "serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.9"
-toml = "0.8"
-config = "0.14"
-
-# Logging and observability
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-tracing-appender = { version = "0.2", optional = true }
-tracing-opentelemetry = { version = "0.24", optional = true }
-
-# Error handling
-thiserror = "1.0"
-anyhow = "1.0"
-color-eyre = "0.6"
-
-# File system operations
-walkdir = "2.4"
-sha2 = "0.10"
-uuid = { version = "1.10", features = ["v4", "serde"] }
-
-# Concurrency utilities
-dashmap = "6.0"
-parking_lot = "0.12"
-crossbeam = "0.8"
-crossbeam-channel = "0.5"
-num_cpus = "1.16"
-
-# Time and datetime
 chrono = { version = "0.4", features = ["serde"] }
 
-# Command line interface
-clap = { version = "4.4", features = ["derive", "env"] }
+# Error handling and logging
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
 
-# Random number generation
-rand = "0.8"
+# Configuration
+serde_yaml = "0.9"
+toml = "0.8"
 
-# Compression
+# Async utilities
+futures = "0.3"
+dashmap = "5.0"
+
+# Networking
+reqwest = { version = "0.11", features = ["json"] }
+
+# File handling
+notify = "6.0"
+sha2 = "0.10"
 flate2 = "1.0"
 
-# Networking (for future API features)
-reqwest = { version = "0.12", features = ["json"] }
-tower = "0.4"
-hyper = "1.4"
-hostname = "0.4"
-notify = "8.0.0"
+# CLI
+clap = { version = "4.0", features = ["derive"] }
 
-# Development dependencies
+# System information
+num_cpus = "1.0"
+hostname = "0.3"
+
+# Concurrency
+crossbeam = "0.8"
+parking_lot = "0.12"
+
+# Platform-specific dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dirs = "5.0"
+tempfile = "3.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3"
+js-sys = "0.3"
+
 [dev-dependencies]
 tokio-test = "0.4"
-tempfile = "3.8"
-proptest = "1.4"
-criterion = "0.5"
 
 [build-dependencies]
 rustc_version = "0.4.1"
 
-# Feature flags
 [features]
-default = ["json-logs", "file-rotation"]
-json-logs = []
-file-rotation = ["tracing-appender"]
-metrics = ["tracing-opentelemetry"]
-
-# Optimization profiles
-[profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-
-[profile.dev]
-debug = true
-opt-level = 0
+default = []
+desktop = ["dioxus-desktop"]
+web     = ["dioxus-web"]
+router  = ["dioxus-router"]
+mobile = []
 
 [[bin]]
-name = "qorzen"
+name = "qorzen-oxide"
 path = "src/main.rs"
 
 [lib]
-name = "qorzen_core"
+name = "qorzen_oxide"
 path = "src/lib.rs"

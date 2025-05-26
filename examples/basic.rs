@@ -16,10 +16,10 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 
-use qorzen_core::{app::ApplicationCore, error::Result, event::{Event}, file::{FileOperationOptions}, task::{TaskBuilder, TaskCategory, TaskPriority}, types::Metadata, Error, ErrorKind, Manager};
+use qorzen_oxide::{app::ApplicationCore, error::Result, event::{Event}, file::{FileOperationOptions}, task::{TaskBuilder, TaskCategory, TaskPriority}, types::Metadata, Error, ErrorKind, Manager};
 
 use clap::Parser;
-use qorzen_core::config::AppConfig;
+use qorzen_oxide::r#mod::AppConfig;
 
 #[derive(Parser, Debug)]
 #[command(name = "basic")]
@@ -152,8 +152,8 @@ async fn demonstrate_file_operations() -> Result<()> {
     println!("  📁 File Management:");
 
     // Create a temporary file manager for demonstration
-    let config = qorzen_core::config::FileConfig::default();
-    let mut file_manager = qorzen_core::file::FileManager::new(config);
+    let config = qorzen_oxide::r#mod::FileConfig::default();
+    let mut file_manager = qorzen_oxide::file::FileManager::new(config);
     file_manager.initialize().await?;
 
     // Write a sample configuration file
@@ -209,8 +209,8 @@ async fn demonstrate_file_operations() -> Result<()> {
 async fn demonstrate_task_management() -> Result<()> {
     println!("  ⚡ Task Management:");
 
-    let config = qorzen_core::config::TaskConfig::default();
-    let mut task_manager = qorzen_core::task::TaskManager::new(config);
+    let config = qorzen_oxide::r#mod::TaskConfig::default();
+    let mut task_manager = qorzen_oxide::task::TaskManager::new(config);
     task_manager.initialize().await?;
 
     // Create multiple tasks with different priorities
@@ -255,7 +255,7 @@ async fn demonstrate_task_management() -> Result<()> {
 
                 for i in 1..=10 {
                     if ctx.is_cancelled() {
-                        return Err(qorzen_core::error::Error::task(
+                        return Err(qorzen_oxide::error::Error::task(
                             Some(ctx.task_id),
                             "Task was cancelled",
                         ));
@@ -307,8 +307,8 @@ async fn demonstrate_task_management() -> Result<()> {
 async fn demonstrate_concurrency() -> Result<()> {
     println!("  🔄 Concurrency Management:");
 
-    let config = qorzen_core::config::ConcurrencyConfig::default();
-    let mut concurrency_manager = qorzen_core::concurrency::ConcurrencyManager::new(config)?;
+    let config = qorzen_oxide::r#mod::ConcurrencyConfig::default();
+    let mut concurrency_manager = qorzen_oxide::concurrency::ConcurrencyManager::new(config)?;
     concurrency_manager.initialize().await?;
 
     // Test different types of concurrent operations
@@ -359,7 +359,7 @@ async fn demonstrate_error_handling() -> Result<()> {
     println!("  ⚠️  Error Handling:");
 
     // Demonstrate different error types and handling
-    use qorzen_core::error::{Error, ErrorSeverity};
+    use qorzen_oxide::error::{Error, ErrorSeverity};
 
     // Configuration error
     let config_error = Error::config("Missing required configuration value")
@@ -378,14 +378,14 @@ async fn demonstrate_error_handling() -> Result<()> {
     // File error
     let file_error = Error::file(
         "/nonexistent/path/file.txt",
-        qorzen_core::error::FileOperation::Read,
+        qorzen_oxide::error::FileOperation::Read,
         "File not found",
     ).severity(ErrorSeverity::Medium);
 
     println!("     ✓ File error is critical: {}", file_error.is_critical());
 
     // Demonstrate error result extensions
-    use qorzen_core::error::ResultExt;
+    use qorzen_oxide::error::ResultExt;
 
     let _result: Result<()> = Err(std::io::Error::new(
         std::io::ErrorKind::PermissionDenied,
