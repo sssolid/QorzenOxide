@@ -1,6 +1,6 @@
+use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
-use serde_json::Value;
 
 /// Unique identifier for managers, tasks, events, etc.
 pub type Id = Uuid;

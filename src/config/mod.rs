@@ -363,8 +363,8 @@ fn get_default_temp_dir() -> Option<PathBuf> {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        use uuid::Uuid;
         use std::fs;
+        use uuid::Uuid;
 
         let mut temp = std::env::temp_dir();
         temp.push(format!("qorzen_{}", Uuid::new_v4()));
@@ -644,12 +644,7 @@ impl ConfigManager {
     }
 
     /// Add an in-memory configuration layer
-    pub fn add_memory_layer(
-        &mut self,
-        name: impl Into<String>,
-        data: Value,
-        priority: u32,
-    ) {
+    pub fn add_memory_layer(&mut self, name: impl Into<String>, data: Value, priority: u32) {
         let layer = ConfigLayer {
             name: name.into(),
             source: ConfigSource::Memory { data },
@@ -873,12 +868,7 @@ impl ConfigManager {
     }
 
     /// Set a nested value in configuration using dot notation
-    fn set_nested_value(
-        &self,
-        config: &mut Value,
-        key: &str,
-        value: Value,
-    ) {
+    fn set_nested_value(&self, config: &mut Value, key: &str, value: Value) {
         let keys: Vec<&str> = key.split('.').collect();
         let mut current = config;
 
@@ -897,10 +887,7 @@ impl ConfigManager {
 
                 let map = current.as_object_mut().unwrap();
                 if !map.contains_key(*k) {
-                    map.insert(
-                        k.to_string(),
-                        Value::Object(Map::new()),
-                    );
+                    map.insert(k.to_string(), Value::Object(Map::new()));
                 }
 
                 current = map.get_mut(*k).unwrap();
@@ -909,12 +896,7 @@ impl ConfigManager {
     }
 
     /// Set a nested environment variable value
-    fn set_nested_env_value(
-        &self,
-        config: &mut Map<String, Value>,
-        keys: &[&str],
-        value: String,
-    ) {
+    fn set_nested_env_value(&self, config: &mut Map<String, Value>, keys: &[&str], value: String) {
         if keys.is_empty() {
             return;
         }
@@ -935,10 +917,7 @@ impl ConfigManager {
         } else {
             let first_key = keys[0];
             if !config.contains_key(first_key) {
-                config.insert(
-                    first_key.to_string(),
-                    Value::Object(Map::new()),
-                );
+                config.insert(first_key.to_string(), Value::Object(Map::new()));
             }
 
             if let Some(Value::Object(nested_map)) = config.get_mut(first_key) {
@@ -1040,10 +1019,7 @@ impl Manager for ConfigManager {
         let mut status = self.state.status().await;
         status.add_metadata("layers", Value::from(self.layers.len()));
         status.add_metadata("watch_enabled", Value::Bool(self.watch_enabled));
-        status.add_metadata(
-            "env_prefix",
-            Value::String(self.env_prefix.clone()),
-        );
+        status.add_metadata("env_prefix", Value::String(self.env_prefix.clone()));
         status
     }
 }
@@ -1051,8 +1027,8 @@ impl Manager for ConfigManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn test_config_manager_creation() {
@@ -1066,7 +1042,9 @@ mod tests {
 
         // Create a temporary config file
         let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(b"app:\n  name: \"Test App\"\n  debug: true").unwrap();
+        temp_file
+            .write_all(b"app:\n  name: \"Test App\"\n  debug: true")
+            .unwrap();
 
         manager
             .add_file_layer("test", temp_file.path(), 0, false)

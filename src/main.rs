@@ -62,15 +62,9 @@ async fn main() -> Result<()> {
 
     // Execute command
     match &cli.command {
-        Some(Commands::Run { headless }) => {
-            run_application(&cli, *headless || cli.headless).await
-        }
-        Some(Commands::Status) => {
-            show_status().await
-        }
-        Some(Commands::Health) => {
-            check_health().await
-        }
+        Some(Commands::Run { headless }) => run_application(&cli, *headless || cli.headless).await,
+        Some(Commands::Status) => show_status().await,
+        Some(Commands::Health) => check_health().await,
         Some(Commands::ValidateConfig { config }) => {
             validate_config(config.clone().or(cli.config)).await
         }
@@ -121,7 +115,7 @@ async fn run_application(cli: &Cli, headless: bool) -> Result<()> {
             current_user: app.current_user().await,
             current_session: app.current_session().await,
             current_layout: Default::default(), // Would get from UI manager
-            current_theme: Default::default(),   // Would get from UI manager
+            current_theme: Default::default(),  // Would get from UI manager
             is_loading: false,
             error_message: None,
             notifications: Vec::new(),
@@ -137,13 +131,12 @@ async fn run_application(cli: &Cli, headless: bool) -> Result<()> {
         {
             use dioxus::desktop::{Config, WindowBuilder};
 
-            let config = Config::new()
-                .with_window(
-                    WindowBuilder::new()
-                        .with_title("Qorzen Oxide")
-                        .with_resizable(true)
-                        .with_inner_size(dioxus::desktop::tao::dpi::LogicalSize::new(1200.0, 800.0))
-                );
+            let config = Config::new().with_window(
+                WindowBuilder::new()
+                    .with_title("Qorzen Oxide")
+                    .with_resizable(true)
+                    .with_inner_size(dioxus::desktop::tao::dpi::LogicalSize::new(1200.0, 800.0)),
+            );
 
             dioxus::desktop::launch_with_props(App, (), config);
         }
@@ -169,10 +162,10 @@ async fn show_status() -> Result<()> {
     println!("State: {:?}", stats.state);
     println!("Uptime: {:?}", stats.uptime);
     println!("Managers: {}", stats.manager_count);
-    println!("System: {} {} ({})",
-             stats.system_info.os_name,
-             stats.system_info.os_version,
-             stats.system_info.arch);
+    println!(
+        "System: {} {} ({})",
+        stats.system_info.os_name, stats.system_info.os_version, stats.system_info.arch
+    );
     println!("CPU cores: {}", stats.system_info.cpu_cores);
     println!("Hostname: {}", stats.system_info.hostname);
 
@@ -190,7 +183,10 @@ async fn check_health() -> Result<()> {
     println!("==================");
     println!("Overall status: {:?}", health.status);
     println!("Uptime: {:?}", health.uptime);
-    println!("Last check: {}", health.last_check.format("%Y-%m-%d %H:%M:%S UTC"));
+    println!(
+        "Last check: {}",
+        health.last_check.format("%Y-%m-%d %H:%M:%S UTC")
+    );
     println!();
     println!("Manager Health:");
 

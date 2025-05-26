@@ -12,24 +12,24 @@
 //! - File type detection and validation
 //! - Progress tracking for large operations
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use notify::{Event as NotifyEvent, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, UNIX_EPOCH};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
-use crate::r#mod::FileConfig;
 use crate::error::{Error, FileOperation, Result, ResultExt};
 use crate::event::{Event, EventBusManager};
-use crate::manager::{Manager, ManagedState, ManagerStatus};
+use crate::manager::{ManagedState, Manager, ManagerStatus};
+use crate::config::FileConfig;
 use crate::types::Metadata;
 
 /// File type enumeration based on content and extension
@@ -65,14 +65,17 @@ impl FileType {
 
         match extension.as_deref() {
             Some(ext) => match ext {
-                "txt" | "md" | "csv" | "json" | "xml" | "html" | "htm" | "css" | "js" | "py" | "rs"
-                | "toml" | "yaml" | "yml" | "ini" | "conf" | "cfg" | "log" => Self::Text,
+                "txt" | "md" | "csv" | "json" | "xml" | "html" | "htm" | "css" | "js" | "py"
+                | "rs" | "toml" | "yaml" | "yml" | "ini" | "conf" | "cfg" | "log" => Self::Text,
                 "exe" | "dll" | "so" | "dylib" | "bin" => Self::Binary,
-                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "svg" | "ico" | "webp" => Self::Image,
+                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "svg" | "ico" | "webp" => {
+                    Self::Image
+                }
                 "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "wma" => Self::Audio,
                 "mp4" | "avi" | "mov" | "wmv" | "flv" | "webm" | "mkv" | "m4v" => Self::Video,
                 "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" | "lz4" | "zst" => Self::Archive,
-                "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp" => Self::Document,
+                "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods"
+                | "odp" => Self::Document,
                 "db" | "sqlite" | "sqlite3" | "parquet" | "avro" | "tsv" => Self::Data,
                 _ => Self::Unknown,
             },
@@ -129,36 +132,24 @@ impl FileMetadata {
     /// Create file metadata from path
     pub async fn from_path(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let metadata = fs::metadata(path).await.with_context(|| {
-            format!("Failed to get metadata for: {}", path.display())
-        })?;
+        let metadata = fs::metadata(path)
+            .await
+            .with_context(|| format!("Failed to get metadata for: {}", path.display()))?;
 
         let file_type = FileType::from_extension(path);
         let mime_type = file_type.mime_type().to_string();
 
-        let created = metadata
-            .created()
-            .ok()
-            .and_then(|t| DateTime::from_timestamp(
-                t.duration_since(UNIX_EPOCH).ok()?.as_secs() as i64,
-                0,
-            ));
+        let created = metadata.created().ok().and_then(|t| {
+            DateTime::from_timestamp(t.duration_since(UNIX_EPOCH).ok()?.as_secs() as i64, 0)
+        });
 
-        let modified = metadata
-            .modified()
-            .ok()
-            .and_then(|t| DateTime::from_timestamp(
-                t.duration_since(UNIX_EPOCH).ok()?.as_secs() as i64,
-                0,
-            ));
+        let modified = metadata.modified().ok().and_then(|t| {
+            DateTime::from_timestamp(t.duration_since(UNIX_EPOCH).ok()?.as_secs() as i64, 0)
+        });
 
-        let accessed = metadata
-            .accessed()
-            .ok()
-            .and_then(|t| DateTime::from_timestamp(
-                t.duration_since(UNIX_EPOCH).ok()?.as_secs() as i64,
-                0,
-            ));
+        let accessed = metadata.accessed().ok().and_then(|t| {
+            DateTime::from_timestamp(t.duration_since(UNIX_EPOCH).ok()?.as_secs() as i64, 0)
+        });
 
         #[cfg(unix)]
         let permissions = {
@@ -361,7 +352,8 @@ impl FileWatcher {
                     }
                 },
                 notify::Config::default(),
-            ).map_err(|e| {
+            )
+            .map_err(|e| {
                 Error::new(
                     crate::error::ErrorKind::File {
                         path: Some(path.display().to_string()),
@@ -490,9 +482,9 @@ impl FileManager {
         let path = path.as_ref();
 
         // Check file size
-        let metadata = fs::metadata(path).await.with_context(|| {
-            format!("Failed to get metadata for: {}", path.display())
-        })?;
+        let metadata = fs::metadata(path)
+            .await
+            .with_context(|| format!("Failed to get metadata for: {}", path.display()))?;
 
         if metadata.len() > self.config.max_file_size {
             return Err(Error::new(
@@ -500,14 +492,17 @@ impl FileManager {
                     path: Some(path.display().to_string()),
                     operation: FileOperation::Read,
                 },
-                format!("File size ({} bytes) exceeds maximum allowed size ({} bytes)",
-                        metadata.len(), self.config.max_file_size),
+                format!(
+                    "File size ({} bytes) exceeds maximum allowed size ({} bytes)",
+                    metadata.len(),
+                    self.config.max_file_size
+                ),
             ));
         }
 
-        fs::read(path).await.with_context(|| {
-            format!("Failed to read file: {}", path.display())
-        })
+        fs::read(path)
+            .await
+            .with_context(|| format!("Failed to read file: {}", path.display()))
     }
 
     /// Read file contents as string
@@ -541,8 +536,11 @@ impl FileManager {
                     path: Some(path.display().to_string()),
                     operation: FileOperation::Write,
                 },
-                format!("Data size ({} bytes) exceeds maximum allowed size ({} bytes)",
-                        data.len(), self.config.max_file_size),
+                format!(
+                    "Data size ({} bytes) exceeds maximum allowed size ({} bytes)",
+                    data.len(),
+                    self.config.max_file_size
+                ),
             ));
         }
 
@@ -550,7 +548,10 @@ impl FileManager {
         if options.create_parents {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).await.with_context(|| {
-                    format!("Failed to create parent directories for: {}", path.display())
+                    format!(
+                        "Failed to create parent directories for: {}",
+                        path.display()
+                    )
                 })?;
             }
         }
@@ -571,9 +572,9 @@ impl FileManager {
             self.atomic_write(path, data, &options).await
         } else {
             // Direct write
-            fs::write(path, data).await.with_context(|| {
-                format!("Failed to write file: {}", path.display())
-            })?;
+            fs::write(path, data)
+                .await
+                .with_context(|| format!("Failed to write file: {}", path.display()))?;
 
             self.apply_file_options(path, &options).await
         }
@@ -589,16 +590,20 @@ impl FileManager {
         let temp_path = path.with_extension("tmp");
 
         // Write to temporary file
-        fs::write(&temp_path, data).await.with_context(|| {
-            format!("Failed to write temporary file: {}", temp_path.display())
-        })?;
+        fs::write(&temp_path, data)
+            .await
+            .with_context(|| format!("Failed to write temporary file: {}", temp_path.display()))?;
 
         // Apply options to temporary file
         self.apply_file_options(&temp_path, options).await?;
 
         // Atomically rename temporary file to target
         fs::rename(&temp_path, path).await.with_context(|| {
-            format!("Failed to rename {} to {}", temp_path.display(), path.display())
+            format!(
+                "Failed to rename {} to {}",
+                temp_path.display(),
+                path.display()
+            )
         })?;
 
         Ok(())
@@ -647,7 +652,10 @@ impl FileManager {
         if options.create_parents {
             if let Some(parent) = destination.parent() {
                 fs::create_dir_all(parent).await.with_context(|| {
-                    format!("Failed to create parent directories for: {}", destination.display())
+                    format!(
+                        "Failed to create parent directories for: {}",
+                        destination.display()
+                    )
                 })?;
             }
         }
@@ -664,9 +672,9 @@ impl FileManager {
         }
 
         // Get source metadata for size check and timestamp preservation
-        let src_metadata = fs::metadata(source).await.with_context(|| {
-            format!("Failed to get source metadata: {}", source.display())
-        })?;
+        let src_metadata = fs::metadata(source)
+            .await
+            .with_context(|| format!("Failed to get source metadata: {}", source.display()))?;
 
         if src_metadata.len() > self.config.max_file_size {
             return Err(Error::new(
@@ -674,19 +682,28 @@ impl FileManager {
                     path: Some(source.display().to_string()),
                     operation: FileOperation::Copy,
                 },
-                format!("Source file size ({} bytes) exceeds maximum allowed size ({} bytes)",
-                        src_metadata.len(), self.config.max_file_size),
+                format!(
+                    "Source file size ({} bytes) exceeds maximum allowed size ({} bytes)",
+                    src_metadata.len(),
+                    self.config.max_file_size
+                ),
             ));
         }
 
         // Perform the copy
         let bytes_copied = fs::copy(source, destination).await.with_context(|| {
-            format!("Failed to copy {} to {}", source.display(), destination.display())
+            format!(
+                "Failed to copy {} to {}",
+                source.display(),
+                destination.display()
+            )
         })?;
 
         // Preserve timestamps if requested
         if options.preserve_timestamps {
-            if let (Ok(_accessed), Ok(_modified)) = (src_metadata.accessed(), src_metadata.modified()) {
+            if let (Ok(_accessed), Ok(_modified)) =
+                (src_metadata.accessed(), src_metadata.modified())
+            {
                 // Set timestamps on destination (platform-specific implementation would go here)
                 // For now, we just acknowledge the variables exist but don't use them
             }
@@ -724,7 +741,10 @@ impl FileManager {
         if options.create_parents {
             if let Some(parent) = destination.parent() {
                 fs::create_dir_all(parent).await.with_context(|| {
-                    format!("Failed to create parent directories for: {}", destination.display())
+                    format!(
+                        "Failed to create parent directories for: {}",
+                        destination.display()
+                    )
                 })?;
             }
         }
@@ -742,7 +762,11 @@ impl FileManager {
 
         // Perform the move
         fs::rename(source, destination).await.with_context(|| {
-            format!("Failed to move {} to {}", source.display(), destination.display())
+            format!(
+                "Failed to move {} to {}",
+                source.display(),
+                destination.display()
+            )
         })?;
 
         Ok(())
@@ -762,9 +786,9 @@ impl FileManager {
             ));
         }
 
-        fs::remove_file(path).await.with_context(|| {
-            format!("Failed to delete file: {}", path.display())
-        })?;
+        fs::remove_file(path)
+            .await
+            .with_context(|| format!("Failed to delete file: {}", path.display()))?;
 
         Ok(())
     }
@@ -778,9 +802,7 @@ impl FileManager {
         } else {
             fs::create_dir(path).await
         }
-            .with_context(|| {
-                format!("Failed to create directory: {}", path.display())
-            })?;
+        .with_context(|| format!("Failed to create directory: {}", path.display()))?;
 
         Ok(())
     }
@@ -804,9 +826,7 @@ impl FileManager {
         } else {
             fs::remove_dir(path).await
         }
-            .with_context(|| {
-                format!("Failed to delete directory: {}", path.display())
-            })?;
+        .with_context(|| format!("Failed to delete directory: {}", path.display()))?;
 
         Ok(())
     }
@@ -814,15 +834,17 @@ impl FileManager {
     /// List directory contents
     pub async fn list_directory(&self, path: impl AsRef<Path>) -> Result<Vec<FileMetadata>> {
         let path = path.as_ref();
-        let mut entries = fs::read_dir(path).await.with_context(|| {
-            format!("Failed to read directory: {}", path.display())
-        })?;
+        let mut entries = fs::read_dir(path)
+            .await
+            .with_context(|| format!("Failed to read directory: {}", path.display()))?;
 
         let mut file_list = Vec::new();
 
-        while let Some(entry) = entries.next_entry().await.with_context(|| {
-            format!("Failed to read directory entry in: {}", path.display())
-        })? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .with_context(|| format!("Failed to read directory entry in: {}", path.display()))?
+        {
             let entry_path = entry.path();
             match FileMetadata::from_path(&entry_path).await {
                 Ok(metadata) => file_list.push(metadata),
@@ -847,14 +869,18 @@ impl FileManager {
 
     /// Get file size
     pub async fn file_size(&self, path: impl AsRef<Path>) -> Result<u64> {
-        let metadata = fs::metadata(path.as_ref()).await.with_context(|| {
-            format!("Failed to get metadata for: {}", path.as_ref().display())
-        })?;
+        let metadata = fs::metadata(path.as_ref())
+            .await
+            .with_context(|| format!("Failed to get metadata for: {}", path.as_ref().display()))?;
         Ok(metadata.len())
     }
 
     /// Create temporary file
-    pub async fn create_temp_file(&self, prefix: Option<&str>, suffix: Option<&str>) -> Result<PathBuf> {
+    pub async fn create_temp_file(
+        &self,
+        prefix: Option<&str>,
+        suffix: Option<&str>,
+    ) -> Result<PathBuf> {
         let prefix = prefix.unwrap_or("temp");
         let suffix = suffix.unwrap_or(".tmp");
         let filename = format!("{}_{}_{}", prefix, Uuid::new_v4(), suffix);
@@ -868,7 +894,7 @@ impl FileManager {
                 Error::file(
                     "temp_dir",
                     FileOperation::Read,
-                    "Temp directory not available"
+                    "Temp directory not available",
                 )
             })?;
 
@@ -880,9 +906,9 @@ impl FileManager {
         }
 
         // Create empty temp file
-        fs::write(&temp_path, b"").await.with_context(|| {
-            format!("Failed to create temp file: {}", temp_path.display())
-        })?;
+        fs::write(&temp_path, b"")
+            .await
+            .with_context(|| format!("Failed to create temp file: {}", temp_path.display()))?;
 
         Ok(temp_path)
     }
@@ -893,15 +919,18 @@ impl FileManager {
             return Ok(0); // No temp dir configured — nothing to clean
         };
 
-        let mut entries = fs::read_dir(temp_dir).await.with_context(|| {
-            format!("Failed to read temp directory: {}", temp_dir.display())
-        })?;
+        let mut entries = fs::read_dir(temp_dir)
+            .await
+            .with_context(|| format!("Failed to read temp directory: {}", temp_dir.display()))?;
 
         let mut cleaned_count = 0u64;
         let cutoff_time = std::time::SystemTime::now() - max_age;
 
         while let Some(entry) = entries.next_entry().await.with_context(|| {
-            format!("Failed to read temp directory entry in: {}", temp_dir.display())
+            format!(
+                "Failed to read temp directory entry in: {}",
+                temp_dir.display()
+            )
         })? {
             let entry_path = entry.path();
 
@@ -909,7 +938,11 @@ impl FileManager {
                 if let Ok(modified) = metadata.modified() {
                     if modified < cutoff_time {
                         if let Err(e) = fs::remove_file(&entry_path).await {
-                            tracing::warn!("Failed to remove temp file {}: {}", entry_path.display(), e);
+                            tracing::warn!(
+                                "Failed to remove temp file {}: {}",
+                                entry_path.display(),
+                                e
+                            );
                         } else {
                             cleaned_count += 1;
                         }
@@ -958,7 +991,11 @@ impl FileManager {
     }
 
     /// Compress file using configured compression
-    pub async fn compress_file(&self, source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result<()> {
+    pub async fn compress_file(
+        &self,
+        source: impl AsRef<Path>,
+        destination: impl AsRef<Path>,
+    ) -> Result<()> {
         if !self.config.enable_compression {
             return Err(Error::new(
                 crate::error::ErrorKind::File {
@@ -978,10 +1015,15 @@ impl FileManager {
     }
 
     /// Decompress file
-    pub async fn decompress_file(&self, source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result<()> {
+    pub async fn decompress_file(
+        &self,
+        source: impl AsRef<Path>,
+        destination: impl AsRef<Path>,
+    ) -> Result<()> {
         let compressed_data = self.read_file(source).await?;
         let decompressed_data = crate::utils::compression::decompress_gzip(&compressed_data)?;
-        self.write_file(destination, &decompressed_data, None).await?;
+        self.write_file(destination, &decompressed_data, None)
+            .await?;
 
         Ok(())
     }
@@ -1018,7 +1060,9 @@ impl Manager for FileManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
 
         // Create temp directory if it doesn't exist
         // fs::create_dir_all(&self.config.temp_dir).await.with_context(|| {
@@ -1026,9 +1070,9 @@ impl Manager for FileManager {
         // })?;
 
         if let Some(ref dir) = self.config.temp_dir {
-            fs::create_dir_all(dir).await.with_context(|| {
-                format!("Failed to create temp directory: {}", dir.display())
-            })?;
+            fs::create_dir_all(dir)
+                .await
+                .with_context(|| format!("Failed to create temp directory: {}", dir.display()))?;
         }
 
         // Initialize file watcher if enabled
@@ -1036,12 +1080,16 @@ impl Manager for FileManager {
             self.watcher = Some(FileWatcher::new()?);
         }
 
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
 
         // Clean up watchers
         self.watcher = None;
@@ -1049,7 +1097,9 @@ impl Manager for FileManager {
         // Clean up temp files
         let _ = self.cleanup_temp_files(Duration::from_secs(0)).await;
 
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
@@ -1064,12 +1114,24 @@ impl Manager for FileManager {
             .unwrap_or_else(|| "<none>".to_string());
 
         status.add_metadata("temp_dir", serde_json::Value::String(temp_dir_display));
-        status.add_metadata("watching_enabled", serde_json::Value::Bool(self.config.enable_watching));
-        status.add_metadata("compression_enabled", serde_json::Value::Bool(self.config.enable_compression));
-        status.add_metadata("max_file_size", serde_json::Value::from(self.config.max_file_size));
+        status.add_metadata(
+            "watching_enabled",
+            serde_json::Value::Bool(self.config.enable_watching),
+        );
+        status.add_metadata(
+            "compression_enabled",
+            serde_json::Value::Bool(self.config.enable_compression),
+        );
+        status.add_metadata(
+            "max_file_size",
+            serde_json::Value::from(self.config.max_file_size),
+        );
 
         let active_ops = self.get_active_operations().await;
-        status.add_metadata("active_operations", serde_json::Value::from(active_ops.len()));
+        status.add_metadata(
+            "active_operations",
+            serde_json::Value::from(active_ops.len()),
+        );
 
         if let Ok((usage_bytes, file_count)) = self.get_temp_usage().await {
             status.add_metadata("temp_usage_bytes", serde_json::Value::from(usage_bytes));
@@ -1083,7 +1145,10 @@ impl Manager for FileManager {
 /// Calculate SHA-256 hash of a file
 pub async fn calculate_file_hash(path: impl AsRef<Path>) -> Result<String> {
     let mut file = fs::File::open(path.as_ref()).await.with_context(|| {
-        format!("Failed to open file for hashing: {}", path.as_ref().display())
+        format!(
+            "Failed to open file for hashing: {}",
+            path.as_ref().display()
+        )
     })?;
 
     let mut hasher = Sha256::new();
@@ -1091,7 +1156,10 @@ pub async fn calculate_file_hash(path: impl AsRef<Path>) -> Result<String> {
 
     loop {
         let bytes_read = file.read(&mut buffer).await.with_context(|| {
-            format!("Failed to read file for hashing: {}", path.as_ref().display())
+            format!(
+                "Failed to read file for hashing: {}",
+                path.as_ref().display()
+            )
         })?;
 
         if bytes_read == 0 {
@@ -1190,7 +1258,10 @@ mod tests {
         let test_data = b"Hello, World!";
 
         // Test write
-        manager.write_file(&test_file, test_data, None).await.unwrap();
+        manager
+            .write_file(&test_file, test_data, None)
+            .await
+            .unwrap();
         assert!(test_file.exists());
 
         // Test read
@@ -1208,13 +1279,19 @@ mod tests {
 
         // Test copy
         let copy_file = temp_dir.path().join("test_copy.txt");
-        let bytes_copied = manager.copy_file(&test_file, &copy_file, None).await.unwrap();
+        let bytes_copied = manager
+            .copy_file(&test_file, &copy_file, None)
+            .await
+            .unwrap();
         assert_eq!(bytes_copied, test_data.len() as u64);
         assert!(copy_file.exists());
 
         // Test move
         let move_file = temp_dir.path().join("test_moved.txt");
-        manager.move_file(&copy_file, &move_file, None).await.unwrap();
+        manager
+            .move_file(&copy_file, &move_file, None)
+            .await
+            .unwrap();
         assert!(!copy_file.exists());
         assert!(move_file.exists());
 
@@ -1259,16 +1336,31 @@ mod tests {
 
     #[test]
     fn test_file_type_detection() {
-        assert_eq!(FileType::from_extension(Path::new("test.txt")), FileType::Text);
-        assert_eq!(FileType::from_extension(Path::new("image.png")), FileType::Image);
-        assert_eq!(FileType::from_extension(Path::new("video.mp4")), FileType::Video);
-        assert_eq!(FileType::from_extension(Path::new("unknown.xyz")), FileType::Unknown);
+        assert_eq!(
+            FileType::from_extension(Path::new("test.txt")),
+            FileType::Text
+        );
+        assert_eq!(
+            FileType::from_extension(Path::new("image.png")),
+            FileType::Image
+        );
+        assert_eq!(
+            FileType::from_extension(Path::new("video.mp4")),
+            FileType::Video
+        );
+        assert_eq!(
+            FileType::from_extension(Path::new("unknown.xyz")),
+            FileType::Unknown
+        );
     }
 
     #[test]
     fn test_filename_sanitization() {
         assert_eq!(sanitize_filename("normal_file.txt"), "normal_file.txt");
-        assert_eq!(sanitize_filename("file<with>bad:chars"), "file_with_bad_chars");
+        assert_eq!(
+            sanitize_filename("file<with>bad:chars"),
+            "file_with_bad_chars"
+        );
         assert_eq!(sanitize_filename("file..."), "file");
         assert_eq!(sanitize_filename("file   "), "file");
     }
@@ -1283,7 +1375,10 @@ mod tests {
         let hash = calculate_file_hash(&test_file).await.unwrap();
 
         // SHA-256 of "Hello, World!"
-        assert_eq!(hash, "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f");
+        assert_eq!(
+            hash,
+            "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+        );
     }
 
     #[test]

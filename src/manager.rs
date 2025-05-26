@@ -125,10 +125,7 @@ impl ManagerStatus {
 
         if let Some(started) = self.started_at {
             if matches!(state, ManagerState::Running | ManagerState::Paused) {
-                self.uptime = Utc::now()
-                    .signed_duration_since(started)
-                    .to_std()
-                    .ok();
+                self.uptime = Utc::now().signed_duration_since(started).to_std().ok();
             }
         }
     }

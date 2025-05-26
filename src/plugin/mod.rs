@@ -12,11 +12,11 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::auth::{Permission, User};
-use crate::r#mod::SettingsSchema;
 use crate::error::{Error, Result};
 use crate::event::{Event, EventBusManager};
-use crate::manager::{Manager, ManagedState, ManagerStatus, PlatformRequirements};
+use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
 use crate::platform::{DatabaseProvider, FileSystemProvider, StorageProvider};
+use crate::config::SettingsSchema;
 
 /// Plugin information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,14 +178,6 @@ pub enum ParameterType {
     Body,
 }
 
-/// API response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiResponse {
-    pub status_code: u16,
-    pub description: String,
-    pub schema: Option<serde_json::Value>,
-}
-
 /// API example
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiExample {
@@ -269,7 +261,11 @@ pub struct DatabasePermissions {
 }
 
 impl PluginDatabase {
-    pub fn new(plugin_id: String, provider: Arc<dyn DatabaseProvider>, permissions: DatabasePermissions) -> Self {
+    pub fn new(
+        plugin_id: String,
+        provider: Arc<dyn DatabaseProvider>,
+        permissions: DatabasePermissions,
+    ) -> Self {
         Self {
             plugin_id,
             provider,
@@ -278,14 +274,24 @@ impl PluginDatabase {
     }
 
     /// Executes a query with permission checking
-    pub async fn execute(&self, query: &str, params: &[serde_json::Value]) -> Result<crate::platform::QueryResult> {
+    pub async fn execute(
+        &self,
+        query: &str,
+        params: &[serde_json::Value],
+    ) -> Result<crate::platform::QueryResult> {
         // Check permissions before executing
         if query.to_uppercase().contains("CREATE TABLE") && !self.permissions.can_create_tables {
-            return Err(Error::permission("database.create_table", "Plugin not allowed to create tables"));
+            return Err(Error::permission(
+                "database.create_table",
+                "Plugin not allowed to create tables",
+            ));
         }
 
         if query.to_uppercase().contains("DROP TABLE") && !self.permissions.can_drop_tables {
-            return Err(Error::permission("database.drop_table", "Plugin not allowed to drop tables"));
+            return Err(Error::permission(
+                "database.drop_table",
+                "Plugin not allowed to drop tables",
+            ));
         }
 
         // Add plugin prefix to table names to isolate data
@@ -377,8 +383,8 @@ impl PluginSandbox {
     /// Checks if an operation is allowed
     pub fn check_operation(&self, operation: &str, resource: &str) -> bool {
         self.allowed_permissions.iter().any(|p| {
-            (p.resource == resource || p.resource == "*") &&
-                (p.action == operation || p.action == "*")
+            (p.resource == resource || p.resource == "*")
+                && (p.action == operation || p.action == "*")
         })
     }
 }
@@ -481,7 +487,11 @@ impl PluginRegistry {
     /// Registers a plugin
     pub fn register(&mut self, plugin: Box<dyn Plugin>) -> Result<()> {
         let info = plugin.info();
-        let deps = plugin.required_dependencies().into_iter().map(|d| d.plugin_id).collect();
+        let deps = plugin
+            .required_dependencies()
+            .into_iter()
+            .map(|d| d.plugin_id)
+            .collect();
 
         if self.plugins.contains_key(&info.id) {
             return Err(Error::plugin(&info.id, "Plugin already registered"));
@@ -541,7 +551,10 @@ impl PluginRegistry {
         if let Some(deps) = self.dependencies.get(plugin_id) {
             for dep in deps {
                 if !self.plugins.contains_key(dep) {
-                    return Err(Error::plugin(plugin_id, format!("Missing dependency: {}", dep)));
+                    return Err(Error::plugin(
+                        plugin_id,
+                        format!("Missing dependency: {}", dep),
+                    ));
                 }
                 self.visit_plugin(dep, order, visited, visiting)?;
             }
@@ -579,7 +592,10 @@ impl DependencyResolver {
             if registry.get(&dep.plugin_id).is_some() {
                 resolved.push(dep.plugin_id);
             } else if !dep.optional {
-                return Err(Error::plugin(&plugin.info().id, format!("Required dependency not found: {}", dep.plugin_id)));
+                return Err(Error::plugin(
+                    &plugin.info().id,
+                    format!("Required dependency not found: {}", dep.plugin_id),
+                ));
             }
         }
 
@@ -648,11 +664,16 @@ impl PluginManager {
         // Validate plugin
         let validation = self.loader.validate_plugin(plugin.as_ref()).await?;
         if !validation.is_valid {
-            return Err(Error::plugin(&plugin.info().id, format!("Plugin validation failed: {:?}", validation.errors)));
+            return Err(Error::plugin(
+                &plugin.info().id,
+                format!("Plugin validation failed: {:?}", validation.errors),
+            ));
         }
 
         // Check dependencies
-        let _resolved_deps = self.dependency_resolver.resolve(plugin.as_ref(), &self.registry)?;
+        let _resolved_deps = self
+            .dependency_resolver
+            .resolve(plugin.as_ref(), &self.registry)?;
 
         // Register plugin
         let plugin_id = plugin.info().id.clone();
@@ -685,10 +706,11 @@ impl PluginManager {
         for plugin_id in load_order {
             if let (Some(plugin), Some(context)) = (
                 self.registry.plugins.get_mut(&plugin_id),
-                self.plugin_contexts.get(&plugin_id).cloned()
+                self.plugin_contexts.get(&plugin_id).cloned(),
             ) {
-                plugin.initialize(context).await
-                    .map_err(|e| Error::plugin(&plugin_id, format!("Plugin initialization failed: {}", e)))?;
+                plugin.initialize(context).await.map_err(|e| {
+                    Error::plugin(&plugin_id, format!("Plugin initialization failed: {}", e))
+                })?;
             }
         }
 
@@ -722,8 +744,15 @@ impl PluginManager {
     }
 
     /// Renders a plugin component
-    pub fn render_component(&self, plugin_id: &str, component_id: &str, props: serde_json::Value) -> Result<Element> {
-        let plugin = self.registry.get(plugin_id)
+    pub fn render_component(
+        &self,
+        plugin_id: &str,
+        component_id: &str,
+        props: serde_json::Value,
+    ) -> Result<Element> {
+        let plugin = self
+            .registry
+            .get(plugin_id)
             .ok_or_else(|| Error::plugin(plugin_id, "Plugin not found"))?;
 
         plugin.render_component(component_id, props)
@@ -742,9 +771,14 @@ impl PluginManager {
                 validation_rules: Vec::new(),
             },
             api_client: self.api_provider.create_client(plugin_id.to_string()),
-            event_bus: Arc::new(crate::event::EventBusManager::new(crate::event::EventBusConfig::default())),
+            event_bus: Arc::new(crate::event::EventBusManager::new(
+                crate::event::EventBusConfig::default(),
+            )),
             database: None,
-            file_system: PluginFileSystem::new(plugin_id.to_string(), Arc::new(crate::platform::native::NativeFileSystem::new()?)),
+            file_system: PluginFileSystem::new(
+                plugin_id.to_string(),
+                Arc::new(crate::platform::native::NativeFileSystem::new()?),
+            ),
             logger: crate::logging::Logger::new(format!("plugin.{}", plugin_id)),
         })
     }
@@ -761,18 +795,24 @@ impl Manager for PluginManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
 
         // Load plugins from plugin directory
         // Initialize all loaded plugins
         self.initialize_plugins().await?;
 
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
 
         // Shutdown all plugins in reverse order
         let mut load_order = self.registry.load_order().to_vec();
@@ -784,17 +824,29 @@ impl Manager for PluginManager {
             }
         }
 
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
     async fn status(&self) -> ManagerStatus {
         let mut status = self.state.status().await;
 
-        status.add_metadata("loaded_plugins", serde_json::Value::from(self.registry.plugins.len()));
-        status.add_metadata("plugin_list", serde_json::Value::Array(
-            self.registry.list().into_iter().map(|s| serde_json::Value::String(s.to_string())).collect()
-        ));
+        status.add_metadata(
+            "loaded_plugins",
+            serde_json::Value::from(self.registry.plugins.len()),
+        );
+        status.add_metadata(
+            "plugin_list",
+            serde_json::Value::Array(
+                self.registry
+                    .list()
+                    .into_iter()
+                    .map(|s| serde_json::Value::String(s.to_string()))
+                    .collect(),
+            ),
+        );
 
         status
     }
@@ -880,11 +932,22 @@ mod tests {
             Vec::new()
         }
 
-        fn render_component(&self, _component_id: &str, _props: serde_json::Value) -> Result<Element> {
-            Err(Error::plugin(&self.info.id, "Component rendering not implemented"))
+        fn render_component(
+            &self,
+            _component_id: &str,
+            _props: serde_json::Value,
+        ) -> Result<Element> {
+            Err(Error::plugin(
+                &self.info.id,
+                "Component rendering not implemented",
+            ))
         }
 
-        async fn handle_api_request(&self, _route_id: &str, _request: ApiRequest) -> Result<ApiResponse> {
+        async fn handle_api_request(
+            &self,
+            _route_id: &str,
+            _request: ApiRequest,
+        ) -> Result<ApiResponse> {
             Err(Error::plugin(&self.info.id, "API handling not implemented"))
         }
 

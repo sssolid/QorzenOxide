@@ -1,8 +1,8 @@
 // src/error.rs - Enhanced error handling with platform and plugin support
 
-use std::fmt;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use uuid::Uuid;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -246,7 +246,8 @@ impl Error {
                 validation_errors: Vec::new(),
             },
             message,
-        ).severity(ErrorSeverity::High)
+        )
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates a manager operation error
@@ -261,7 +262,8 @@ impl Error {
                 operation,
             },
             message,
-        ).severity(ErrorSeverity::High)
+        )
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates a platform-specific error
@@ -277,21 +279,20 @@ impl Error {
                 fallback_available: false,
             },
             message,
-        ).severity(ErrorSeverity::Medium)
+        )
+        .severity(ErrorSeverity::Medium)
     }
 
     /// Creates a permission error
-    pub fn permission(
-        required_permission: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn permission(required_permission: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(
             ErrorKind::Permission {
                 required_permission: required_permission.into(),
                 user_role: None,
             },
             message,
-        ).severity(ErrorSeverity::High)
+        )
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates a plugin error
@@ -303,7 +304,8 @@ impl Error {
                 dependency_missing: None,
             },
             message,
-        ).severity(ErrorSeverity::Medium)
+        )
+        .severity(ErrorSeverity::Medium)
     }
 
     /// Creates an authentication error
@@ -315,7 +317,8 @@ impl Error {
                 reason: msg.clone(),
             },
             msg,
-        ).severity(ErrorSeverity::High)
+        )
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates an authorization error
@@ -331,7 +334,44 @@ impl Error {
                 user_id: None,
             },
             message,
-        ).severity(ErrorSeverity::High)
+        )
+        .severity(ErrorSeverity::High)
+    }
+
+    /// Creates a file operation error
+    pub fn file(
+        path: impl Into<String>,
+        operation: FileOperation,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            ErrorKind::File {
+                path: Some(path.into()),
+                operation,
+            },
+            message,
+        )
+    }
+
+    /// Creates a task error
+    pub fn task(
+        task_id: Option<uuid::Uuid>,
+        task_name: Option<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::new(
+            ErrorKind::Task {
+                task_id,
+                task_name,
+                cancelled: false,
+            },
+            message,
+        )
+    }
+
+    /// Creates a timeout error
+    pub fn timeout(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Timeout, message)
     }
 }
 
@@ -376,10 +416,7 @@ where
     where
         F: FnOnce() -> String,
     {
-        self.map_err(|e| {
-            Error::new(ErrorKind::Application, f())
-                .caused_by(e)
-        })
+        self.map_err(|e| Error::new(ErrorKind::Application, f()).caused_by(e))
     }
 
     fn with_source(self, source: impl Into<String>) -> Result<T> {
@@ -392,12 +429,15 @@ where
 
     fn with_plugin(self, plugin_id: impl Into<String>) -> Result<T> {
         self.map_err(|e| {
-            Error::new(ErrorKind::Plugin {
-                plugin_id: Some(plugin_id.into()),
-                plugin_name: None,
-                dependency_missing: None,
-            }, e.to_string())
-                .caused_by(e)
+            Error::new(
+                ErrorKind::Plugin {
+                    plugin_id: Some(plugin_id.into()),
+                    plugin_name: None,
+                    dependency_missing: None,
+                },
+                e.to_string(),
+            )
+            .caused_by(e)
         })
     }
 
@@ -418,7 +458,10 @@ mod tests {
     fn test_error_creation() {
         let error = Error::config("Invalid configuration value")
             .source("config_manager")
-            .metadata("key", serde_json::Value::String("database.host".to_string()));
+            .metadata(
+                "key",
+                serde_json::Value::String("database.host".to_string()),
+            );
 
         assert_eq!(error.severity, ErrorSeverity::High);
         assert_eq!(error.source, "config_manager");

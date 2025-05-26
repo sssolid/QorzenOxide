@@ -1,7 +1,7 @@
 // src/platform/web.rs - Web/WASM platform implementations
 
-use std::collections::HashMap;
 use async_trait::async_trait;
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::*;
@@ -24,8 +24,8 @@ pub fn detect_capabilities() -> PlatformCapabilities {
     let window = web_sys::window().unwrap();
 
     PlatformCapabilities {
-        has_filesystem: false, // Limited file access
-        has_database: true,    // IndexedDB
+        has_filesystem: false,       // Limited file access
+        has_database: true,          // IndexedDB
         has_background_tasks: false, // Limited background processing
         has_push_notifications: window.navigator().service_worker().is_ok(),
         has_biometric_auth: false,
@@ -33,8 +33,12 @@ pub fn detect_capabilities() -> PlatformCapabilities {
         has_location: window.navigator().geolocation().is_ok(),
         max_file_size: Some(50 * 1024 * 1024), // 50MB browser limit
         supported_formats: vec![
-            "txt".to_string(), "json".to_string(), "csv".to_string(),
-            "jpg".to_string(), "png".to_string(), "gif".to_string(),
+            "txt".to_string(),
+            "json".to_string(),
+            "csv".to_string(),
+            "jpg".to_string(),
+            "png".to_string(),
+            "gif".to_string(),
         ],
         platform_name: "web".to_string(),
         platform_version: "1.0".to_string(),
@@ -66,12 +70,20 @@ impl WebFileSystem {
 
     async fn read_user_file(&self, _path: &str) -> Result<Vec<u8>> {
         // Would implement File API for user-selected files
-        Err(Error::platform("web", "filesystem", "User file reading not implemented"))
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "User file reading not implemented",
+        ))
     }
 
     async fn store_user_file(&self, _path: &str, _data: &[u8]) -> Result<()> {
         // Would implement File API for user file downloads
-        Err(Error::platform("web", "filesystem", "User file storage not implemented"))
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "User file storage not implemented",
+        ))
     }
 
     async fn fetch_from_server(&self, path: &str) -> Result<Vec<u8>> {
@@ -85,12 +97,22 @@ impl WebFileSystem {
         let response: Response = response_value.dyn_into().unwrap();
 
         if !response.ok() {
-            return Err(Error::platform("web", "filesystem", format!("HTTP {}", response.status())));
+            return Err(Error::platform(
+                "web",
+                "filesystem",
+                format!("HTTP {}", response.status()),
+            ));
         }
 
         let array_buffer = JsFuture::from(response.array_buffer().unwrap())
             .await
-            .map_err(|e| Error::platform("web", "filesystem", format!("Failed to read response: {:?}", e)))?;
+            .map_err(|e| {
+                Error::platform(
+                    "web",
+                    "filesystem",
+                    format!("Failed to read response: {:?}", e),
+                )
+            })?;
 
         let uint8_array = js_sys::Uint8Array::new(&array_buffer);
         Ok(uint8_array.to_vec())
@@ -98,7 +120,11 @@ impl WebFileSystem {
 
     async fn upload_to_server(&self, _path: &str, _data: &[u8]) -> Result<()> {
         // Would implement server upload
-        Err(Error::platform("web", "filesystem", "Server upload not implemented"))
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "Server upload not implemented",
+        ))
     }
 }
 
@@ -110,7 +136,11 @@ impl FileSystemProvider for WebFileSystem {
         } else if path.starts_with("server://") {
             self.fetch_from_server(&path[9..]).await // Remove "server://" prefix
         } else {
-            Err(Error::platform("web", "filesystem", "Invalid path for web platform"))
+            Err(Error::platform(
+                "web",
+                "filesystem",
+                "Invalid path for web platform",
+            ))
         }
     }
 
@@ -120,20 +150,36 @@ impl FileSystemProvider for WebFileSystem {
         } else if path.starts_with("server://") {
             self.upload_to_server(path, data).await
         } else {
-            Err(Error::platform("web", "filesystem", "Invalid path for web platform"))
+            Err(Error::platform(
+                "web",
+                "filesystem",
+                "Invalid path for web platform",
+            ))
         }
     }
 
     async fn delete_file(&self, _path: &str) -> Result<()> {
-        Err(Error::platform("web", "filesystem", "File deletion not supported in web platform"))
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "File deletion not supported in web platform",
+        ))
     }
 
     async fn list_directory(&self, _path: &str) -> Result<Vec<FileInfo>> {
-        Err(Error::platform("web", "filesystem", "Directory listing not supported in web platform"))
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "Directory listing not supported in web platform",
+        ))
     }
 
     async fn create_directory(&self, _path: &str) -> Result<()> {
-        Err(Error::platform("web", "filesystem", "Directory creation not supported in web platform"))
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "Directory creation not supported in web platform",
+        ))
     }
 
     async fn file_exists(&self, _path: &str) -> bool {
@@ -141,7 +187,11 @@ impl FileSystemProvider for WebFileSystem {
     }
 
     async fn get_metadata(&self, _path: &str) -> Result<FileMetadata> {
-        Err(Error::platform("web", "filesystem", "File metadata not available in web platform"))
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "File metadata not available in web platform",
+        ))
     }
 }
 
@@ -162,7 +212,11 @@ impl IndexedDbDatabase {
 impl DatabaseProvider for IndexedDbDatabase {
     async fn execute(&self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
         // Implementation would use IndexedDB API
-        Err(Error::platform("web", "database", "IndexedDB execute not implemented"))
+        Err(Error::platform(
+            "web",
+            "database",
+            "IndexedDB execute not implemented",
+        ))
     }
 
     async fn query(&self, _query: &str, _params: &[serde_json::Value]) -> Result<Vec<Row>> {
@@ -209,13 +263,19 @@ impl NetworkProvider for FetchNetwork {
             opts.body(Some(&uint8_array));
         }
 
-        let req = Request::new_with_str_and_init(&request.url, &opts)
-            .map_err(|e| Error::platform("web", "network", format!("Failed to create request: {:?}", e)))?;
+        let req = Request::new_with_str_and_init(&request.url, &opts).map_err(|e| {
+            Error::platform(
+                "web",
+                "network",
+                format!("Failed to create request: {:?}", e),
+            )
+        })?;
 
         // Set headers
         for (key, value) in request.headers {
-            req.headers().set(&key, &value)
-                .map_err(|e| Error::platform("web", "network", format!("Failed to set header: {:?}", e)))?;
+            req.headers().set(&key, &value).map_err(|e| {
+                Error::platform("web", "network", format!("Failed to set header: {:?}", e))
+            })?;
         }
 
         let response_value = JsFuture::from(window.fetch_with_request(&req))
@@ -231,7 +291,13 @@ impl NetworkProvider for FetchNetwork {
 
         let body = JsFuture::from(response.array_buffer().unwrap())
             .await
-            .map_err(|e| Error::platform("web", "network", format!("Failed to read response body: {:?}", e)))?;
+            .map_err(|e| {
+                Error::platform(
+                    "web",
+                    "network",
+                    format!("Failed to read response body: {:?}", e),
+                )
+            })?;
 
         let uint8_array = js_sys::Uint8Array::new(&body);
 
@@ -295,7 +361,11 @@ impl StorageProvider for WebStorage {
                 Ok(Some(value.into_bytes()))
             }
             Ok(None) => Ok(None),
-            Err(e) => Err(Error::platform("web", "storage", format!("Failed to get item: {:?}", e))),
+            Err(e) => Err(Error::platform(
+                "web",
+                "storage",
+                format!("Failed to get item: {:?}", e),
+            )),
         }
     }
 
@@ -305,23 +375,30 @@ impl StorageProvider for WebStorage {
         // In a real implementation, you'd encode to base64 or use a proper encoding
         let value_str = String::from_utf8_lossy(value);
 
-        storage.set_item(key, &value_str)
+        storage
+            .set_item(key, &value_str)
             .map_err(|e| Error::platform("web", "storage", format!("Failed to set item: {:?}", e)))
     }
 
     async fn delete(&self, key: &str) -> Result<()> {
         let storage = self.get_storage()?;
 
-        storage.remove_item(key)
-            .map_err(|e| Error::platform("web", "storage", format!("Failed to delete item: {:?}", e)))
+        storage.remove_item(key).map_err(|e| {
+            Error::platform("web", "storage", format!("Failed to delete item: {:?}", e))
+        })
     }
 
     async fn list_keys(&self, prefix: &str) -> Result<Vec<String>> {
         let storage = self.get_storage()?;
         let mut keys = Vec::new();
 
-        let length = storage.length()
-            .map_err(|e| Error::platform("web", "storage", format!("Failed to get storage length: {:?}", e)))?;
+        let length = storage.length().map_err(|e| {
+            Error::platform(
+                "web",
+                "storage",
+                format!("Failed to get storage length: {:?}", e),
+            )
+        })?;
 
         for i in 0..length {
             if let Ok(Some(key)) = storage.key(i) {
@@ -337,7 +414,12 @@ impl StorageProvider for WebStorage {
     async fn clear(&self) -> Result<()> {
         let storage = self.get_storage()?;
 
-        storage.clear()
-            .map_err(|e| Error::platform("web", "storage", format!("Failed to clear storage: {:?}", e)))
+        storage.clear().map_err(|e| {
+            Error::platform(
+                "web",
+                "storage",
+                format!("Failed to clear storage: {:?}", e),
+            )
+        })
     }
 }

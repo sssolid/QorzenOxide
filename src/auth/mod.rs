@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
-use crate::manager::{Manager, ManagedState, ManagerStatus, PlatformRequirements};
+use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
 use crate::platform::StorageProvider;
 
 /// User ID type
@@ -46,17 +46,17 @@ pub struct Role {
 /// Permission definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Permission {
-    pub resource: String,     // "user.profile", "plugin.inventory", "system.config"
-    pub action: String,       // "read", "write", "delete", "execute"
+    pub resource: String, // "user.profile", "plugin.inventory", "system.config"
+    pub action: String,   // "read", "write", "delete", "execute"
     pub scope: PermissionScope,
 }
 
 /// Permission scope
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PermissionScope {
-    Own,            // User's own resources
-    Department(String),  // Department-specific resources
-    Global,         // All resources
+    Own,                // User's own resources
+    Department(String), // Department-specific resources
+    Global,             // All resources
 }
 
 /// User preferences
@@ -155,11 +155,11 @@ pub struct TokenPair {
 /// JWT claims
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,  // user ID
-    pub iat: i64,     // issued at
-    pub exp: i64,     // expires at
-    pub aud: String,  // audience
-    pub iss: String,  // issuer
+    pub sub: String, // user ID
+    pub iat: i64,    // issued at
+    pub exp: i64,    // expires at
+    pub aud: String, // audience
+    pub iss: String, // issuer
     pub roles: Vec<String>,
     pub permissions: Vec<String>,
 }
@@ -219,11 +219,14 @@ impl PermissionCache {
     }
 
     fn check_permission(&self, user_id: UserId, resource: &str, action: &str) -> Option<bool> {
-        self.cache.get(&(user_id, resource.to_string(), action.to_string())).copied()
+        self.cache
+            .get(&(user_id, resource.to_string(), action.to_string()))
+            .copied()
     }
 
     fn cache_permission(&mut self, user_id: UserId, resource: &str, action: &str, allowed: bool) {
-        self.cache.insert((user_id, resource.to_string(), action.to_string()), allowed);
+        self.cache
+            .insert((user_id, resource.to_string(), action.to_string()), allowed);
         self.last_updated = Utc::now();
     }
 
@@ -311,22 +314,35 @@ impl AccountManager {
     }
 
     /// Authenticates a user
-    pub async fn authenticate(&self, credentials: Credentials, provider: Option<&str>) -> Result<AuthResult> {
+    pub async fn authenticate(
+        &self,
+        credentials: Credentials,
+        provider: Option<&str>,
+    ) -> Result<AuthResult> {
         let provider_name = provider.unwrap_or("local");
-        let auth_provider = self.auth_providers.get(provider_name)
-            .ok_or_else(|| Error::authentication(format!("Authentication provider '{}' not found", provider_name)))?;
+        let auth_provider = self.auth_providers.get(provider_name).ok_or_else(|| {
+            Error::authentication(format!(
+                "Authentication provider '{}' not found",
+                provider_name
+            ))
+        })?;
 
         let auth_result = auth_provider.authenticate(&credentials).await?;
 
         // Store session
-        self.session_store.create_session(auth_result.session.clone()).await?;
+        self.session_store
+            .create_session(auth_result.session.clone())
+            .await?;
 
         // Update current user and session
         *self.current_user.write().await = Some(auth_result.user.clone());
         *self.current_session.write().await = Some(auth_result.session.clone());
 
         // Clear permission cache for user
-        self.permission_cache.write().await.clear_user_cache(auth_result.user.id);
+        self.permission_cache
+            .write()
+            .await
+            .clear_user_cache(auth_result.user.id);
 
         Ok(auth_result)
     }
@@ -334,17 +350,29 @@ impl AccountManager {
     /// Validates a token
     pub async fn validate_token(&self, token: &str, provider: Option<&str>) -> Result<Claims> {
         let provider_name = provider.unwrap_or("local");
-        let auth_provider = self.auth_providers.get(provider_name)
-            .ok_or_else(|| Error::authentication(format!("Authentication provider '{}' not found", provider_name)))?;
+        let auth_provider = self.auth_providers.get(provider_name).ok_or_else(|| {
+            Error::authentication(format!(
+                "Authentication provider '{}' not found",
+                provider_name
+            ))
+        })?;
 
         auth_provider.validate_token(token).await
     }
 
     /// Refreshes an access token
-    pub async fn refresh_token(&self, refresh_token: &str, provider: Option<&str>) -> Result<TokenPair> {
+    pub async fn refresh_token(
+        &self,
+        refresh_token: &str,
+        provider: Option<&str>,
+    ) -> Result<TokenPair> {
         let provider_name = provider.unwrap_or("local");
-        let auth_provider = self.auth_providers.get(provider_name)
-            .ok_or_else(|| Error::authentication(format!("Authentication provider '{}' not found", provider_name)))?;
+        let auth_provider = self.auth_providers.get(provider_name).ok_or_else(|| {
+            Error::authentication(format!(
+                "Authentication provider '{}' not found",
+                provider_name
+            ))
+        })?;
 
         auth_provider.refresh_token(refresh_token).await
     }
@@ -375,27 +403,51 @@ impl AccountManager {
     }
 
     /// Checks if a user has permission for a resource and action
-    pub async fn check_permission(&self, user_id: UserId, resource: &str, action: &str) -> Result<bool> {
+    pub async fn check_permission(
+        &self,
+        user_id: UserId,
+        resource: &str,
+        action: &str,
+    ) -> Result<bool> {
         // Check cache first
-        if let Some(cached) = self.permission_cache.read().await.check_permission(user_id, resource, action) {
+        if let Some(cached) = self
+            .permission_cache
+            .read()
+            .await
+            .check_permission(user_id, resource, action)
+        {
             return Ok(cached);
         }
 
         // Load user and check permissions
-        let user = self.user_store.get_user(user_id).await?
+        let user = self
+            .user_store
+            .get_user(user_id)
+            .await?
             .ok_or_else(|| Error::authorization(resource, action, "User not found"))?;
 
         let has_permission = self.user_has_permission(&user, resource, action);
 
         // Cache the result
-        self.permission_cache.write().await.cache_permission(user_id, resource, action, has_permission);
+        self.permission_cache.write().await.cache_permission(
+            user_id,
+            resource,
+            action,
+            has_permission,
+        );
 
         Ok(has_permission)
     }
 
     /// Checks if current user has permission
-    pub async fn check_current_user_permission(&self, resource: &str, action: &str) -> Result<bool> {
-        let user = self.current_user().await
+    pub async fn check_current_user_permission(
+        &self,
+        resource: &str,
+        action: &str,
+    ) -> Result<bool> {
+        let user = self
+            .current_user()
+            .await
             .ok_or_else(|| Error::authorization(resource, action, "No authenticated user"))?;
 
         self.check_permission(user.id, resource, action).await
@@ -418,7 +470,10 @@ impl AccountManager {
         self.user_store.update_user(user.clone()).await?;
 
         // Clear permission cache for updated user
-        self.permission_cache.write().await.clear_user_cache(user.id);
+        self.permission_cache
+            .write()
+            .await
+            .clear_user_cache(user.id);
 
         // Update current user if it's the same
         if let Some(current) = self.current_user.read().await.as_ref() {
@@ -472,8 +527,8 @@ impl AccountManager {
 
     fn permission_matches(&self, permission: &Permission, resource: &str, action: &str) -> bool {
         // Simple string matching - in practice you'd want more sophisticated matching
-        (permission.resource == resource || permission.resource == "*") &&
-            (permission.action == action || permission.action == "*")
+        (permission.resource == resource || permission.resource == "*")
+            && (permission.action == action || permission.action == "*")
     }
 }
 
@@ -488,31 +543,49 @@ impl Manager for AccountManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
 
         // Initialize default auth providers, create admin user if needed, etc.
 
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
 
         // Cleanup sessions, etc.
         let _ = self.cleanup_expired_sessions().await;
 
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
     async fn status(&self) -> ManagerStatus {
         let mut status = self.state.status().await;
 
-        let current_user_id = self.current_user().await.map(|u| u.id.to_string()).unwrap_or_else(|| "none".to_string());
+        let current_user_id = self
+            .current_user()
+            .await
+            .map(|u| u.id.to_string())
+            .unwrap_or_else(|| "none".to_string());
         status.add_metadata("current_user", serde_json::Value::String(current_user_id));
-        status.add_metadata("auth_providers", serde_json::Value::from(self.auth_providers.len()));
-        status.add_metadata("security_policy", serde_json::to_value(&self.security_policy).unwrap_or_default());
+        status.add_metadata(
+            "auth_providers",
+            serde_json::Value::from(self.auth_providers.len()),
+        );
+        status.add_metadata(
+            "security_policy",
+            serde_json::to_value(&self.security_policy).unwrap_or_default(),
+        );
 
         status
     }
@@ -606,13 +679,21 @@ impl UserStore for MemoryUserStore {
     }
 
     async fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
-        Ok(self.users.read().await.values()
+        Ok(self
+            .users
+            .read()
+            .await
+            .values()
             .find(|u| u.username == username)
             .cloned())
     }
 
     async fn get_user_by_email(&self, email: &str) -> Result<Option<User>> {
-        Ok(self.users.read().await.values()
+        Ok(self
+            .users
+            .read()
+            .await
+            .values()
             .find(|u| u.email == email)
             .cloned())
     }
@@ -682,7 +763,10 @@ mod tests {
 
         account_manager.create_user(user.clone()).await.unwrap();
 
-        let retrieved_user = account_manager.get_user_by_username("testuser").await.unwrap();
+        let retrieved_user = account_manager
+            .get_user_by_username("testuser")
+            .await
+            .unwrap();
         assert!(retrieved_user.is_some());
         assert_eq!(retrieved_user.unwrap().username, "testuser");
     }
@@ -727,10 +811,16 @@ mod tests {
 
         account_manager.create_user(user.clone()).await.unwrap();
 
-        let has_permission = account_manager.check_permission(user.id, "user.profile", "read").await.unwrap();
+        let has_permission = account_manager
+            .check_permission(user.id, "user.profile", "read")
+            .await
+            .unwrap();
         assert!(has_permission);
 
-        let no_permission = account_manager.check_permission(user.id, "admin.users", "write").await.unwrap();
+        let no_permission = account_manager
+            .check_permission(user.id, "admin.users", "write")
+            .await
+            .unwrap();
         assert!(!no_permission);
     }
 }

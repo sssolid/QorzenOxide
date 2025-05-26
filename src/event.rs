@@ -26,7 +26,7 @@ use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 use crate::error::{Error, ErrorKind, EventOperation, Result};
-use crate::manager::{Manager, ManagedState, ManagerStatus};
+use crate::manager::{ManagedState, Manager, ManagerStatus};
 use crate::types::Metadata;
 
 /// Base event trait that all events must implement
@@ -354,10 +354,12 @@ impl EventBusManager {
         {
             let mut stats = self.stats.write().await;
             stats.total_published += 1;
-            *stats.events_by_type
+            *stats
+                .events_by_type
                 .entry(event_arc.event_type().to_string())
                 .or_insert(0) += 1;
-            *stats.events_by_priority
+            *stats
+                .events_by_priority
                 .entry(event_arc.priority())
                 .or_insert(0) += 1;
         }
@@ -386,7 +388,10 @@ impl EventBusManager {
     }
 
     /// Subscribe to events with a filter
-    pub async fn subscribe(&self, filter: EventFilter) -> Result<mpsc::UnboundedReceiver<Arc<dyn Event>>> {
+    pub async fn subscribe(
+        &self,
+        filter: EventFilter,
+    ) -> Result<mpsc::UnboundedReceiver<Arc<dyn Event>>> {
         let (sender, receiver) = mpsc::unbounded_channel::<Arc<dyn Event>>();
         let subscription_id = Uuid::new_v4();
 
@@ -549,7 +554,10 @@ impl EventBusManager {
                     Ok(()) => successful_deliveries += 1,
                     Err(_) => {
                         failed_deliveries += 1;
-                        tracing::warn!("Failed to deliver event to subscription {}", subscription_id);
+                        tracing::warn!(
+                            "Failed to deliver event to subscription {}",
+                            subscription_id
+                        );
                     }
                 }
             }
@@ -602,18 +610,27 @@ impl Manager for EventBusManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
 
         // Start event processing workers
         self.start_workers().await?;
 
-        self.state.set_state(crate::manager::ManagerState::Running).await;
-        tracing::info!("Event bus manager initialized with {} workers", self.config.worker_count);
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
+        tracing::info!(
+            "Event bus manager initialized with {} workers",
+            self.config.worker_count
+        );
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
 
         // Stop processing new events
         self.stop_workers().await;
@@ -621,7 +638,9 @@ impl Manager for EventBusManager {
         // Clear subscriptions
         self.subscriptions.clear();
 
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         tracing::info!("Event bus manager shut down");
         Ok(())
     }
@@ -630,12 +649,27 @@ impl Manager for EventBusManager {
         let mut status = self.state.status().await;
         let stats = self.get_stats().await;
 
-        status.add_metadata("total_published", serde_json::Value::from(stats.total_published));
-        status.add_metadata("total_processed", serde_json::Value::from(stats.total_processed));
+        status.add_metadata(
+            "total_published",
+            serde_json::Value::from(stats.total_published),
+        );
+        status.add_metadata(
+            "total_processed",
+            serde_json::Value::from(stats.total_processed),
+        );
         status.add_metadata("total_failed", serde_json::Value::from(stats.total_failed));
-        status.add_metadata("active_subscriptions", serde_json::Value::from(stats.active_subscriptions));
-        status.add_metadata("worker_count", serde_json::Value::from(self.config.worker_count));
-        status.add_metadata("avg_processing_time_ms", serde_json::Value::from(stats.avg_processing_time_ms));
+        status.add_metadata(
+            "active_subscriptions",
+            serde_json::Value::from(stats.active_subscriptions),
+        );
+        status.add_metadata(
+            "worker_count",
+            serde_json::Value::from(self.config.worker_count),
+        );
+        status.add_metadata(
+            "avg_processing_time_ms",
+            serde_json::Value::from(stats.avg_processing_time_ms),
+        );
 
         status
     }
@@ -758,7 +792,9 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Check if we received the event
-        if let Ok(received_event) = tokio::time::timeout(Duration::from_millis(100), receiver.recv()).await {
+        if let Ok(received_event) =
+            tokio::time::timeout(Duration::from_millis(100), receiver.recv()).await
+        {
             assert!(received_event.is_some());
             let event = received_event.unwrap();
             assert_eq!(event.event_type(), "test.event");
@@ -782,8 +818,7 @@ mod tests {
 
         assert!(filter.matches(&event));
 
-        let filter_no_match = EventFilter::new()
-            .with_event_type("other.event");
+        let filter_no_match = EventFilter::new().with_event_type("other.event");
 
         assert!(!filter_no_match.matches(&event));
     }

@@ -12,16 +12,18 @@ use tokio::sync::{broadcast, RwLock};
 use tokio::time::{interval, timeout};
 use uuid::Uuid;
 
-use crate::auth::{AccountManager, MemorySessionStore, MemoryUserStore, SecurityPolicy, User, UserSession};
-use crate::r#mod::{TieredConfigManager, MemoryConfigStore, ConfigurationTier};
+use crate::auth::{
+    AccountManager, MemorySessionStore, MemoryUserStore, SecurityPolicy, User, UserSession,
+};
 use crate::concurrency::ConcurrencyManager;
 use crate::error::{Error, ErrorKind, ManagerOperation, Result, ResultExt};
 use crate::event::EventBusManager;
 use crate::file::FileManager;
 use crate::logging::LoggingManager;
-use crate::manager::{HealthStatus, Manager, ManagerState, ManagerStatus, ManagedState};
+use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState, ManagerStatus};
 use crate::platform::PlatformManager;
 use crate::plugin::PluginManager;
+use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
 use crate::task::TaskManager;
 use crate::ui::UILayoutManager;
 
@@ -226,11 +228,11 @@ impl ApplicationCore {
         // Add configuration stores for different tiers
         config_manager.add_store(
             ConfigurationTier::System,
-            Box::new(MemoryConfigStore::new(ConfigurationTier::System))
+            Box::new(MemoryConfigStore::new(ConfigurationTier::System)),
         );
         config_manager.add_store(
             ConfigurationTier::Runtime,
-            Box::new(MemoryConfigStore::new(ConfigurationTier::Runtime))
+            Box::new(MemoryConfigStore::new(ConfigurationTier::Runtime)),
         );
 
         config_manager.initialize().await?;
@@ -242,10 +244,13 @@ impl ApplicationCore {
         tracing::info!("Initializing logging manager");
         let config = if let Some(config_manager) = &self.config_manager {
             // Get logging config from configuration system
-            config_manager.get("logging").await.unwrap_or(None)
-                .unwrap_or_else(|| crate::r#mod::LoggingConfig::default())
+            config_manager
+                .get("logging")
+                .await
+                .unwrap_or(None)
+                .unwrap_or_else(|| crate::config::LoggingConfig::default())
         } else {
-            crate::r#mod::LoggingConfig::default()
+            crate::config::LoggingConfig::default()
         };
 
         let mut logging_manager = LoggingManager::new(config);
@@ -257,10 +262,13 @@ impl ApplicationCore {
     async fn init_concurrency_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing concurrency manager");
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager.get("concurrency").await.unwrap_or(None)
-                .unwrap_or_else(|| crate::r#mod::ConcurrencyConfig::default())
+            config_manager
+                .get("concurrency")
+                .await
+                .unwrap_or(None)
+                .unwrap_or_else(|| crate::config::ConcurrencyConfig::default())
         } else {
-            crate::r#mod::ConcurrencyConfig::default()
+            crate::config::ConcurrencyConfig::default()
         };
 
         let mut concurrency_manager = ConcurrencyManager::new(config)?;
@@ -272,10 +280,13 @@ impl ApplicationCore {
     async fn init_event_bus_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing event bus manager");
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager.get("event_bus").await.unwrap_or(None)
-                .unwrap_or_else(|| crate::r#mod::EventBusConfig::default())
+            config_manager
+                .get("event_bus")
+                .await
+                .unwrap_or(None)
+                .unwrap_or_else(|| crate::config::EventBusConfig::default())
         } else {
-            crate::r#mod::EventBusConfig::default()
+            crate::config::EventBusConfig::default()
         };
 
         let event_config = crate::event::EventBusConfig {
@@ -297,10 +308,13 @@ impl ApplicationCore {
     async fn init_file_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing file manager");
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager.get("files").await.unwrap_or(None)
-                .unwrap_or_else(|| crate::r#mod::FileConfig::default())
+            config_manager
+                .get("files")
+                .await
+                .unwrap_or(None)
+                .unwrap_or_else(|| crate::config::FileConfig::default())
         } else {
-            crate::r#mod::FileConfig::default()
+            crate::config::FileConfig::default()
         };
 
         let mut file_manager = FileManager::new(config);
@@ -318,10 +332,13 @@ impl ApplicationCore {
     async fn init_task_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing task manager");
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager.get("tasks").await.unwrap_or(None)
-                .unwrap_or_else(|| crate::r#mod::TaskConfig::default())
+            config_manager
+                .get("tasks")
+                .await
+                .unwrap_or(None)
+                .unwrap_or_else(|| crate::config::TaskConfig::default())
         } else {
-            crate::r#mod::TaskConfig::default()
+            crate::config::TaskConfig::default()
         };
 
         let mut task_manager = TaskManager::new(config);
@@ -339,7 +356,10 @@ impl ApplicationCore {
     async fn init_account_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing account manager");
         let security_policy = if let Some(config_manager) = &self.config_manager {
-            config_manager.get("security").await.unwrap_or(None)
+            config_manager
+                .get("security")
+                .await
+                .unwrap_or(None)
                 .unwrap_or_else(|| SecurityPolicy::default())
         } else {
             SecurityPolicy::default()
@@ -429,10 +449,10 @@ impl ApplicationCore {
             {
                 use tokio::signal::unix::{signal, SignalKind};
 
-                let mut sigterm = signal(SignalKind::terminate())
-                    .expect("Failed to register SIGTERM handler");
-                let mut sigint = signal(SignalKind::interrupt())
-                    .expect("Failed to register SIGINT handler");
+                let mut sigterm =
+                    signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
+                let mut sigint =
+                    signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
 
                 tokio::select! {
                     _ = sigterm.recv() => {
@@ -566,7 +586,10 @@ impl ApplicationCore {
 
         ApplicationHealth {
             status: overall_status,
-            uptime: Utc::now().signed_duration_since(self.started_at).to_std().unwrap_or_default(),
+            uptime: Utc::now()
+                .signed_duration_since(self.started_at)
+                .to_std()
+                .unwrap_or_default(),
             managers: manager_health,
             last_check: Utc::now(),
             details: HashMap::new(),
@@ -578,13 +601,16 @@ impl ApplicationCore {
         ApplicationStats {
             version: crate::VERSION.to_string(),
             started_at: self.started_at,
-            uptime: Utc::now().signed_duration_since(self.started_at).to_std().unwrap_or_default(),
+            uptime: Utc::now()
+                .signed_duration_since(self.started_at)
+                .to_std()
+                .unwrap_or_default(),
             state: *self.app_state.read().await,
             manager_count: self.manager_registry.len(),
             initialized_managers: self.manager_registry.len(), // Simplified
-            failed_managers: 0, // Simplified
-            memory_usage_bytes: 0, // Would use platform-specific APIs
-            cpu_usage_percent: 0.0, // Would use platform-specific APIs
+            failed_managers: 0,                                // Simplified
+            memory_usage_bytes: 0,                             // Would use platform-specific APIs
+            cpu_usage_percent: 0.0,                            // Would use platform-specific APIs
             system_info: self.system_info.clone(),
         }
     }
@@ -635,9 +661,18 @@ impl Manager for ApplicationCore {
         let mut status = self.state.status().await;
         let app_stats = self.get_stats().await;
 
-        status.add_metadata("app_state", serde_json::Value::String(format!("{:?}", app_stats.state)));
-        status.add_metadata("uptime_seconds", serde_json::Value::from(app_stats.uptime.as_secs()));
-        status.add_metadata("manager_count", serde_json::Value::from(app_stats.manager_count));
+        status.add_metadata(
+            "app_state",
+            serde_json::Value::String(format!("{:?}", app_stats.state)),
+        );
+        status.add_metadata(
+            "uptime_seconds",
+            serde_json::Value::from(app_stats.uptime.as_secs()),
+        );
+        status.add_metadata(
+            "manager_count",
+            serde_json::Value::from(app_stats.manager_count),
+        );
         status.add_metadata("version", serde_json::Value::String(app_stats.version));
 
         status
@@ -663,10 +698,16 @@ impl SimplePluginLoader {
 #[async_trait]
 impl crate::plugin::PluginLoader for SimplePluginLoader {
     async fn load_plugin(&self, _path: &str) -> Result<Box<dyn crate::plugin::Plugin>> {
-        Err(Error::plugin("loader", "Plugin loading not implemented in example"))
+        Err(Error::plugin(
+            "loader",
+            "Plugin loading not implemented in example",
+        ))
     }
 
-    async fn validate_plugin(&self, _plugin: &dyn crate::plugin::Plugin) -> Result<crate::plugin::ValidationResult> {
+    async fn validate_plugin(
+        &self,
+        _plugin: &dyn crate::plugin::Plugin,
+    ) -> Result<crate::plugin::ValidationResult> {
         Ok(crate::plugin::ValidationResult {
             is_valid: true,
             errors: Vec::new(),
@@ -702,7 +743,10 @@ mod tests {
         app.initialize().await.unwrap();
 
         let health = app.get_health().await;
-        assert!(matches!(health.status, HealthStatus::Healthy | HealthStatus::Degraded));
+        assert!(matches!(
+            health.status,
+            HealthStatus::Healthy | HealthStatus::Degraded
+        ));
 
         app.shutdown().await.unwrap();
     }

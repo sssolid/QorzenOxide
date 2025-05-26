@@ -193,7 +193,7 @@ pub mod retry {
 
                     // Calculate next delay with exponential backoff
                     delay = Duration::from_millis(
-                        ((delay.as_millis() as f64) * config.backoff_multiplier) as u64
+                        ((delay.as_millis() as f64) * config.backoff_multiplier) as u64,
                     );
                     delay = delay.min(config.max_delay);
 
@@ -210,10 +210,7 @@ pub mod retry {
     }
 
     /// Retry a synchronous function - Fixed version
-    pub async fn retry_sync<F, T, E>(
-        func: F,
-        config: RetryConfig,
-    ) -> std::result::Result<T, E>
+    pub async fn retry_sync<F, T, E>(func: F, config: RetryConfig) -> std::result::Result<T, E>
     where
         F: Fn() -> std::result::Result<T, E> + Send + Sync + 'static,
         T: Send + 'static,
@@ -227,7 +224,7 @@ pub mod retry {
             },
             config,
         )
-            .await
+        .await
     }
 }
 
@@ -331,7 +328,9 @@ pub mod strings {
                 let mut chars = word.chars();
                 match chars.next() {
                     None => String::new(),
-                    Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+                    Some(first) => {
+                        first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase()
+                    }
                 }
             })
             .collect()
@@ -359,10 +358,7 @@ pub mod async_utils {
     use super::*;
 
     /// Execute a function with a timeout
-    pub async fn with_timeout<F, T>(
-        future: F,
-        timeout_duration: Duration,
-    ) -> Result<T>
+    pub async fn with_timeout<F, T>(future: F, timeout_duration: Duration) -> Result<T>
     where
         F: Future<Output = T>,
     {
@@ -372,17 +368,14 @@ pub mod async_utils {
     }
 
     /// Execute multiple futures concurrently with a limit
-    pub async fn execute_with_concurrency_limit<F, T>(
-        futures: Vec<F>,
-        limit: usize,
-    ) -> Vec<T>
+    pub async fn execute_with_concurrency_limit<F, T>(futures: Vec<F>, limit: usize) -> Vec<T>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
     {
         use futures::stream::{FuturesUnordered, StreamExt};
-        use tokio::sync::Semaphore;
         use std::sync::Arc;
+        use tokio::sync::Semaphore;
 
         let semaphore = Arc::new(Semaphore::new(limit));
         let mut tasks = FuturesUnordered::new();
@@ -459,7 +452,10 @@ pub mod validation {
         let mut errors = Vec::new();
 
         if password.len() < min_length {
-            errors.push(format!("Password must be at least {} characters", min_length));
+            errors.push(format!(
+                "Password must be at least {} characters",
+                min_length
+            ));
         }
 
         if !password.chars().any(|c| c.is_uppercase()) {
@@ -474,7 +470,10 @@ pub mod validation {
             errors.push("Password must contain at least one digit".to_string());
         }
 
-        if !password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c)) {
+        if !password
+            .chars()
+            .any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c))
+        {
             errors.push("Password must contain at least one special character".to_string());
         }
 
@@ -493,12 +492,9 @@ pub mod compression {
         use std::io::Write;
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(data).map_err(|e| {
-            Error::new(
-                ErrorKind::Io,
-                format!("Failed to compress data: {}", e),
-            )
-        })?;
+        encoder
+            .write_all(data)
+            .map_err(|e| Error::new(ErrorKind::Io, format!("Failed to compress data: {}", e)))?;
 
         encoder.finish().map_err(|e| {
             Error::new(
@@ -515,12 +511,9 @@ pub mod compression {
 
         let mut decoder = GzDecoder::new(data);
         let mut decompressed = Vec::new();
-        decoder.read_to_end(&mut decompressed).map_err(|e| {
-            Error::new(
-                ErrorKind::Io,
-                format!("Failed to decompress data: {}", e),
-            )
-        })?;
+        decoder
+            .read_to_end(&mut decompressed)
+            .map_err(|e| Error::new(ErrorKind::Io, format!("Failed to decompress data: {}", e)))?;
 
         Ok(decompressed)
     }
@@ -544,10 +537,16 @@ mod tests {
 
     #[test]
     fn test_duration_to_human() {
-        assert_eq!(timing::duration_to_human(Duration::from_millis(500)), "500ms");
+        assert_eq!(
+            timing::duration_to_human(Duration::from_millis(500)),
+            "500ms"
+        );
         assert_eq!(timing::duration_to_human(Duration::from_secs(1)), "1.000s");
         assert_eq!(timing::duration_to_human(Duration::from_secs(61)), "1m 1s");
-        assert_eq!(timing::duration_to_human(Duration::from_secs(3661)), "1h 1m 1s");
+        assert_eq!(
+            timing::duration_to_human(Duration::from_secs(3661)),
+            "1h 1m 1s"
+        );
     }
 
     #[test]
@@ -601,7 +600,8 @@ mod tests {
                 initial_delay: Duration::from_millis(1),
                 ..Default::default()
             },
-        ).await;
+        )
+        .await;
 
         assert_eq!(result.unwrap(), "Success");
         assert_eq!(attempts, 3);

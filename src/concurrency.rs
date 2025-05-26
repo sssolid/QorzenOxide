@@ -15,8 +15,8 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::{fmt, thread};
 use std::time::{Duration, Instant};
+use std::{fmt, thread};
 
 use async_trait::async_trait;
 use crossbeam::queue::SegQueue;
@@ -25,9 +25,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot, Semaphore};
 use uuid::Uuid;
 
-use crate::r#mod::ConcurrencyConfig;
-use crate::error::{Error, ErrorKind, ConcurrencyOperation, Result, ResultExt};
-use crate::manager::{Manager, ManagedState, ManagerStatus};
+use crate::error::{ConcurrencyOperation, Error, ErrorKind, Result, ResultExt};
+use crate::manager::{ManagedState, Manager, ManagerStatus};
+use crate::config::ConcurrencyConfig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThreadPoolType {
@@ -129,7 +129,8 @@ impl ThreadWorkerStats {
 
     fn record_task_execution(&self, duration: Duration) {
         self.tasks_executed.fetch_add(1, Ordering::Relaxed);
-        self.total_execution_time_ms.fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
+        self.total_execution_time_ms
+            .fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
         *self.last_activity.lock() = Instant::now();
     }
 
@@ -352,7 +353,8 @@ impl ThreadPool {
 
         while !*shutdown_signal.lock() {
             // Try to get work from local queue first
-            let work_item = local_queue.pop()
+            let work_item = local_queue
+                .pop()
                 .or_else(|| global_queue.pop())
                 .or_else(|| {
                     if work_stealing {
@@ -367,9 +369,10 @@ impl ThreadPool {
                 let start_time = Instant::now();
 
                 // Execute the task with panic handling
-                let execution_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    task();
-                }));
+                let execution_result =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        task();
+                    }));
 
                 let execution_time = start_time.elapsed();
                 stats.record_task_execution(execution_time);
@@ -611,14 +614,18 @@ impl ConcurrencyManager {
         F: FnOnce() -> R + Send + 'static,
         R: Send + 'static,
     {
-        let compute_pool = self.thread_pools.get(&ThreadPoolType::Compute)
-            .ok_or_else(|| Error::new(
-                ErrorKind::Concurrency {
-                    thread_id: None,
-                    operation: ConcurrencyOperation::ThreadPool,
-                },
-                "Compute thread pool not available",
-            ))?;
+        let compute_pool = self
+            .thread_pools
+            .get(&ThreadPoolType::Compute)
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorKind::Concurrency {
+                        thread_id: None,
+                        operation: ConcurrencyOperation::ThreadPool,
+                    },
+                    "Compute thread pool not available",
+                )
+            })?;
 
         compute_pool.submit_async(task).await
     }
@@ -628,14 +635,15 @@ impl ConcurrencyManager {
         F: FnOnce() -> R + Send + 'static,
         R: Send + 'static,
     {
-        let io_pool = self.thread_pools.get(&ThreadPoolType::Io)
-            .ok_or_else(|| Error::new(
+        let io_pool = self.thread_pools.get(&ThreadPoolType::Io).ok_or_else(|| {
+            Error::new(
                 ErrorKind::Concurrency {
                     thread_id: None,
                     operation: ConcurrencyOperation::ThreadPool,
                 },
                 "I/O thread pool not available",
-            ))?;
+            )
+        })?;
 
         io_pool.submit_async(task).await
     }
@@ -645,14 +653,18 @@ impl ConcurrencyManager {
         F: FnOnce() -> R + Send + 'static,
         R: Send + 'static,
     {
-        let blocking_pool = self.thread_pools.get(&ThreadPoolType::Blocking)
-            .ok_or_else(|| Error::new(
-                ErrorKind::Concurrency {
-                    thread_id: None,
-                    operation: ConcurrencyOperation::ThreadPool,
-                },
-                "Blocking thread pool not available",
-            ))?;
+        let blocking_pool = self
+            .thread_pools
+            .get(&ThreadPoolType::Blocking)
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorKind::Concurrency {
+                        thread_id: None,
+                        operation: ConcurrencyOperation::ThreadPool,
+                    },
+                    "Blocking thread pool not available",
+                )
+            })?;
 
         blocking_pool.submit_async(task).await
     }
@@ -688,11 +700,7 @@ impl ConcurrencyManager {
         self.async_coordinator.stats()
     }
 
-    pub fn create_custom_pool(
-        &mut self,
-        pool_id: u8,
-        config: ThreadPoolConfig,
-    ) -> Result<()> {
+    pub fn create_custom_pool(&mut self, pool_id: u8, config: ThreadPoolConfig) -> Result<()> {
         let pool_type = ThreadPoolType::Custom(pool_id);
         let thread_pool = ThreadPool::new(pool_type, config)?;
         self.thread_pools.insert(pool_type, thread_pool);
@@ -705,14 +713,15 @@ impl ConcurrencyManager {
         R: Send + 'static,
     {
         let pool_type = ThreadPoolType::Custom(pool_id);
-        let custom_pool = self.thread_pools.get(&pool_type)
-            .ok_or_else(|| Error::new(
+        let custom_pool = self.thread_pools.get(&pool_type).ok_or_else(|| {
+            Error::new(
                 ErrorKind::Concurrency {
                     thread_id: None,
                     operation: ConcurrencyOperation::ThreadPool,
                 },
                 format!("Custom thread pool {} not available", pool_id),
-            ))?;
+            )
+        })?;
 
         custom_pool.submit_async(task).await
     }
@@ -729,17 +738,23 @@ impl Manager for ConcurrencyManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
 
         // All thread pools are created during construction
         // Any additional initialization can go here
 
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
 
         // Shutdown all thread pools
         let shutdown_timeout = Duration::from_secs(30);
@@ -756,7 +771,9 @@ impl Manager for ConcurrencyManager {
             }
         }
 
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
@@ -783,22 +800,37 @@ impl Manager for ConcurrencyManager {
             );
         }
 
-        status.add_metadata("total_active_threads", serde_json::Value::from(total_active_threads));
-        status.add_metadata("total_queued_tasks", serde_json::Value::from(total_queued_tasks));
-        status.add_metadata("total_executed_tasks", serde_json::Value::from(total_executed_tasks));
+        status.add_metadata(
+            "total_active_threads",
+            serde_json::Value::from(total_active_threads),
+        );
+        status.add_metadata(
+            "total_queued_tasks",
+            serde_json::Value::from(total_queued_tasks),
+        );
+        status.add_metadata(
+            "total_executed_tasks",
+            serde_json::Value::from(total_executed_tasks),
+        );
 
         // Add async coordinator stats
         let coordinator_stats = self.get_async_coordinator_stats();
-        status.add_metadata("async_coordinated_tasks", serde_json::Value::from(coordinator_stats.total_coordinated));
-        status.add_metadata("async_active_permits", serde_json::Value::from(coordinator_stats.active_permits));
+        status.add_metadata(
+            "async_coordinated_tasks",
+            serde_json::Value::from(coordinator_stats.total_coordinated),
+        );
+        status.add_metadata(
+            "async_active_permits",
+            serde_json::Value::from(coordinator_stats.active_permits),
+        );
 
         status
     }
 }
 
 pub mod utils {
-    use std::pin::Pin;
     use super::*;
+    use std::pin::Pin;
     use std::sync::Arc;
     use tokio::sync::Barrier;
 
@@ -826,10 +858,7 @@ pub mod utils {
         results
     }
 
-    pub async fn execute_with_limit<F, R>(
-        tasks: Vec<F>,
-        limit: usize,
-    ) -> Vec<Result<R>>
+    pub async fn execute_with_limit<F, R>(tasks: Vec<F>, limit: usize) -> Vec<Result<R>>
     where
         F: Future<Output = Result<R>> + Send + 'static,
         R: Send + 'static,
@@ -872,7 +901,11 @@ pub mod utils {
     }
 
     pub async fn synchronize_at_barrier(
-        tasks: Vec<Box<dyn FnOnce(Arc<Barrier>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send>>,
+        tasks: Vec<
+            Box<
+                dyn FnOnce(Arc<Barrier>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send,
+            >,
+        >,
     ) -> Result<()> {
         let barrier = Arc::new(Barrier::new(tasks.len()));
         let handles: Vec<_> = tasks
@@ -901,8 +934,8 @@ pub mod utils {
 
 #[cfg(test)]
 mod tests {
-    use std::pin::Pin;
     use super::*;
+    use std::pin::Pin;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::Duration;
 
@@ -927,10 +960,13 @@ mod tests {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = Arc::clone(&counter);
 
-        let result = pool.submit_async(move || {
-            counter_clone.fetch_add(1, Ordering::SeqCst);
-            42i32 // Changed to i32 to fix type issue
-        }).await.unwrap();
+        let result = pool
+            .submit_async(move || {
+                counter_clone.fetch_add(1, Ordering::SeqCst);
+                42i32 // Changed to i32 to fix type issue
+            })
+            .await
+            .unwrap();
 
         assert_eq!(result, 42);
         assert_eq!(counter.load(Ordering::SeqCst), 1);
@@ -954,14 +990,18 @@ mod tests {
         let config = ConcurrencyConfig::default();
         let manager = ConcurrencyManager::new(config).unwrap();
 
-        let result = manager.execute_compute(|| {
-            // Simulate CPU-intensive work
-            let mut sum = 0i32; // Changed to i32
-            for i in 0..1000i32 { // Changed to i32
-                sum += i;
-            }
-            sum
-        }).await.unwrap();
+        let result = manager
+            .execute_compute(|| {
+                // Simulate CPU-intensive work
+                let mut sum = 0i32; // Changed to i32
+                for i in 0..1000i32 {
+                    // Changed to i32
+                    sum += i;
+                }
+                sum
+            })
+            .await
+            .unwrap();
 
         assert_eq!(result, 499500);
     }
@@ -975,11 +1015,14 @@ mod tests {
         let pool = ThreadPool::new(ThreadPoolType::Io, config).unwrap();
 
         // Execute some tasks
-        for i in 0..5i32 { // Changed to i32
-            let _ = pool.submit_async(move || {
-                thread::sleep(Duration::from_millis(10));
-                i * 2
-            }).await;
+        for i in 0..5i32 {
+            // Changed to i32
+            let _ = pool
+                .submit_async(move || {
+                    thread::sleep(Duration::from_millis(10));
+                    i * 2
+                })
+                .await;
         }
 
         let stats = pool.stats();

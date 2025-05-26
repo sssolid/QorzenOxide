@@ -16,7 +16,15 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 
-use qorzen_oxide::{app::ApplicationCore, error::Result, event::{Event}, file::{FileOperationOptions}, task::{TaskBuilder, TaskCategory, TaskPriority}, types::Metadata, Error, ErrorKind, Manager};
+use qorzen_oxide::{
+    app::ApplicationCore,
+    error::Result,
+    event::Event,
+    file::FileOperationOptions,
+    task::{TaskBuilder, TaskCategory, TaskPriority},
+    types::Metadata,
+    Error, ErrorKind, Manager,
+};
 
 use clap::Parser;
 use qorzen_oxide::r#mod::AppConfig;
@@ -99,10 +107,7 @@ async fn main() -> Result<()> {
     let stats = app.get_stats().await;
     println!(
         "📊 Application Stats:\n   Version: {}\n   Uptime: {:?}\n   Managers: {}/{}",
-        stats.version,
-        stats.uptime,
-        stats.initialized_managers,
-        stats.manager_count
+        stats.version, stats.uptime, stats.initialized_managers, stats.manager_count
     );
 
     // Demonstrate various functionalities
@@ -125,10 +130,7 @@ async fn main() -> Result<()> {
 
     // Show final health status
     let health = app.get_health().await;
-    println!(
-        "\n💚 Final Health Status: {:?}",
-        health.status
-    );
+    println!("\n💚 Final Health Status: {:?}", health.status);
 
     // Graceful shutdown
     println!("\n🛑 Shutting down application...");
@@ -166,17 +168,23 @@ async fn demonstrate_file_operations() -> Result<()> {
         }
     });
 
-    let json = serde_json::to_string_pretty(&sample_config)
-        .map_err(|e| Error::new(ErrorKind::Serialization(e.to_string()), "Failed to serialize sample config"))?;
+    let json = serde_json::to_string_pretty(&sample_config).map_err(|e| {
+        Error::new(
+            ErrorKind::Serialization(e.to_string()),
+            "Failed to serialize sample config",
+        )
+    })?;
 
-    file_manager.write_file(
-        "config/service.json",
-        json.as_bytes(),
-        Option::from(FileOperationOptions {
-            create_parents: true,
-            ..Default::default()
-        }),
-    ).await?;
+    file_manager
+        .write_file(
+            "config/service.json",
+            json.as_bytes(),
+            Option::from(FileOperationOptions {
+                create_parents: true,
+                ..Default::default()
+            }),
+        )
+        .await?;
 
     // Read it back
     let content = file_manager.read_file("config/service.json").await?;
@@ -188,19 +196,23 @@ async fn demonstrate_file_operations() -> Result<()> {
     println!("     ✓ File size: {}", file_info.size);
 
     // Create a copy
-    let copy_path = file_manager.copy_file(
-        "config/service.json",
-        "config/service_backup.json",
-        Option::from(FileOperationOptions {
-            create_parents: true,
-            ..Default::default()
-        }),
-    ).await?;
+    let copy_path = file_manager
+        .copy_file(
+            "config/service.json",
+            "config/service_backup.json",
+            Option::from(FileOperationOptions {
+                create_parents: true,
+                ..Default::default()
+            }),
+        )
+        .await?;
     println!("     ✓ Copied bytes: {}", copy_path);
 
     // Clean up config files
     file_manager.delete_file("config/service.json").await?;
-    file_manager.delete_file("config/service_backup.json").await?;
+    file_manager
+        .delete_file("config/service_backup.json")
+        .await?;
 
     file_manager.shutdown().await?;
     Ok(())
@@ -236,7 +248,9 @@ async fn demonstrate_task_management() -> Result<()> {
                 }
 
                 ctx.report_percent(100, "High priority calculation complete");
-                Ok(serde_json::Value::String("High priority result".to_string()))
+                Ok(serde_json::Value::String(
+                    "High priority result".to_string(),
+                ))
             }
         });
 
@@ -267,7 +281,9 @@ async fn demonstrate_task_management() -> Result<()> {
                 }
 
                 ctx.report_percent(100, "Background processing complete");
-                Ok(serde_json::Value::Number(counter.load(Ordering::SeqCst).into()))
+                Ok(serde_json::Value::Number(
+                    counter.load(Ordering::SeqCst).into(),
+                ))
             }
         });
 
@@ -275,7 +291,9 @@ async fn demonstrate_task_management() -> Result<()> {
 
     // Wait for all tasks to complete
     for task_id in task_ids {
-        let task_info = task_manager.wait_for_task(task_id, Some(Duration::from_secs(15))).await?;
+        let task_info = task_manager
+            .wait_for_task(task_id, Some(Duration::from_secs(15)))
+            .await?;
         println!(
             "     ✓ Task '{}' completed with status: {:?}",
             task_info.name, task_info.status
@@ -298,7 +316,10 @@ async fn demonstrate_task_management() -> Result<()> {
     let stats = task_manager.get_stats().await;
     println!("     ✓ Total tasks created: {}", stats.total_created);
     println!("     ✓ Total tasks completed: {}", stats.total_completed);
-    println!("     ✓ Final counter value: {}", counter.load(Ordering::SeqCst));
+    println!(
+        "     ✓ Final counter value: {}",
+        counter.load(Ordering::SeqCst)
+    );
 
     task_manager.shutdown().await?;
     Ok(())
@@ -315,9 +336,8 @@ async fn demonstrate_concurrency() -> Result<()> {
     let start_time = std::time::Instant::now();
 
     // CPU-intensive task
-    let compute_future = concurrency_manager.execute_compute(|| {
-        (0..100_000).fold(0u64, |acc, x| acc + x)
-    });
+    let compute_future =
+        concurrency_manager.execute_compute(|| (0..100_000).fold(0u64, |acc, x| acc + x));
 
     // I/O task
     let io_future = concurrency_manager.execute_io(|| {
@@ -364,14 +384,20 @@ async fn demonstrate_error_handling() -> Result<()> {
     // Configuration error
     let config_error = Error::config("Missing required configuration value")
         .source("example_component")
-        .metadata("config_key", serde_json::Value::String("database.url".to_string()));
+        .metadata(
+            "config_key",
+            serde_json::Value::String("database.url".to_string()),
+        );
 
     println!("     ✓ Config error severity: {:?}", config_error.severity);
-    println!("     ✓ Should handle automatically: {}", config_error.should_handle());
+    println!(
+        "     ✓ Should handle automatically: {}",
+        config_error.should_handle()
+    );
 
     // Task error with context
-    let task_error = Error::task(Some(uuid::Uuid::new_v4()), "Task execution failed")
-        .caused_by(config_error);
+    let task_error =
+        Error::task(Some(uuid::Uuid::new_v4()), "Task execution failed").caused_by(config_error);
 
     println!("     ✓ Task error has {} causes", task_error.causes.len());
 
@@ -380,9 +406,13 @@ async fn demonstrate_error_handling() -> Result<()> {
         "/nonexistent/path/file.txt",
         qorzen_oxide::error::FileOperation::Read,
         "File not found",
-    ).severity(ErrorSeverity::Medium);
+    )
+    .severity(ErrorSeverity::Medium);
 
-    println!("     ✓ File error is critical: {}", file_error.is_critical());
+    println!(
+        "     ✓ File error is critical: {}",
+        file_error.is_critical()
+    );
 
     // Demonstrate error result extensions
     use qorzen_oxide::error::ResultExt;
@@ -391,8 +421,8 @@ async fn demonstrate_error_handling() -> Result<()> {
         std::io::ErrorKind::PermissionDenied,
         "Access denied",
     ))
-        .with_context(|| "Failed to access system resource".to_string())
-        .with_source("example_service");
+    .with_context(|| "Failed to access system resource".to_string())
+    .with_source("example_service");
 
     println!("     ✓ Error context and chaining demonstrated");
 

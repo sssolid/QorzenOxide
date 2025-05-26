@@ -51,21 +51,21 @@
 )]
 #![allow(clippy::module_name_repetitions)]
 
-pub mod types;
-pub mod r#mod;
+pub mod app;
+pub mod auth;
+pub mod concurrency;
 pub mod error;
 pub mod event;
 pub mod file;
 pub mod logging;
 pub mod manager;
-pub mod task;
-pub mod concurrency;
-pub mod app;
-pub mod utils;
-pub mod auth;
-pub mod ui;
-pub mod plugin;
+pub mod config;
 pub mod platform;
+pub mod plugin;
+pub mod task;
+pub mod types;
+pub mod ui;
+pub mod utils;
 
 // Re-export commonly used types
 pub use app::ApplicationCore;

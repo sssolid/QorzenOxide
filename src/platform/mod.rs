@@ -1,12 +1,12 @@
 // src/platform/mod.rs - Core platform abstraction
 
-use std::collections::HashMap;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::error::{Error, Result};
-use crate::manager::{Manager, ManagedState, ManagerStatus, PlatformRequirements};
+use crate::error::Result;
+use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native;
@@ -17,6 +17,12 @@ pub mod database;
 pub mod filesystem;
 pub mod network;
 pub mod storage;
+
+// Re-export types
+pub use database::{DatabaseProvider, Migration, QueryResult, Row, Transaction};
+pub use filesystem::{FileInfo, FileMetadata, FileSystemProvider};
+pub use network::{NetworkProvider, NetworkRequest, NetworkResponse};
+pub use storage::StorageProvider;
 
 /// Platform capabilities detection
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,114 +56,6 @@ impl Default for PlatformCapabilities {
             platform_version: "unknown".to_string(),
         }
     }
-}
-
-/// File system operations
-#[async_trait]
-pub trait FileSystemProvider: Send + Sync {
-    async fn read_file(&self, path: &str) -> Result<Vec<u8>>;
-    async fn write_file(&self, path: &str, data: &[u8]) -> Result<()>;
-    async fn delete_file(&self, path: &str) -> Result<()>;
-    async fn list_directory(&self, path: &str) -> Result<Vec<FileInfo>>;
-    async fn create_directory(&self, path: &str) -> Result<()>;
-    async fn file_exists(&self, path: &str) -> bool;
-    async fn get_metadata(&self, path: &str) -> Result<FileMetadata>;
-}
-
-/// Database operations
-#[async_trait]
-pub trait DatabaseProvider: Send + Sync {
-    async fn execute(&self, query: &str, params: &[serde_json::Value]) -> Result<QueryResult>;
-    async fn query(&self, query: &str, params: &[serde_json::Value]) -> Result<Vec<Row>>;
-    async fn transaction<F, R>(&self, f: F) -> Result<R>
-    where
-        F: FnOnce(&mut Transaction) -> Result<R> + Send,
-        R: Send;
-    async fn migrate(&self, migrations: &[Migration]) -> Result<()>;
-}
-
-/// Storage operations (key-value)
-#[async_trait]
-pub trait StorageProvider: Send + Sync {
-    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>>;
-    async fn set(&self, key: &str, value: &[u8]) -> Result<()>;
-    async fn delete(&self, key: &str) -> Result<()>;
-    async fn list_keys(&self, prefix: &str) -> Result<Vec<String>>;
-    async fn clear(&self) -> Result<()>;
-}
-
-/// Network operations
-#[async_trait]
-pub trait NetworkProvider: Send + Sync {
-    async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse>;
-    async fn upload_file(&self, url: &str, file_data: &[u8]) -> Result<NetworkResponse>;
-    async fn download_file(&self, url: &str) -> Result<Vec<u8>>;
-}
-
-/// File information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileInfo {
-    pub name: String,
-    pub path: String,
-    pub size: u64,
-    pub is_directory: bool,
-    pub modified: chrono::DateTime<chrono::Utc>,
-}
-
-/// File metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileMetadata {
-    pub size: u64,
-    pub is_directory: bool,
-    pub is_readonly: bool,
-    pub created: Option<chrono::DateTime<chrono::Utc>>,
-    pub modified: chrono::DateTime<chrono::Utc>,
-    pub accessed: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Database query result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryResult {
-    pub rows_affected: u64,
-    pub last_insert_id: Option<i64>,
-}
-
-/// Database row
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Row {
-    pub columns: HashMap<String, serde_json::Value>,
-}
-
-/// Database transaction
-pub struct Transaction {
-    // Implementation will be platform-specific
-}
-
-/// Database migration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Migration {
-    pub version: u32,
-    pub description: String,
-    pub up_sql: String,
-    pub down_sql: String,
-}
-
-/// Network request
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkRequest {
-    pub method: String,
-    pub url: String,
-    pub headers: HashMap<String, String>,
-    pub body: Option<Vec<u8>>,
-    pub timeout_ms: Option<u64>,
-}
-
-/// Network response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkResponse {
-    pub status_code: u16,
-    pub headers: HashMap<String, String>,
-    pub body: Vec<u8>,
 }
 
 /// Main platform manager that coordinates all platform providers
@@ -245,7 +143,9 @@ impl Manager for PlatformManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
 
         // Platform-specific initialization
         #[cfg(not(target_arch = "wasm32"))]
@@ -254,12 +154,16 @@ impl Manager for PlatformManager {
         #[cfg(target_arch = "wasm32")]
         web::initialize().await?;
 
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
 
         // Platform-specific cleanup
         #[cfg(not(target_arch = "wasm32"))]
@@ -268,14 +172,22 @@ impl Manager for PlatformManager {
         #[cfg(target_arch = "wasm32")]
         web::cleanup().await?;
 
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
     async fn status(&self) -> ManagerStatus {
         let mut status = self.state.status().await;
-        status.add_metadata("platform", serde_json::json!(self.capabilities.platform_name));
-        status.add_metadata("capabilities", serde_json::to_value(&self.capabilities).unwrap_or_default());
+        status.add_metadata(
+            "platform",
+            serde_json::json!(self.capabilities.platform_name),
+        );
+        status.add_metadata(
+            "capabilities",
+            serde_json::to_value(&self.capabilities).unwrap_or_default(),
+        );
         status
     }
 

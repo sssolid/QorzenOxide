@@ -25,7 +25,7 @@ use qorzen_oxide::{
     app::ApplicationCore,
     error::{Error, ErrorKind, Result},
     event::{Event, EventFilter},
-    manager::{HealthStatus, Manager, ManagedState, ManagerStatus},
+    manager::{HealthStatus, ManagedState, Manager, ManagerStatus},
     task::{TaskBuilder, TaskCategory, TaskPriority},
     types::Metadata,
 };
@@ -225,7 +225,10 @@ impl DataProcessingService {
 
                 tracing::info!(
                     "Processed batch {}: {}/{} items in {:?}",
-                    batch_id, processed_count, item_count, processing_time
+                    batch_id,
+                    processed_count,
+                    item_count,
+                    processing_time
                 );
 
                 // In a real implementation, you'd publish events here
@@ -258,30 +261,41 @@ impl Manager for DataProcessingService {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(qorzen_oxide::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(qorzen_oxide::manager::ManagerState::Initializing)
+            .await;
 
         tracing::info!("Initializing Data Processing Service");
         tracing::info!("  Batch size: {}", self.config.batch_size);
-        tracing::info!("  Processing interval: {}ms", self.config.processing_interval_ms);
+        tracing::info!(
+            "  Processing interval: {}ms",
+            self.config.processing_interval_ms
+        );
         tracing::info!("  Max items: {}", self.config.max_items);
 
         // Start the processing loop
         self.start_processing_loop().await?;
 
-        self.state.set_state(qorzen_oxide::manager::ManagerState::Running).await;
+        self.state
+            .set_state(qorzen_oxide::manager::ManagerState::Running)
+            .await;
         tracing::info!("Data Processing Service initialized successfully");
 
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(qorzen_oxide::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(qorzen_oxide::manager::ManagerState::ShuttingDown)
+            .await;
 
         tracing::info!("Shutting down Data Processing Service");
 
         // In a real implementation, you'd stop the processing loop gracefully
 
-        self.state.set_state(qorzen_oxide::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(qorzen_oxide::manager::ManagerState::Shutdown)
+            .await;
         tracing::info!("Data Processing Service shutdown complete");
 
         Ok(())
@@ -292,11 +306,20 @@ impl Manager for DataProcessingService {
         let stats = self.get_stats().await;
         let item_count = self.processed_items.read().await.len();
 
-        status.add_metadata("total_processed", serde_json::Value::from(stats.total_processed));
+        status.add_metadata(
+            "total_processed",
+            serde_json::Value::from(stats.total_processed),
+        );
         status.add_metadata("total_errors", serde_json::Value::from(stats.total_errors));
-        status.add_metadata("processing_rate", serde_json::Value::from(stats.processing_rate_per_second));
+        status.add_metadata(
+            "processing_rate",
+            serde_json::Value::from(stats.processing_rate_per_second),
+        );
         status.add_metadata("items_in_memory", serde_json::Value::from(item_count));
-        status.add_metadata("batch_size", serde_json::Value::from(self.config.batch_size));
+        status.add_metadata(
+            "batch_size",
+            serde_json::Value::from(self.config.batch_size),
+        );
 
         status
     }
@@ -308,7 +331,9 @@ impl Manager for DataProcessingService {
         // Consider service unhealthy if no processing for more than 10 seconds
         if last_batch_age.num_seconds() > 10 {
             HealthStatus::Unhealthy
-        } else if stats.total_errors > 0 && stats.total_errors as f64 / stats.total_processed as f64 > 0.2 {
+        } else if stats.total_errors > 0
+            && stats.total_errors as f64 / stats.total_processed as f64 > 0.2
+        {
             // Degraded if error rate > 20%
             HealthStatus::Degraded
         } else {
@@ -388,18 +413,22 @@ impl MonitoringService {
 
                 match health.status {
                     HealthStatus::Degraded => {
-                        monitoring_service.create_alert(
-                            AlertLevel::Warning,
-                            "Application health is degraded".to_string(),
-                            "application".to_string(),
-                        ).await;
+                        monitoring_service
+                            .create_alert(
+                                AlertLevel::Warning,
+                                "Application health is degraded".to_string(),
+                                "application".to_string(),
+                            )
+                            .await;
                     }
                     HealthStatus::Unhealthy => {
-                        monitoring_service.create_alert(
-                            AlertLevel::Critical,
-                            "Application health is unhealthy".to_string(),
-                            "application".to_string(),
-                        ).await;
+                        monitoring_service
+                            .create_alert(
+                                AlertLevel::Critical,
+                                "Application health is unhealthy".to_string(),
+                                "application".to_string(),
+                            )
+                            .await;
                     }
                     _ => {}
                 }
@@ -408,18 +437,22 @@ impl MonitoringService {
                 for (manager_name, manager_health) in &health.managers {
                     match manager_health {
                         HealthStatus::Degraded => {
-                            monitoring_service.create_alert(
-                                AlertLevel::Warning,
-                                format!("Manager {} is degraded", manager_name),
-                                manager_name.clone(),
-                            ).await;
+                            monitoring_service
+                                .create_alert(
+                                    AlertLevel::Warning,
+                                    format!("Manager {} is degraded", manager_name),
+                                    manager_name.clone(),
+                                )
+                                .await;
                         }
                         HealthStatus::Unhealthy => {
-                            monitoring_service.create_alert(
-                                AlertLevel::Error,
-                                format!("Manager {} is unhealthy", manager_name),
-                                manager_name.clone(),
-                            ).await;
+                            monitoring_service
+                                .create_alert(
+                                    AlertLevel::Error,
+                                    format!("Manager {} is unhealthy", manager_name),
+                                    manager_name.clone(),
+                                )
+                                .await;
                         }
                         _ => {}
                     }
@@ -451,16 +484,24 @@ impl Manager for MonitoringService {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(qorzen_oxide::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(qorzen_oxide::manager::ManagerState::Initializing)
+            .await;
         tracing::info!("Monitoring Service initialized");
-        self.state.set_state(qorzen_oxide::manager::ManagerState::Running).await;
+        self.state
+            .set_state(qorzen_oxide::manager::ManagerState::Running)
+            .await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(qorzen_oxide::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(qorzen_oxide::manager::ManagerState::ShuttingDown)
+            .await;
         tracing::info!("Monitoring Service shutdown");
-        self.state.set_state(qorzen_oxide::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(qorzen_oxide::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
@@ -512,7 +553,9 @@ async fn main() -> Result<()> {
 
     data_service.initialize().await?;
     monitoring_service.initialize().await?;
-    monitoring_service.start_monitoring(Arc::clone(&app_arc)).await?;
+    monitoring_service
+        .start_monitoring(Arc::clone(&app_arc))
+        .await?;
 
     println!("✅ Custom services initialized");
 
@@ -521,11 +564,7 @@ async fn main() -> Result<()> {
 
     // Simulate running for a period to see processing and monitoring
     for i in 1..=10 {
-        display_monitoring_status(
-            &monitoring_service,
-            i,
-            &data_service
-        ).await?;
+        display_monitoring_status(&monitoring_service, i, &data_service).await?;
 
         if i % 3 == 0 {
             demonstrate_complex_task_workflow().await?;
@@ -539,7 +578,10 @@ async fn main() -> Result<()> {
     println!("  Data Processing:");
     println!("    Total processed: {}", data_stats.total_processed);
     println!("    Total errors: {}", data_stats.total_errors);
-    println!("    Processing rate: {:.2}/sec", data_stats.processing_rate_per_second);
+    println!(
+        "    Processing rate: {:.2}/sec",
+        data_stats.processing_rate_per_second
+    );
 
     show_final_monitoring_summary(&monitoring_service).await?;
 
@@ -551,7 +593,10 @@ async fn main() -> Result<()> {
     println!("  Application Stats:");
     println!("    Version: {}", app_stats.version);
     println!("    Uptime: {:?}", app_stats.uptime);
-    println!("    Managers: {}/{}", app_stats.initialized_managers, app_stats.manager_count);
+    println!(
+        "    Managers: {}/{}",
+        app_stats.initialized_managers, app_stats.manager_count
+    );
 
     // Shutdown services
     println!("\n🛑 Shutting down services...");
@@ -565,7 +610,11 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn display_monitoring_status(monitoring_service: &MonitoringService, i: u32, data_service: &DataProcessingService) -> Result<()> {
+async fn display_monitoring_status(
+    monitoring_service: &MonitoringService,
+    i: u32,
+    data_service: &DataProcessingService,
+) -> Result<()> {
     sleep(Duration::from_secs(3)).await;
 
     let stats = data_service.get_stats().await;
@@ -573,7 +622,10 @@ async fn display_monitoring_status(monitoring_service: &MonitoringService, i: u3
 
     println!(
         "📊 Iteration {}: Processed {} items, {} errors, {} active alerts",
-        i, stats.total_processed, stats.total_errors, alerts.len()
+        i,
+        stats.total_processed,
+        stats.total_errors,
+        alerts.len()
     );
 
     let recent_items = data_service.get_processed_items(Some(3)).await;
@@ -655,8 +707,12 @@ async fn demonstrate_complex_task_workflow() -> Result<()> {
     let process_task_id = task_manager.submit_task(data_process_task).await?;
 
     // Wait for completion
-    let fetch_result = task_manager.wait_for_task(fetch_task_id, Some(Duration::from_secs(2))).await?;
-    let process_result = task_manager.wait_for_task(process_task_id, Some(Duration::from_secs(2))).await?;
+    let fetch_result = task_manager
+        .wait_for_task(fetch_task_id, Some(Duration::from_secs(2)))
+        .await?;
+    let process_result = task_manager
+        .wait_for_task(process_task_id, Some(Duration::from_secs(2)))
+        .await?;
 
     println!("     ✓ Fetch task: {:?}", fetch_result.status);
     println!("     ✓ Process task: {:?}", process_result.status);

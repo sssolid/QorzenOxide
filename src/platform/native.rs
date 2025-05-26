@@ -1,11 +1,11 @@
 // src/platform/native.rs - Native platform implementations
 
-use std::collections::HashMap;
-use std::path::Path;
 use async_trait::async_trait;
+use std::collections::HashMap;
 use tokio::fs;
 
-use crate::error::{Error, Result};
+use crate::error::Error;
+use crate::error::Result;
 use crate::platform::*;
 
 /// Creates native platform providers
@@ -24,16 +24,28 @@ pub fn detect_capabilities() -> PlatformCapabilities {
         has_filesystem: true,
         has_database: true,
         has_background_tasks: true,
-        has_push_notifications: cfg!(any(target_os = "macos", target_os = "windows", target_os = "linux")),
+        has_push_notifications: cfg!(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux"
+        )),
         has_biometric_auth: cfg!(any(target_os = "macos", target_os = "windows")),
         has_camera: true,
         has_location: true,
         max_file_size: Some(u64::MAX),
         supported_formats: vec![
-            "txt".to_string(), "json".to_string(), "yaml".to_string(),
-            "toml".to_string(), "xml".to_string(), "csv".to_string(),
-            "jpg".to_string(), "png".to_string(), "gif".to_string(),
-            "mp4".to_string(), "mp3".to_string(), "pdf".to_string(),
+            "txt".to_string(),
+            "json".to_string(),
+            "yaml".to_string(),
+            "toml".to_string(),
+            "xml".to_string(),
+            "csv".to_string(),
+            "jpg".to_string(),
+            "png".to_string(),
+            "gif".to_string(),
+            "mp4".to_string(),
+            "mp3".to_string(),
+            "pdf".to_string(),
         ],
         platform_name: std::env::consts::OS.to_string(),
         platform_version: "1.0".to_string(),
@@ -47,8 +59,13 @@ pub async fn initialize() -> Result<()> {
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().join("data"))
         .join("qorzen");
 
-    fs::create_dir_all(&data_dir).await
-        .map_err(|e| Error::platform("native", "filesystem", format!("Failed to create data directory: {}", e)))?;
+    fs::create_dir_all(&data_dir).await.map_err(|e| {
+        Error::platform(
+            "native",
+            "filesystem",
+            format!("Failed to create data directory: {}", e),
+        )
+    })?;
 
     Ok(())
 }
@@ -65,7 +82,7 @@ pub struct NativeFileSystem {
 }
 
 impl NativeFileSystem {
-    fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let base_path = dirs::data_dir()
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().join("data"))
             .join("qorzen");
@@ -88,46 +105,81 @@ impl NativeFileSystem {
 impl FileSystemProvider for NativeFileSystem {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
         let full_path = self.resolve_path(path);
-        fs::read(&full_path).await
-            .map_err(|e| Error::platform("native", "filesystem", format!("Failed to read file {}: {}", path, e)))
+        fs::read(&full_path).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "filesystem",
+                format!("Failed to read file {}: {}", path, e),
+            )
+        })
     }
 
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<()> {
         let full_path = self.resolve_path(path);
 
         if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent).await
-                .map_err(|e| Error::platform("native", "filesystem", format!("Failed to create directory: {}", e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                Error::platform(
+                    "native",
+                    "filesystem",
+                    format!("Failed to create directory: {}", e),
+                )
+            })?;
         }
 
-        fs::write(&full_path, data).await
-            .map_err(|e| Error::platform("native", "filesystem", format!("Failed to write file {}: {}", path, e)))
+        fs::write(&full_path, data).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "filesystem",
+                format!("Failed to write file {}: {}", path, e),
+            )
+        })
     }
 
     async fn delete_file(&self, path: &str) -> Result<()> {
         let full_path = self.resolve_path(path);
-        fs::remove_file(&full_path).await
-            .map_err(|e| Error::platform("native", "filesystem", format!("Failed to delete file {}: {}", path, e)))
+        fs::remove_file(&full_path).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "filesystem",
+                format!("Failed to delete file {}: {}", path, e),
+            )
+        })
     }
 
     async fn list_directory(&self, path: &str) -> Result<Vec<FileInfo>> {
         let full_path = self.resolve_path(path);
-        let mut entries = fs::read_dir(&full_path).await
-            .map_err(|e| Error::platform("native", "filesystem", format!("Failed to read directory {}: {}", path, e)))?;
+        let mut entries = fs::read_dir(&full_path).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "filesystem",
+                format!("Failed to read directory {}: {}", path, e),
+            )
+        })?;
 
         let mut files = Vec::new();
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| Error::platform("native", "filesystem", format!("Failed to read directory entry: {}", e)))? {
-
-            let metadata = entry.metadata().await
-                .map_err(|e| Error::platform("native", "filesystem", format!("Failed to read metadata: {}", e)))?;
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            Error::platform(
+                "native",
+                "filesystem",
+                format!("Failed to read directory entry: {}", e),
+            )
+        })? {
+            let metadata = entry.metadata().await.map_err(|e| {
+                Error::platform(
+                    "native",
+                    "filesystem",
+                    format!("Failed to read metadata: {}", e),
+                )
+            })?;
 
             let file_info = FileInfo {
                 name: entry.file_name().to_string_lossy().to_string(),
                 path: entry.path().to_string_lossy().to_string(),
                 size: metadata.len(),
                 is_directory: metadata.is_dir(),
-                modified: metadata.modified()
+                modified: metadata
+                    .modified()
                     .map(|t| chrono::DateTime::from(t))
                     .unwrap_or_else(|_| chrono::Utc::now()),
             };
@@ -139,8 +191,13 @@ impl FileSystemProvider for NativeFileSystem {
 
     async fn create_directory(&self, path: &str) -> Result<()> {
         let full_path = self.resolve_path(path);
-        fs::create_dir_all(&full_path).await
-            .map_err(|e| Error::platform("native", "filesystem", format!("Failed to create directory {}: {}", path, e)))
+        fs::create_dir_all(&full_path).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "filesystem",
+                format!("Failed to create directory {}: {}", path, e),
+            )
+        })
     }
 
     async fn file_exists(&self, path: &str) -> bool {
@@ -150,22 +207,24 @@ impl FileSystemProvider for NativeFileSystem {
 
     async fn get_metadata(&self, path: &str) -> Result<FileMetadata> {
         let full_path = self.resolve_path(path);
-        let metadata = fs::metadata(&full_path).await
-            .map_err(|e| Error::platform("native", "filesystem", format!("Failed to get metadata for {}: {}", path, e)))?;
+        let metadata = fs::metadata(&full_path).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "filesystem",
+                format!("Failed to get metadata for {}: {}", path, e),
+            )
+        })?;
 
         Ok(FileMetadata {
             size: metadata.len(),
             is_directory: metadata.is_dir(),
             is_readonly: metadata.permissions().readonly(),
-            created: metadata.created()
-                .map(|t| chrono::DateTime::from(t))
-                .ok(),
-            modified: metadata.modified()
+            created: metadata.created().map(|t| chrono::DateTime::from(t)).ok(),
+            modified: metadata
+                .modified()
                 .map(|t| chrono::DateTime::from(t))
                 .unwrap_or_else(|_| chrono::Utc::now()),
-            accessed: metadata.accessed()
-                .map(|t| chrono::DateTime::from(t))
-                .ok(),
+            accessed: metadata.accessed().map(|t| chrono::DateTime::from(t)).ok(),
         })
     }
 }
@@ -173,7 +232,7 @@ impl FileSystemProvider for NativeFileSystem {
 /// SQLite database implementation
 pub struct SqliteDatabase {
     // Database connection would be here
-    db_path: std::path::PathBuf,
+    _db_path: std::path::PathBuf,
 }
 
 impl SqliteDatabase {
@@ -183,7 +242,7 @@ impl SqliteDatabase {
             .join("qorzen")
             .join("app.db");
 
-        Ok(Self { db_path })
+        Ok(Self { _db_path: db_path })
     }
 }
 
@@ -200,16 +259,6 @@ impl DatabaseProvider for SqliteDatabase {
     async fn query(&self, _query: &str, _params: &[serde_json::Value]) -> Result<Vec<Row>> {
         // Implementation would use SQLite
         Ok(Vec::new())
-    }
-
-    async fn transaction<F, R>(&self, f: F) -> Result<R>
-    where
-        F: FnOnce(&mut Transaction) -> Result<R> + Send,
-        R: Send,
-    {
-        // Implementation would create transaction
-        let mut tx = Transaction {};
-        f(&mut tx)
     }
 
     async fn migrate(&self, _migrations: &[Migration]) -> Result<()> {
@@ -239,7 +288,13 @@ impl NetworkProvider for NativeNetwork {
             "POST" => self.client.post(&request.url),
             "PUT" => self.client.put(&request.url),
             "DELETE" => self.client.delete(&request.url),
-            _ => return Err(Error::platform("native", "network", format!("Unsupported HTTP method: {}", request.method))),
+            _ => {
+                return Err(Error::platform(
+                    "native",
+                    "network",
+                    format!("Unsupported HTTP method: {}", request.method),
+                ))
+            }
         };
 
         for (key, value) in request.headers {
@@ -254,17 +309,27 @@ impl NetworkProvider for NativeNetwork {
             req = req.timeout(std::time::Duration::from_millis(timeout_ms));
         }
 
-        let response = req.send().await
-            .map_err(|e| Error::platform("native", "network", format!("HTTP request failed: {}", e)))?;
+        let response = req.send().await.map_err(|e| {
+            Error::platform("native", "network", format!("HTTP request failed: {}", e))
+        })?;
 
         let status_code = response.status().as_u16();
-        let headers = response.headers()
+        let headers = response
+            .headers()
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
 
-        let body = response.bytes().await
-            .map_err(|e| Error::platform("native", "network", format!("Failed to read response body: {}", e)))?
+        let body = response
+            .bytes()
+            .await
+            .map_err(|e| {
+                Error::platform(
+                    "native",
+                    "network",
+                    format!("Failed to read response body: {}", e),
+                )
+            })?
             .to_vec();
 
         Ok(NetworkResponse {
@@ -326,7 +391,11 @@ impl StorageProvider for NativeStorage {
         match fs::read(&path).await {
             Ok(data) => Ok(Some(data)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(Error::platform("native", "storage", format!("Failed to read key {}: {}", key, e))),
+            Err(e) => Err(Error::platform(
+                "native",
+                "storage",
+                format!("Failed to read key {}: {}", key, e),
+            )),
         }
     }
 
@@ -334,28 +403,52 @@ impl StorageProvider for NativeStorage {
         let path = self.key_to_path(key);
 
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await
-                .map_err(|e| Error::platform("native", "storage", format!("Failed to create storage directory: {}", e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                Error::platform(
+                    "native",
+                    "storage",
+                    format!("Failed to create storage directory: {}", e),
+                )
+            })?;
         }
 
-        fs::write(&path, value).await
-            .map_err(|e| Error::platform("native", "storage", format!("Failed to write key {}: {}", key, e)))
+        fs::write(&path, value).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "storage",
+                format!("Failed to write key {}: {}", key, e),
+            )
+        })
     }
 
     async fn delete(&self, key: &str) -> Result<()> {
         let path = self.key_to_path(key);
-        fs::remove_file(&path).await
-            .map_err(|e| Error::platform("native", "storage", format!("Failed to delete key {}: {}", key, e)))
+        fs::remove_file(&path).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "storage",
+                format!("Failed to delete key {}: {}", key, e),
+            )
+        })
     }
 
     async fn list_keys(&self, prefix: &str) -> Result<Vec<String>> {
-        let mut entries = fs::read_dir(&self.storage_path).await
-            .map_err(|e| Error::platform("native", "storage", format!("Failed to read storage directory: {}", e)))?;
+        let mut entries = fs::read_dir(&self.storage_path).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "storage",
+                format!("Failed to read storage directory: {}", e),
+            )
+        })?;
 
         let mut keys = Vec::new();
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| Error::platform("native", "storage", format!("Failed to read storage entry: {}", e)))? {
-
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            Error::platform(
+                "native",
+                "storage",
+                format!("Failed to read storage entry: {}", e),
+            )
+        })? {
             if let Some(name) = entry.file_name().to_str() {
                 if let Some(key) = name.strip_suffix(".bin") {
                     if key.starts_with(prefix) {
@@ -370,12 +463,22 @@ impl StorageProvider for NativeStorage {
 
     async fn clear(&self) -> Result<()> {
         if self.storage_path.exists() {
-            fs::remove_dir_all(&self.storage_path).await
-                .map_err(|e| Error::platform("native", "storage", format!("Failed to clear storage: {}", e)))?;
+            fs::remove_dir_all(&self.storage_path).await.map_err(|e| {
+                Error::platform(
+                    "native",
+                    "storage",
+                    format!("Failed to clear storage: {}", e),
+                )
+            })?;
         }
 
-        fs::create_dir_all(&self.storage_path).await
-            .map_err(|e| Error::platform("native", "storage", format!("Failed to recreate storage directory: {}", e)))?;
+        fs::create_dir_all(&self.storage_path).await.map_err(|e| {
+            Error::platform(
+                "native",
+                "storage",
+                format!("Failed to recreate storage directory: {}", e),
+            )
+        })?;
 
         Ok(())
     }

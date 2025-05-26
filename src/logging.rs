@@ -19,20 +19,15 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{Event, Subscriber};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{
-    fmt,
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    EnvFilter,
-    Layer,
-    Registry,
-};
 use tracing_subscriber::layer::Identity;
+use tracing_subscriber::{
+    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer, Registry,
+};
 use uuid::Uuid;
 
-use crate::r#mod::{LoggingConfig, LogFormat};
 use crate::error::{Error, ErrorKind, Result, ResultExt};
-use crate::manager::{Manager, ManagedState, ManagerStatus};
+use crate::manager::{ManagedState, Manager, ManagerStatus};
+use crate::config::{LogFormat, LoggingConfig};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
@@ -127,7 +122,10 @@ impl DatabaseLogWriter {
 impl LogWriter for DatabaseLogWriter {
     async fn write(&self, entry: &LogEntry) -> Result<()> {
         // In a real implementation, this would write to a database
-        tracing::debug!("Would write log entry to database table: {}", self.table_name);
+        tracing::debug!(
+            "Would write log entry to database table: {}",
+            self.table_name
+        );
         tracing::debug!("Entry: {:?}", entry);
         Ok(())
     }
@@ -247,9 +245,9 @@ where
             target: event.metadata().target().to_string(),
             file: event.metadata().file().map(String::from),
             line: event.metadata().line(),
-            correlation_id: None, // Would extract from context
+            correlation_id: None,   // Would extract from context
             fields: HashMap::new(), // Would extract from event fields
-            span: None, // Would extract current span info
+            span: None,             // Would extract current span info
         };
 
         // Send entry through channel - this won't panic if the receiver is dropped
@@ -327,32 +325,23 @@ impl LoggingManager {
         // File output
         let registry = if let Some(file_config) = &self.config.file {
             let file_appender = tracing_appender::rolling::daily(
-                file_config.path.parent().unwrap_or_else(|| std::path::Path::new(".")),
-                file_config.path.file_name().unwrap_or_else(|| std::ffi::OsStr::new("app.log")),
+                file_config
+                    .path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new(".")),
+                file_config
+                    .path
+                    .file_name()
+                    .unwrap_or_else(|| std::ffi::OsStr::new("app.log")),
             );
 
             let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
             self._guards.push(guard);
 
             let file_layer = match self.config.format {
-                LogFormat::Json => {
-                    fmt::layer()
-                        .json()
-                        .with_writer(non_blocking)
-                        .boxed()
-                }
-                LogFormat::Pretty => {
-                    fmt::layer()
-                        .pretty()
-                        .with_writer(non_blocking)
-                        .boxed()
-                }
-                LogFormat::Compact => {
-                    fmt::layer()
-                        .compact()
-                        .with_writer(non_blocking)
-                        .boxed()
-                }
+                LogFormat::Json => fmt::layer().json().with_writer(non_blocking).boxed(),
+                LogFormat::Pretty => fmt::layer().pretty().with_writer(non_blocking).boxed(),
+                LogFormat::Compact => fmt::layer().compact().with_writer(non_blocking).boxed(),
             };
 
             registry.with(file_layer)
@@ -421,7 +410,10 @@ impl LoggingManager {
 
     pub async fn flush(&self) -> Result<()> {
         for writer in &self.writers {
-            writer.flush().await.with_context(|| "Failed to flush log writer".to_string())?;
+            writer
+                .flush()
+                .await
+                .with_context(|| "Failed to flush log writer".to_string())?;
         }
         Ok(())
     }
@@ -442,7 +434,9 @@ impl Manager for LoggingManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
 
         // Setup tracing
         self.setup_tracing().await?;
@@ -450,19 +444,23 @@ impl Manager for LoggingManager {
         // Create log directories if needed
         if let Some(file_config) = &self.config.file {
             if let Some(parent) = file_config.path.parent() {
-                tokio::fs::create_dir_all(parent)
-                    .await
-                    .with_context(|| format!("Failed to create log directory: {}", parent.display()))?;
+                tokio::fs::create_dir_all(parent).await.with_context(|| {
+                    format!("Failed to create log directory: {}", parent.display())
+                })?;
             }
         }
 
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
         tracing::info!("Logging manager initialized successfully");
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
 
         tracing::info!("Shutting down logging manager");
 
@@ -471,7 +469,10 @@ impl Manager for LoggingManager {
 
         // Close all writers
         for writer in &self.writers {
-            writer.close().await.with_context(|| "Failed to close log writer".to_string())?;
+            writer
+                .close()
+                .await
+                .with_context(|| "Failed to close log writer".to_string())?;
         }
 
         // Stop the writer task
@@ -480,7 +481,9 @@ impl Manager for LoggingManager {
             let _ = handle.await;
         }
 
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
@@ -488,11 +491,23 @@ impl Manager for LoggingManager {
         let mut status = self.state.status().await;
         let stats = self.get_stats().await;
 
-        status.add_metadata("total_entries", serde_json::Value::from(stats.total_entries));
+        status.add_metadata(
+            "total_entries",
+            serde_json::Value::from(stats.total_entries),
+        );
         status.add_metadata("writers_count", serde_json::Value::from(self.writers.len()));
-        status.add_metadata("file_logging", serde_json::Value::Bool(self.config.file.is_some()));
-        status.add_metadata("console_logging", serde_json::Value::Bool(self.config.console.enabled));
-        status.add_metadata("log_level", serde_json::Value::String(self.config.level.clone()));
+        status.add_metadata(
+            "file_logging",
+            serde_json::Value::Bool(self.config.file.is_some()),
+        );
+        status.add_metadata(
+            "console_logging",
+            serde_json::Value::Bool(self.config.console.enabled),
+        );
+        status.add_metadata(
+            "log_level",
+            serde_json::Value::String(self.config.level.clone()),
+        );
 
         status
     }
@@ -557,10 +572,16 @@ impl Logger {
         // Combine metadata and fields
         let mut all_fields = self.metadata.clone();
         all_fields.extend(fields.clone());
-        all_fields.insert("component".to_string(), serde_json::Value::String(self.component.clone()));
+        all_fields.insert(
+            "component".to_string(),
+            serde_json::Value::String(self.component.clone()),
+        );
 
         if let Some(correlation_id) = self.correlation_id {
-            all_fields.insert("correlation_id".to_string(), serde_json::Value::String(correlation_id.to_string()));
+            all_fields.insert(
+                "correlation_id".to_string(),
+                serde_json::Value::String(correlation_id.to_string()),
+            );
         }
 
         // Use tracing macros without dynamic target or fields
@@ -696,7 +717,10 @@ mod tests {
         logger.info("Test message with context");
 
         let mut fields = HashMap::new();
-        fields.insert("custom_field".to_string(), serde_json::Value::Number(42.into()));
+        fields.insert(
+            "custom_field".to_string(),
+            serde_json::Value::Number(42.into()),
+        );
         logger.log_with_fields(LogLevel::Debug, "Message with fields", &fields);
     }
 }
