@@ -21,8 +21,9 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use futures::channel::mpsc;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 use crate::error::{Error, ErrorKind, EventOperation, Result};
@@ -305,10 +306,8 @@ pub struct EventBusManager {
     state: ManagedState,
     config: EventBusConfig,
     subscriptions: Arc<DashMap<Uuid, EventSubscription>>,
-    event_queue: mpsc::UnboundedSender<EventEnvelope>,
     stats: Arc<RwLock<EventStats>>,
     event_counter: Arc<AtomicU64>,
-    worker_handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
 impl Debug for EventBusManager {
@@ -323,13 +322,10 @@ impl Debug for EventBusManager {
 impl EventBusManager {
     /// Create a new event bus manager
     pub fn new(config: EventBusConfig) -> Self {
-        let (event_sender, _event_receiver) = mpsc::unbounded_channel::<EventEnvelope>();
-
         Self {
             state: ManagedState::new(Uuid::new_v4(), "event_bus_manager"),
             config,
             subscriptions: Arc::new(DashMap::new()),
-            event_queue: event_sender,
             stats: Arc::new(RwLock::new(EventStats {
                 total_published: 0,
                 total_processed: 0,
@@ -341,7 +337,6 @@ impl EventBusManager {
                 queue_size: 0,
             })),
             event_counter: Arc::new(AtomicU64::new(0)),
-            worker_handles: Vec::new(),
         }
     }
 
@@ -352,7 +347,7 @@ impl EventBusManager {
         // Update statistics
         self.event_counter.fetch_add(1, Ordering::Relaxed);
         {
-            let mut stats = self.stats.write().await;
+            let mut stats = self.stats.write();
             stats.total_published += 1;
             *stats
                 .events_by_type
@@ -364,27 +359,64 @@ impl EventBusManager {
                 .or_insert(0) += 1;
         }
 
-        // Create event envelope
-        let envelope = EventEnvelope {
-            event: event_arc,
-            received_at: Instant::now(),
-            retry_count: 0,
-            max_retries: 3,
-        };
-
-        // Send to processing queue
-        self.event_queue.send(envelope).map_err(|_| {
-            Error::new(
-                ErrorKind::Event {
-                    event_type: Some("unknown".to_string()),
-                    subscriber_id: None,
-                    operation: EventOperation::Publish,
-                },
-                "Event queue is closed",
-            )
-        })?;
+        // Send to matching subscriptions immediately for web compatibility
+        self.process_event_sync(event_arc).await;
 
         Ok(())
+    }
+
+    async fn process_event_sync(&self, event: Arc<dyn Event>) {
+        let start_time = Instant::now();
+
+        // Find matching subscriptions
+        let matching_subscriptions: Vec<(Uuid, Arc<dyn Event>)> = self.subscriptions
+            .iter()
+            .filter_map(|entry| {
+                let subscription = entry.value();
+                if subscription.active && subscription.filter.matches(event.as_ref()) {
+                    Some((subscription.id, Arc::clone(&event)))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Send event to matching subscriptions
+        let mut successful_deliveries = 0;
+        let mut failed_deliveries = 0;
+
+        for (subscription_id, _event_clone) in matching_subscriptions {
+            if let Some(subscription) = self.subscriptions.get(&subscription_id) {
+                match subscription.sender.unbounded_send(Arc::clone(&event)) {
+                    Ok(()) => successful_deliveries += 1,
+                    Err(_) => {
+                        failed_deliveries += 1;
+                        // Remove failed subscription
+                        self.subscriptions.remove(&subscription_id);
+                    }
+                }
+            }
+        }
+
+        let processing_time = start_time.elapsed();
+
+        // Update statistics
+        {
+            let mut stats = self.stats.write();
+            stats.total_processed += 1;
+            if failed_deliveries > 0 {
+                stats.total_failed += 1;
+            }
+
+            // Update average processing time
+            let total_processed = stats.total_processed;
+            stats.avg_processing_time_ms = (stats.avg_processing_time_ms
+                * (total_processed - 1) as f64
+                + processing_time.as_millis() as f64)
+                / total_processed as f64;
+
+            stats.active_subscriptions = self.subscriptions.len();
+        }
     }
 
     /// Subscribe to events with a filter
@@ -392,7 +424,7 @@ impl EventBusManager {
         &self,
         filter: EventFilter,
     ) -> Result<mpsc::UnboundedReceiver<Arc<dyn Event>>> {
-        let (sender, receiver) = mpsc::unbounded_channel::<Arc<dyn Event>>();
+        let (sender, receiver) = mpsc::unbounded::<Arc<dyn Event>>();
         let subscription_id = Uuid::new_v4();
 
         let subscription = EventSubscription {
@@ -408,11 +440,9 @@ impl EventBusManager {
 
         // Update stats
         {
-            let mut stats = self.stats.write().await;
+            let mut stats = self.stats.write();
             stats.active_subscriptions = self.subscriptions.len();
         }
-
-        tracing::debug!("Created subscription: {}", subscription_id);
 
         Ok(receiver)
     }

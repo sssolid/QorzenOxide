@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use notify::RecommendedWatcher;
+use futures::channel::broadcast;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
-use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
 use crate::error::{Error, Result, ResultExt};
@@ -576,7 +576,6 @@ pub struct ConfigManager {
     layers: Vec<ConfigLayer>,
     merged_config: Arc<RwLock<Value>>,
     change_notifier: broadcast::Sender<ConfigChangeEvent>,
-    _watcher: Option<RecommendedWatcher>,
     watch_enabled: bool,
     env_prefix: String,
     event_bus: Option<Arc<EventBusManager>>,
@@ -602,7 +601,6 @@ impl ConfigManager {
             layers: Vec::new(),
             merged_config: Arc::new(RwLock::new(Value::Object(Map::new()))),
             change_notifier,
-            _watcher: None,
             watch_enabled: true,
             env_prefix: "QORZEN".to_string(),
             event_bus: None,
@@ -816,17 +814,26 @@ impl ConfigManager {
     async fn load_layer_config(&self, layer: &ConfigLayer) -> Result<Value> {
         match &layer.source {
             ConfigSource::File { path, format } => {
-                let content = tokio::fs::read_to_string(path)
-                    .await
-                    .with_context(|| format!("Failed to read config file: {}", path.display()))?;
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let content = std::fs::read_to_string(path)
+                        .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
-                match format {
-                    ConfigFormat::Yaml => serde_yaml::from_str(&content)
-                        .map_err(|e| Error::config(format!("Failed to parse YAML config: {}", e))),
-                    ConfigFormat::Json => serde_json::from_str(&content)
-                        .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e))),
-                    ConfigFormat::Toml => toml::from_str(&content)
-                        .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e))),
+                    match format {
+                        #[cfg(feature = "serde_yaml")]
+                        ConfigFormat::Yaml => serde_yaml::from_str(&content)
+                            .map_err(|e| Error::config(format!("Failed to parse YAML config: {}", e))),
+                        ConfigFormat::Json => serde_json::from_str(&content)
+                            .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e))),
+                        #[cfg(feature = "toml")]
+                        ConfigFormat::Toml => toml::from_str(&content)
+                            .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e))),
+                        _ => Err(Error::config("Unsupported config format for this platform")),
+                    }
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    Err(Error::config("File loading not supported in web platform"))
                 }
             }
             ConfigSource::Environment { prefix } => {

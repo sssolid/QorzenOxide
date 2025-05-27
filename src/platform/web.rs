@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::*;
-use web_sys::{Request, RequestInit, Response, Storage, Window, Navigator};
 
 use crate::error::{Error, Result};
 use crate::platform::*;
@@ -13,7 +12,7 @@ use crate::platform::*;
 // Set up panic hook and allocator for web
 #[cfg(target_arch = "wasm32")]
 #[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+static ALLOC: wee_alloc::WeeAlloc<'_> = wee_alloc::WeeAlloc::INIT;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
@@ -31,7 +30,7 @@ pub fn create_providers() -> Result<PlatformProviders> {
 }
 
 pub fn detect_capabilities() -> PlatformCapabilities {
-    let window = web_sys::window().unwrap();
+    let window = window().unwrap();
 
     PlatformCapabilities {
         has_filesystem: false,       // Limited file access
@@ -56,12 +55,12 @@ pub fn detect_capabilities() -> PlatformCapabilities {
 }
 
 pub async fn initialize() -> Result<()> {
-    web_sys::console::log_1(&"Initializing web platform".into());
+    console::log_1(&"Initializing web platform".into());
     Ok(())
 }
 
 pub async fn cleanup() -> Result<()> {
-    web_sys::console::log_1(&"Cleaning up web platform".into());
+    console::log_1(&"Cleaning up web platform".into());
     Ok(())
 }
 
@@ -134,7 +133,7 @@ impl FileSystemProvider for WebFileSystem {
 
 impl WebFileSystem {
     async fn fetch_from_url(&self, url: &str) -> Result<Vec<u8>> {
-        let window = web_sys::window().unwrap();
+        let window = window().unwrap();
         let request = Request::new_with_str(url).unwrap();
 
         let response_value = JsFuture::from(window.fetch_with_request(&request))
@@ -208,7 +207,7 @@ impl FetchNetwork {
 #[async_trait]
 impl NetworkProvider for FetchNetwork {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse> {
-        let window = web_sys::window().unwrap();
+        let window = window().unwrap();
 
         let mut opts = RequestInit::new();
         opts.method(&request.method);
@@ -293,7 +292,7 @@ impl WebStorage {
     }
 
     fn get_storage(&self) -> Result<Storage> {
-        web_sys::window()
+        window()
             .and_then(|w| w.local_storage().ok())
             .flatten()
             .ok_or_else(|| Error::platform("web", "storage", "localStorage not available"))

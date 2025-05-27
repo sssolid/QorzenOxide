@@ -2,16 +2,12 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-#[cfg(not(target_arch = "wasm32"))]
-use tokio::sync::RwLock;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::platform::native;
 use uuid::Uuid;
 
 use crate::auth::{Permission, User};
@@ -207,7 +203,6 @@ pub struct PluginContext {
     pub event_bus: Arc<EventBusManager>,
     pub database: Option<PluginDatabase>,
     pub file_system: PluginFileSystem,
-    pub logger: crate::logging::Logger,
 }
 
 /// Plugin API client for interacting with core system
@@ -765,7 +760,18 @@ impl PluginManager {
     }
 
     async fn create_plugin_context(&self, plugin_id: &str) -> Result<PluginContext> {
-        // This would be implemented with actual dependencies
+        // Create a simple filesystem implementation for web
+        let filesystem_provider: Arc<dyn FileSystemProvider> = {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                Arc::new(crate::platform::native::NativeFileSystem::new()?)
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                Arc::new(crate::platform::web::WebFileSystem::new()?)
+            }
+        };
+
         Ok(PluginContext {
             plugin_id: plugin_id.to_string(),
             config: PluginConfig {
@@ -777,15 +783,14 @@ impl PluginManager {
                 validation_rules: Vec::new(),
             },
             api_client: self.api_provider.create_client(plugin_id.to_string()),
-            event_bus: Arc::new(crate::event::EventBusManager::new(
+            event_bus: Arc::new(EventBusManager::new(
                 crate::event::EventBusConfig::default(),
             )),
             database: None,
             file_system: PluginFileSystem::new(
                 plugin_id.to_string(),
-                Arc::new(NativeFileSystem::new()?),
+                filesystem_provider,
             ),
-            logger: crate::logging::Logger::new(format!("plugin.{}", plugin_id)),
         })
     }
 }

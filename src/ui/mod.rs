@@ -4,9 +4,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use dioxus::prelude::*;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-#[cfg(not(target_arch = "wasm32"))]
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::auth::{Permission, User, UserSession};
