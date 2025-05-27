@@ -539,10 +539,8 @@ checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
- "js-sys",
  "num-traits",
  "serde",
- "wasm-bindgen",
  "windows-link",
 ]
 
@@ -3757,9 +3755,6 @@ dependencies = [
  "crossbeam",
  "dashmap",
  "dioxus",
- "dioxus-desktop",
- "dioxus-router",
- "dioxus-web",
  "dirs",
  "flate2",
  "futures",
@@ -3771,7 +3766,6 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "reqwest",
- "rustc_version",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -4876,7 +4870,6 @@ dependencies = [
  "bytes",
  "libc",
  "mio 1.0.3",
- "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",

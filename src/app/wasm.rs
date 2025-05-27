@@ -1,5 +1,8 @@
 // src/app/wasm.rs - WASM-specific application core
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;

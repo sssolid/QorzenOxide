@@ -5,115 +5,55 @@ edition = "2021"
 
 [features]
 default = ["desktop"]
-desktop = ["dioxus-desktop", "dioxus/desktop", "native-deps"]
-web = ["dioxus-web", "dioxus/web", "web-deps", "getrandom/js"]
-native-deps = [
-    "tokio/full",
-    "notify",
-    "dirs",
-    "hostname",
-    "flate2",
-    "tracing-appender",
-    "reqwest",
-    "serde_yaml",
-    "toml",
-    "sha2"
-]
-web-deps = [
-    "wasm-bindgen",
-    "wasm-bindgen-futures",
-    "web-sys",
-    "js-sys",
-    "console_error_panic_hook",
-    "wee_alloc"
-]
+desktop = []
+web = []
 
 [dependencies]
-# Core dependencies (always included)
-dioxus = { version = "0.5", features = ["macro", "html", "desktop"] }
-dioxus-desktop = { version = "0.5", optional = true }
-dioxus-web = { version = "0.5", optional = true }
-dioxus-router = { version = "0.5", optional = true }
+# Core dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde", "clock"], default-features = false }
 async-trait = "0.1"
 futures = "0.3"
 tracing = "0.1"
 parking_lot = "0.12"
 crossbeam = "0.8"
-num_cpus = "1.0"
-clap = { version = "4.0", features = ["derive"] }
-rand = "0.8"
-getrandom = { version = "0.2", optional = true, features = ["js"] }
 uuid = { version = "1.0", features = ["v4", "serde", "js"] }
 dashmap = "5.0"
-
-# Conditional dependencies for native
-tokio = { version = "1.0", features = ["macros", "rt"], optional = true }
-tokio-util = { version = "0.7", optional = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
-notify = { version = "6.0", optional = true }
-dirs = { version = "5.0", optional = true }
-hostname = { version = "0.3", optional = true }
-flate2 = { version = "1.0", optional = true }
-tracing-appender = { version = "0.2", optional = true }
-reqwest = { version = "0.12", features = ["json"], optional = true }
-serde_yaml = { version = "0.9", optional = true }
-toml = { version = "0.8", optional = true }
-sha2 = { version = "0.10", optional = true }
-
-# Web-only dependencies
-wasm-bindgen = { version = "0.2", optional = true }
-wasm-bindgen-futures = { version = "0.4", optional = true }
-web-sys = { version = "0.3", features = [
-    "console",
-    "Window",
-    "Navigator",
-    "MediaDevices",
-    "Geolocation",
-    "ServiceWorkerContainer",
-    "Request",
-    "RequestInit",
-    "Response",
-    "Headers",
-    "Storage"
-], optional = true }
-js-sys = { version = "0.3", optional = true }
-console_error_panic_hook = { version = "0.1", optional = true }
-wee_alloc = { version = "0.4", optional = true }
-
-# Development dependencies
-[dev-dependencies]
-tempfile = "3.10"
+rand = "0.8"
 
 # Target-specific dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Dioxus with desktop features for native
+dioxus = { version = "0.5", features = ["macro", "html", "desktop"] }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "sync", "time", "signal"] }
+tokio-util = "0.7"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+clap = { version = "4.0", features = ["derive"] }
+notify = "6.0"
+dirs = "5.0"
+hostname = "0.3"
+flate2 = "1.0"
+tracing-appender = "0.2"
+reqwest = { version = "0.12", features = ["json"] }
+serde_yaml = "0.9"
+toml = "0.8"
+sha2 = "0.10"
+num_cpus = "1.0"
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1"
-wee_alloc = "0.4"
+# Dioxus with web features for WASM
+dioxus = { version = "0.5", features = ["macro", "html", "web"] }
+tokio = { version = "1.0", features = ["sync", "macros", "rt", "time"], default-features = false }
+getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
-    "console",
-    "Window",
-    "Navigator",
-    "MediaDevices",
-    "Geolocation",
-    "ServiceWorkerContainer",
-    "Request",
-    "RequestInit",
-    "Response",
-    "Headers",
-    "Storage"
+    "console", "Window", "Navigator", "Request", "Response", "Headers"
 ] }
 js-sys = "0.3"
+console_error_panic_hook = "0.1"
+wee_alloc = "0.4"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1.0", features = ["full"] }
-tokio-util = "0.7"
-reqwest = { version = "0.12", features = ["json"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-sha2 = "0.10"
-
-[build-dependencies]
-rustc_version = "0.4"
+[dev-dependencies]
+tempfile = "3.10"

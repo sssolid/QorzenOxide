@@ -15,15 +15,19 @@ use uuid::Uuid;
 use crate::auth::{
     AccountManager, MemorySessionStore, MemoryUserStore, SecurityPolicy, User, UserSession,
 };
+#[cfg(not(target_arch = "wasm32"))]
 use crate::concurrency::ConcurrencyManager;
 use crate::error::{Error, ErrorKind, ManagerOperation, Result, ResultExt};
 use crate::event::EventBusManager;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::file::FileManager;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::logging::LoggingManager;
 use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState, ManagerStatus};
 use crate::platform::PlatformManager;
 use crate::plugin::PluginManager;
 use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::task::TaskManager;
 use crate::ui::UILayoutManager;
 

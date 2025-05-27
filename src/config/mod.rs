@@ -684,23 +684,16 @@ impl ConfigManager {
                         .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
                     match format {
+                        ConfigFormat::Json => serde_json::from_str(&content)
+                            .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e))),
                         #[cfg(feature = "serde_yaml")]
                         ConfigFormat::Yaml => serde_yaml::from_str(&content)
                             .map_err(|e| Error::config(format!("Failed to parse YAML config: {}", e))),
-                        ConfigFormat::Json => serde_json::from_str(&content)
-                            .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e))),
                         #[cfg(feature = "toml")]
                         ConfigFormat::Toml => toml::from_str(&content)
                             .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e))),
                         #[cfg(not(any(feature = "serde_yaml", feature = "toml")))]
-                        _ => {
-                            if matches!(format, ConfigFormat::Json) {
-                                serde_json::from_str(&content)
-                                    .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e)))
-                            } else {
-                                Err(Error::config("Unsupported config format for this platform"))
-                            }
-                        }
+                        _ => Err(Error::config("Unsupported config format for this platform")),
                     }
                 }
                 #[cfg(target_arch = "wasm32")]
@@ -708,23 +701,23 @@ impl ConfigManager {
                     Err(Error::config("File loading not supported in web platform"))
                 }
             }
+            // ... rest of the method remains the same
             ConfigSource::Environment { prefix } => {
-                let mut env_config = Map::new();
-
-                for (key, value) in std::env::vars() {
-                    if key.starts_with(prefix) {
-                        let config_key = key
-                            .strip_prefix(prefix)
-                            .unwrap()
-                            .trim_start_matches('_')
-                            .to_lowercase();
-
-                        // Convert environment variable to nested structure
-                        let nested_keys: Vec<&str> = config_key.split('_').collect();
-                        self.set_nested_env_value(&mut env_config, &nested_keys, value);
+                let mut env_config = serde_json::Map::new();
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    for (key, value) in std::env::vars() {
+                        if key.starts_with(prefix) {
+                            let config_key = key
+                                .strip_prefix(prefix)
+                                .unwrap()
+                                .trim_start_matches('_')
+                                .to_lowercase();
+                            let nested_keys: Vec<&str> = config_key.split('_').collect();
+                            self.set_nested_env_value(&mut env_config, &nested_keys, value);
+                        }
                     }
                 }
-
                 Ok(Value::Object(env_config))
             }
             ConfigSource::Memory { data } => Ok(data.clone()),
