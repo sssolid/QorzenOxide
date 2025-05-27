@@ -974,9 +974,14 @@ checksum = "b8e7fe217b50d43b27528b0f24c89b411f742a3e7564d1cfbf85253f967954db"
 dependencies = [
  "dioxus-config-macro",
  "dioxus-core",
+ "dioxus-core-macro",
  "dioxus-desktop",
  "dioxus-fullstack",
+ "dioxus-hooks",
+ "dioxus-hot-reload",
+ "dioxus-html",
  "dioxus-router",
+ "dioxus-signals",
  "dioxus-web",
 ]
 
@@ -3752,6 +3757,9 @@ dependencies = [
  "crossbeam",
  "dashmap",
  "dioxus",
+ "dioxus-desktop",
+ "dioxus-router",
+ "dioxus-web",
  "dirs",
  "flate2",
  "futures",

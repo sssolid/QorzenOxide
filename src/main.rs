@@ -1,16 +1,18 @@
-// src/main.rs - Cross-platform main entry point
+// src/main.rs - Complete main entry point
 
 use std::path::PathBuf;
+use std::process;
 
 use clap::{Parser, Subcommand};
 use dioxus::prelude::*;
 
+use qorzen_oxide::app::ApplicationCore;
 use qorzen_oxide::error::Result;
 use qorzen_oxide::ui::{App, AppState};
 
 #[derive(Parser)]
 #[command(
-    name = "qorzen-oxide", 
+    name = "qorzen-oxide",
     version = qorzen_oxide::VERSION,
     about = "A cross-platform, plugin-based application framework",
     long_about = None
@@ -38,30 +40,14 @@ enum Commands {
         #[arg(long)]
         headless: bool,
     },
-    #[cfg(not(target_arch = "wasm32"))]
     Status,
-    #[cfg(not(target_arch = "wasm32"))]
     Health,
-    #[cfg(not(target_arch = "wasm32"))]
     ValidateConfig {
         #[arg(short, long)]
         config: Option<PathBuf>,
     },
 }
 
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    // Set up panic hook
-    console_error_panic_hook::set_once();
-
-    // Initialize tracing for web
-    tracing_wasm::set_as_global_default();
-
-    // Launch Dioxus app directly for web
-    dioxus::launch(App);
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     // Parse command line arguments
     let cli = Cli::parse();
@@ -100,7 +86,6 @@ fn main() {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn setup_logging(cli: &Cli) {
     let level = if cli.debug {
         tracing::Level::DEBUG
@@ -117,25 +102,56 @@ fn setup_logging(cli: &Cli) {
         .ok();
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn run_ui_application(cli: &Cli) {
     tracing::info!("Starting Qorzen Oxide v{}", qorzen_oxide::VERSION);
-    dioxus::launch(App);
+
+    // Create initial app state
+    let app_state = AppState {
+        current_user: None,
+        current_session: None,
+        current_layout: Default::default(),
+        current_theme: Default::default(),
+        is_loading: false,
+        error_message: None,
+        notifications: Vec::new(),
+    };
+
+    // // Launch Dioxus application - this will handle the async runtime
+    // #[cfg(target_arch = "wasm32")]
+    // {
+    //     #[cfg(feature = "web")]
+    //     dioxus::launch(App);
+    // }
+    // 
+    // #[cfg(not(target_arch = "wasm32"))]
+    // {
+    //     #[cfg(feature = "desktop")]
+    //     dioxus::launch(App);
+    // }
+    #[cfg(target_arch = "wasm32")]
+    fn main() {
+        qorzen_oxide::web::launch();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn main() {
+        qorzen_oxide::app::native::launch();
+    }
+
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn run_headless_application(cli: &Cli) {
+    // Use a new runtime for headless mode
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
     rt.block_on(async {
         if let Err(e) = run_application_async(cli, true).await {
             eprintln!("Application error: {}", e);
-            std::process::exit(1);
+            process::exit(1);
         }
     });
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn run_headless_command<F>(command: F)
 where
     F: FnOnce() -> Result<()>,
@@ -145,17 +161,15 @@ where
     rt.block_on(async {
         if let Err(e) = command() {
             eprintln!("Command error: {}", e);
-            std::process::exit(1);
+            process::exit(1);
         }
     });
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 async fn run_application_async(cli: &Cli, headless: bool) -> Result<()> {
-    use qorzen_oxide::ApplicationCore;
-
     tracing::info!("Starting Qorzen Oxide v{}", qorzen_oxide::VERSION);
 
+    // Create and initialize application
     let mut app = if let Some(config_path) = &cli.config {
         ApplicationCore::with_config_file(config_path)
     } else {
@@ -169,14 +183,12 @@ async fn run_application_async(cli: &Cli, headless: bool) -> Result<()> {
         app.wait_for_shutdown().await?;
     }
 
+    // Shutdown application
     app.shutdown().await?;
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn show_status() -> Result<()> {
-    use qorzen_oxide::ApplicationCore;
-
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
     rt.block_on(async {
@@ -204,10 +216,7 @@ fn show_status() -> Result<()> {
     })
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn check_health() -> Result<()> {
-    use qorzen_oxide::ApplicationCore;
-
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
     rt.block_on(async {
@@ -237,6 +246,7 @@ fn check_health() -> Result<()> {
             println!("  {} {}: {:?}", status_icon, name, status);
         }
 
+        // Set exit code based on health
         let exit_code = match health.status {
             qorzen_oxide::manager::HealthStatus::Healthy => 0,
             qorzen_oxide::manager::HealthStatus::Degraded => 1,
@@ -247,17 +257,14 @@ fn check_health() -> Result<()> {
         app.shutdown().await?;
 
         if exit_code != 0 {
-            std::process::exit(exit_code);
+            process::exit(exit_code);
         }
 
         Ok(())
     })
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn validate_config(config_path: Option<PathBuf>) -> Result<()> {
-    use qorzen_oxide::ApplicationCore;
-
     println!("Validating configuration...");
 
     let _app = if let Some(path) = config_path {
