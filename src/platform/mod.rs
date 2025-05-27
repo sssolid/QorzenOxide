@@ -2,7 +2,6 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::error::Result;
@@ -132,7 +131,79 @@ impl PlatformManager {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
+impl Manager for PlatformManager {
+    fn name(&self) -> &str {
+        "platform_manager"
+    }
+
+    fn id(&self) -> Uuid {
+        self.state.id()
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
+
+        // Platform-specific initialization
+        #[cfg(not(target_arch = "wasm32"))]
+        native::initialize().await?;
+
+        #[cfg(target_arch = "wasm32")]
+        web::initialize().await?;
+
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
+
+        // Platform-specific cleanup
+        #[cfg(not(target_arch = "wasm32"))]
+        native::cleanup().await?;
+
+        #[cfg(target_arch = "wasm32")]
+        web::cleanup().await?;
+
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
+        Ok(())
+    }
+
+    async fn status(&self) -> ManagerStatus {
+        let mut status = self.state.status().await;
+        status.add_metadata(
+            "platform",
+            serde_json::json!(self.capabilities.platform_name),
+        );
+        status.add_metadata(
+            "capabilities",
+            serde_json::to_value(&self.capabilities).unwrap_or_default(),
+        );
+        status
+    }
+
+    fn platform_requirements(&self) -> PlatformRequirements {
+        PlatformRequirements {
+            requires_filesystem: true,
+            requires_network: true,
+            requires_database: true,
+            requires_native_apis: false,
+            minimum_permissions: vec!["platform.access".to_string()],
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
 impl Manager for PlatformManager {
     fn name(&self) -> &str {
         "platform_manager"

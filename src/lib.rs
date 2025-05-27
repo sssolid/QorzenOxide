@@ -2,10 +2,12 @@
 
 //! Qorzen Core - A modular plugin-based system with async core managers
 
+#![cfg_attr(debug_assertions, allow(unsafe_code))]
 #![deny(unsafe_code)]
 #![cfg_attr(test, allow(unsafe_code))]
 #![warn(clippy::all)]
 #![allow(clippy::module_name_repetitions)]
+
 
 // Core modules (always available)
 pub mod app;

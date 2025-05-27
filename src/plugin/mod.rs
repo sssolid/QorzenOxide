@@ -4,11 +4,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
-use dioxus::prelude::*;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use dioxus::prelude::*;
 
 use crate::auth::{Permission, User};
 use crate::error::{Error, Result};
@@ -38,7 +36,7 @@ pub enum Platform {
     Windows,
     MacOS,
     Linux,
-    iOS,
+    IOS,
     Android,
     Web,
     All,
@@ -218,13 +216,13 @@ impl PluginApiClient {
     }
 
     /// Gets configuration value
-    pub async fn get_config(&self, key: &str) -> Result<Option<serde_json::Value>> {
+    pub async fn get_config(&self, _key: &str) -> Result<Option<serde_json::Value>> {
         // Implementation would call core config system
         Ok(None)
     }
 
     /// Sets configuration value
-    pub async fn set_config(&self, key: &str, value: serde_json::Value) -> Result<()> {
+    pub async fn set_config(&self, _key: &str, _value: serde_json::Value) -> Result<()> {
         // Implementation would call core config system
         Ok(())
     }
@@ -236,7 +234,7 @@ impl PluginApiClient {
     }
 
     /// Checks permission
-    pub async fn check_permission(&self, resource: &str, action: &str) -> Result<bool> {
+    pub async fn check_permission(&self, _resource: &str, _action: &str) -> Result<bool> {
         // Implementation would call account manager
         Ok(false)
     }
@@ -391,6 +389,7 @@ impl PluginSandbox {
 }
 
 /// Main plugin trait
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait Plugin: Send + Sync + std::fmt::Debug {
     /// Returns plugin information
@@ -433,6 +432,49 @@ pub trait Plugin: Send + Sync + std::fmt::Debug {
     async fn handle_event(&self, handler_id: &str, event: &dyn Event) -> Result<()>;
 }
 
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait Plugin: Sync + std::fmt::Debug {
+    /// Returns plugin information
+    fn info(&self) -> PluginInfo;
+
+    /// Returns required dependencies
+    fn required_dependencies(&self) -> Vec<PluginDependency>;
+
+    /// Returns required permissions
+    fn required_permissions(&self) -> Vec<Permission>;
+
+    /// Initializes the plugin
+    async fn initialize(&mut self, context: PluginContext) -> Result<()>;
+
+    /// Shuts down the plugin
+    async fn shutdown(&mut self) -> Result<()>;
+
+    /// Returns UI components provided by this plugin
+    fn ui_components(&self) -> Vec<UIComponent>;
+
+    /// Returns menu items provided by this plugin
+    fn menu_items(&self) -> Vec<MenuItem>;
+
+    /// Returns settings schema for configuration
+    fn settings_schema(&self) -> Option<SettingsSchema>;
+
+    /// Returns API routes provided by this plugin
+    fn api_routes(&self) -> Vec<ApiRoute>;
+
+    /// Returns event handlers provided by this plugin
+    fn event_handlers(&self) -> Vec<EventHandler>;
+
+    /// Renders a UI component
+    fn render_component(&self, component_id: &str, props: serde_json::Value) -> Result<dioxus::VNode>;
+
+    /// Handles an API request
+    async fn handle_api_request(&self, route_id: &str, request: ApiRequest) -> Result<ApiResponse>;
+
+    /// Handles an event
+    async fn handle_event(&self, handler_id: &str, event: &dyn Event) -> Result<()>;
+}
+
 /// API request structure
 #[derive(Debug, Clone)]
 pub struct ApiRequest {
@@ -453,8 +495,17 @@ pub struct ApiResponse {
 }
 
 /// Plugin loader trait
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait PluginLoader: Send + Sync {
+    async fn load_plugin(&self, path: &str) -> Result<Box<dyn Plugin>>;
+    async fn validate_plugin(&self, plugin: &dyn Plugin) -> Result<ValidationResult>;
+    async fn unload_plugin(&self, plugin_id: &str) -> Result<()>;
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait PluginLoader: Sync {
     async fn load_plugin(&self, path: &str) -> Result<Box<dyn Plugin>>;
     async fn validate_plugin(&self, plugin: &dyn Plugin) -> Result<ValidationResult>;
     async fn unload_plugin(&self, plugin_id: &str) -> Result<()>;
@@ -814,6 +865,7 @@ impl PluginManager {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl Manager for PluginManager {
     fn name(&self) -> &str {
@@ -860,7 +912,6 @@ impl Manager for PluginManager {
         Ok(())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     async fn status(&self) -> ManagerStatus {
         let mut status = self.state.status().await;
 
@@ -882,7 +933,64 @@ impl Manager for PluginManager {
         status
     }
 
-    #[cfg(target_arch = "wasm32")]
+    fn platform_requirements(&self) -> PlatformRequirements {
+        PlatformRequirements {
+            requires_filesystem: true,
+            requires_network: false,
+            requires_database: false,
+            requires_native_apis: false,
+            minimum_permissions: vec!["plugin.load".to_string(), "plugin.manage".to_string()],
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+impl Manager for PluginManager {
+    fn name(&self) -> &str {
+        "plugin_manager"
+    }
+
+    fn id(&self) -> Uuid {
+        self.state.id()
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
+
+        // Load plugins from plugin directory
+        // Initialize all loaded plugins
+        self.initialize_plugins().await?;
+
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
+
+        // Shutdown all plugins in reverse order
+        let mut load_order = self.registry.load_order().to_vec();
+        load_order.reverse();
+
+        for plugin_id in load_order {
+            if let Err(e) = self.unload_plugin(&plugin_id).await {
+                tracing::error!("Failed to unload plugin {}: {}", plugin_id, e);
+            }
+        }
+
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
+        Ok(())
+    }
+
     async fn status(&self) -> ManagerStatus {
         let mut status = self.state.status().await;
 

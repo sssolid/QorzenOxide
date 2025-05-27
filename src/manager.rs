@@ -182,9 +182,127 @@ impl Default for ManagerMetrics {
     }
 }
 
-/// Core trait for all system managers
+/// Core trait for all system managers - conditional Send requirement based on target
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait Manager: Send + Sync + fmt::Debug {
+    /// Returns the manager name
+    fn name(&self) -> &str;
+
+    /// Returns the manager ID
+    fn id(&self) -> Uuid;
+
+    /// Initializes the manager
+    async fn initialize(&mut self) -> Result<()>;
+
+    /// Shuts down the manager
+    async fn shutdown(&mut self) -> Result<()>;
+
+    /// Returns current status
+    async fn status(&self) -> ManagerStatus;
+
+    /// Performs health check
+    async fn health_check(&self) -> HealthStatus {
+        let status = self.status().await;
+        match status.state {
+            ManagerState::Running => HealthStatus::Healthy,
+            ManagerState::Paused | ManagerState::Maintenance => HealthStatus::Degraded,
+            ManagerState::Error => HealthStatus::Unhealthy,
+            _ => HealthStatus::Unknown,
+        }
+    }
+
+    /// Pauses the manager
+    async fn pause(&mut self) -> Result<()> {
+        Err(Error::manager(
+            self.name(),
+            ManagerOperation::Pause,
+            "Pause operation not supported",
+        ))
+    }
+
+    /// Resumes the manager
+    async fn resume(&mut self) -> Result<()> {
+        Err(Error::manager(
+            self.name(),
+            ManagerOperation::Resume,
+            "Resume operation not supported",
+        ))
+    }
+
+    /// Restarts the manager
+    async fn restart(&mut self) -> Result<()> {
+        self.shutdown().await?;
+        self.initialize().await
+    }
+
+    /// Gets current configuration
+    async fn get_config(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Updates configuration
+    async fn update_config(&mut self, _config: serde_json::Value) -> Result<()> {
+        Err(Error::manager(
+            self.name(),
+            ManagerOperation::Configure,
+            "Configuration update not supported",
+        ))
+    }
+
+    /// Returns dependencies
+    fn dependencies(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Returns initialization priority
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    /// Checks if manager is essential for system operation
+    fn is_essential(&self) -> bool {
+        false
+    }
+
+    /// Returns manager version
+    fn version(&self) -> Option<String> {
+        None
+    }
+
+    /// Returns manager description
+    fn description(&self) -> Option<String> {
+        None
+    }
+
+    /// Checks if manager supports runtime reloading
+    fn supports_runtime_reload(&self) -> bool {
+        false
+    }
+
+    /// Reloads configuration at runtime
+    async fn reload_config(&mut self, _config: serde_json::Value) -> Result<()> {
+        Err(Error::manager(
+            self.name(),
+            ManagerOperation::Reload,
+            "Runtime configuration reload not supported",
+        ))
+    }
+
+    /// Returns required permissions
+    fn required_permissions(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Returns platform requirements
+    fn platform_requirements(&self) -> PlatformRequirements {
+        PlatformRequirements::default()
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait Manager: Sync + fmt::Debug {
     /// Returns the manager name
     fn name(&self) -> &str;
 

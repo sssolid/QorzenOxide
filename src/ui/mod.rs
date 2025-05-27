@@ -443,7 +443,87 @@ impl UILayoutManager {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait::async_trait]
+impl Manager for UILayoutManager {
+    fn name(&self) -> &str {
+        "ui_layout_manager"
+    }
+
+    fn id(&self) -> Uuid {
+        self.state.id()
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
+
+        // Register default layout and theme
+        let default_layout = self.default_layout().await;
+        let default_theme = self.default_theme().await;
+
+        self.register_layout(default_layout.clone()).await;
+        self.register_theme(default_theme.clone()).await;
+
+        self.set_current_layout(default_layout).await;
+        self.set_current_theme(default_theme).await;
+
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
+        Ok(())
+    }
+
+    async fn status(&self) -> ManagerStatus {
+        let mut status = self.state.status().await;
+
+        status.add_metadata(
+            "layouts_count",
+            serde_json::Value::from(self.layouts.read().await.len()),
+        );
+        status.add_metadata(
+            "themes_count",
+            serde_json::Value::from(self.themes.read().await.len()),
+        );
+
+        if let Some(layout) = self.current_layout().await {
+            status.add_metadata(
+                "current_layout",
+                serde_json::Value::String(layout.layout_id),
+            );
+        }
+
+        if let Some(theme) = self.current_theme().await {
+            status.add_metadata("current_theme", serde_json::Value::String(theme.id));
+        }
+
+        status
+    }
+
+    fn platform_requirements(&self) -> PlatformRequirements {
+        PlatformRequirements {
+            requires_filesystem: false,
+            requires_network: false,
+            requires_database: false,
+            requires_native_apis: false,
+            minimum_permissions: vec!["ui.access".to_string()],
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait::async_trait(?Send)]
 impl Manager for UILayoutManager {
     fn name(&self) -> &str {
         "ui_layout_manager"

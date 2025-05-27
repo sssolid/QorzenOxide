@@ -59,7 +59,7 @@ web-sys = { version = "0.3", features = [
 #    "Headers",
 #    "Storage",
 #    "ArrayBuffer",
-#    "Uint8Array"
+#    "Uint8Array",
     "console",
     "Window",
     "Navigator",

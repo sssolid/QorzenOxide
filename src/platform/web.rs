@@ -29,7 +29,7 @@ pub fn create_providers() -> Result<PlatformProviders> {
 }
 
 pub fn detect_capabilities() -> PlatformCapabilities {
-    let window = window().unwrap();
+    let _window = window().unwrap();
 
     PlatformCapabilities {
         has_filesystem: false,
@@ -66,12 +66,12 @@ pub async fn cleanup() -> Result<()> {
 pub struct WebFileSystem;
 
 impl WebFileSystem {
-    pub fn new() -> Result<Self> { // Make this public
+    pub fn new() -> Result<Self> {
         Ok(Self)
     }
 }
 
-#[async_trait(?Send)] // Remove Send requirement for WASM
+#[async_trait(?Send)]
 impl FileSystemProvider for WebFileSystem {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
         if path.starts_with("http://") || path.starts_with("https://") {
@@ -209,11 +209,11 @@ impl NetworkProvider for FetchNetwork {
         let window = window().unwrap();
 
         let mut opts = RequestInit::new();
-        opts.method(&request.method);
+        opts.set_method(&request.method);
 
         if let Some(body) = request.body {
             let uint8_array = js_sys::Uint8Array::from(&body[..]);
-            opts.body(Some(&uint8_array));
+            opts.set_body(Some(&uint8_array));
         }
 
         let req = Request::new_with_str(&request.url).map_err(|e| {

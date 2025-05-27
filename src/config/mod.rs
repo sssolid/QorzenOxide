@@ -1,4 +1,4 @@
-// src/config.rs
+// src/config/mod.rs
 
 //! Configuration management system with hot-reload support
 //!
@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 use uuid::Uuid;
 
-use crate::error::{Error, Result, ResultExt};
+use crate::error::{Error, Result};
 use crate::event::{Event, EventBusManager};
 use crate::manager::{ManagedState, Manager, ManagerStatus};
 use crate::types::Metadata;
@@ -237,6 +237,7 @@ impl Default for FileLogConfig {
     }
 }
 
+/// Get default CPU count for the platform
 fn get_default_cpu_count() -> usize {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -260,7 +261,7 @@ pub struct EventBusConfig {
 impl Default for EventBusConfig {
     fn default() -> Self {
         Self {
-            worker_count: get_default_cpu_count() * 2,
+            worker_count: get_default_cpu_count().max(1) * 2,
             queue_size: 10000,
             publish_timeout_ms: 5000,
             enable_persistence: false,
@@ -337,7 +338,7 @@ pub struct TaskConfig {
 impl Default for TaskConfig {
     fn default() -> Self {
         Self {
-            max_concurrent: num_cpus::get() * 2,
+            max_concurrent: get_default_cpu_count().max(1) * 2,
             default_timeout_ms: 300_000, // 5 minutes
             keep_completed: true,
             progress_update_interval_ms: 1000,
@@ -693,7 +694,7 @@ impl ConfigManager {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     let content = std::fs::read_to_string(path)
-                        .with_context(|| format!("Failed to read config file: {}", path.display()))?;
+                        .map_err(|e| Error::config(format!("Failed to read config file: {}", e)))?;
 
                     match format {
                         ConfigFormat::Json => serde_json::from_str(&content)
@@ -713,7 +714,6 @@ impl ConfigManager {
                     Err(Error::config("File loading not supported in web platform"))
                 }
             }
-            // ... rest of the method remains the same
             ConfigSource::Environment { prefix } => {
                 let mut env_config = serde_json::Map::new();
                 #[cfg(not(target_arch = "wasm32"))]
@@ -868,6 +868,8 @@ impl Default for ConfigManager {
     }
 }
 
+/// Conditional Manager implementation for ConfigManager
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl Manager for ConfigManager {
     fn name(&self) -> &str {
@@ -875,7 +877,60 @@ impl Manager for ConfigManager {
     }
 
     fn id(&self) -> Uuid {
-        Uuid::new_v4() // Simplified
+        self.state.id()
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
+
+        // Store env_prefix in a local variable to avoid borrow conflicts
+        let env_prefix = self.env_prefix.clone();
+        self.add_env_layer("environment", &env_prefix, 1000);
+
+        // Load and merge all configurations
+        self.merge_configurations().await?;
+
+        // TODO: Setup file watching for hot-reload
+
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
+
+        // Clean up file watchers, etc.
+
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
+        Ok(())
+    }
+
+    async fn status(&self) -> ManagerStatus {
+        let mut status = self.state.status().await;
+        status.add_metadata("layers", Value::from(self.layers.len()));
+        status.add_metadata("watch_enabled", Value::Bool(self.watch_enabled));
+        status.add_metadata("env_prefix", Value::String(self.env_prefix.clone()));
+        status
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+impl Manager for ConfigManager {
+    fn name(&self) -> &str {
+        "config_manager"
+    }
+
+    fn id(&self) -> Uuid {
+        self.state.id()
     }
 
     async fn initialize(&mut self) -> Result<()> {

@@ -1,8 +1,5 @@
 // src/app/wasm.rs - WASM-specific application core
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::{AccountManager, MemorySessionStore, MemoryUserStore, SecurityPolicy, User, UserSession};
-use crate::error::{Error, ErrorKind, ManagerOperation, Result, ResultExt};
+use crate::error::{Error, Result};
 use crate::event::EventBusManager;
-use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState, ManagerStatus};
+use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState};
 use crate::platform::PlatformManager;
 use crate::plugin::PluginManager;
 use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
@@ -350,7 +347,7 @@ impl SimplePluginLoader {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl crate::plugin::PluginLoader for SimplePluginLoader {
     async fn load_plugin(&self, _path: &str) -> Result<Box<dyn crate::plugin::Plugin>> {
         Err(Error::plugin(

@@ -13,7 +13,6 @@ use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::manager::{Manager, ManagedState, ManagerStatus, PlatformRequirements};
-use crate::platform::StorageProvider;
 
 /// Configuration tiers in order of precedence (lowest to highest)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -49,9 +48,21 @@ impl ConfigurationTier {
     }
 }
 
-/// Configuration store trait
+/// Configuration store trait - conditional Send requirement
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait ConfigStore: Send + Sync {
+    async fn get(&self, key: &str) -> Result<Option<Value>>;
+    async fn set(&self, key: &str, value: Value) -> Result<()>;
+    async fn delete(&self, key: &str) -> Result<()>;
+    async fn list_keys(&self, prefix: &str) -> Result<Vec<String>>;
+    async fn watch(&self, key: &str) -> Result<ConfigWatcher>;
+    fn tier(&self) -> ConfigurationTier;
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait ConfigStore: Sync {
     async fn get(&self, key: &str) -> Result<Option<Value>>;
     async fn set(&self, key: &str, value: Value) -> Result<()>;
     async fn delete(&self, key: &str) -> Result<()>;
@@ -433,7 +444,7 @@ impl TieredConfigManager {
 
         // Deserialize and return
         let result: T = serde_json::from_value(merged_value)
-            .map_err(|e| Error::config("Failed to deserialize merged value"))?;
+            .map_err(|_e| Error::config("Failed to deserialize merged value"))?;
         Ok(Some(result))
     }
 
@@ -529,6 +540,8 @@ impl TieredConfigManager {
     }
 }
 
+/// Conditional Manager implementation for TieredConfigManager
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl Manager for TieredConfigManager {
     fn name(&self) -> &str {
@@ -541,34 +554,25 @@ impl Manager for TieredConfigManager {
 
     async fn initialize(&mut self) -> Result<()> {
         self.state.set_state(crate::manager::ManagerState::Initializing).await;
-
-        // Initialize stores, setup validation rules, etc.
-
         self.state.set_state(crate::manager::ManagerState::Running).await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
         self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
-
-        // Sync any pending changes
         let _ = self.sync().await;
-
         self.state.set_state(crate::manager::ManagerState::Shutdown).await;
         Ok(())
     }
 
     async fn status(&self) -> ManagerStatus {
         let mut status = self.state.status().await;
-
         status.add_metadata("stores_count", Value::from(self.stores.len()));
         status.add_metadata("cache_size", Value::from(self.cache.read().await.len()));
         status.add_metadata("cache_ttl_seconds", Value::from(self.cache_ttl.as_secs()));
-
         if let Some(sync_manager) = &self.sync_manager {
             status.add_metadata("last_sync", Value::String(sync_manager.last_sync_time().await.to_rfc3339()));
         }
-
         status
     }
 
@@ -576,9 +580,67 @@ impl Manager for TieredConfigManager {
         true
     }
 
-    async fn reload_config(&mut self, config: Value) -> Result<()> {
-        // Reload configuration from the provided value
-        if let Value::Object(config_obj) = config {
+    async fn reload_config(&mut self, config: serde_json::Value) -> Result<()> {
+        if let serde_json::Value::Object(config_obj) = config {
+            for (key, value) in config_obj {
+                self.set(&key, value, ConfigurationTier::Runtime).await?;
+            }
+        }
+        Ok(())
+    }
+
+    fn platform_requirements(&self) -> PlatformRequirements {
+        PlatformRequirements {
+            requires_filesystem: true,
+            requires_network: true,
+            requires_database: false,
+            requires_native_apis: false,
+            minimum_permissions: vec!["config.read".to_string(), "config.write".to_string()],
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+impl Manager for TieredConfigManager {
+    fn name(&self) -> &str {
+        "tiered_config_manager"
+    }
+
+    fn id(&self) -> Uuid {
+        self.state.id()
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
+        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state.set_state(crate::manager::ManagerState::Running).await;
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        let _ = self.sync().await;
+        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        Ok(())
+    }
+
+    async fn status(&self) -> ManagerStatus {
+        let mut status = self.state.status().await;
+        status.add_metadata("stores_count", Value::from(self.stores.len()));
+        status.add_metadata("cache_size", Value::from(self.cache.read().await.len()));
+        status.add_metadata("cache_ttl_seconds", Value::from(self.cache_ttl.as_secs()));
+        if let Some(sync_manager) = &self.sync_manager {
+            status.add_metadata("last_sync", Value::String(sync_manager.last_sync_time().await.to_rfc3339()));
+        }
+        status
+    }
+
+    fn supports_runtime_reload(&self) -> bool {
+        true
+    }
+
+    async fn reload_config(&mut self, config: serde_json::Value) -> Result<()> {
+        if let serde_json::Value::Object(config_obj) = config {
             for (key, value) in config_obj {
                 self.set(&key, value, ConfigurationTier::Runtime).await?;
             }
@@ -615,7 +677,56 @@ impl MemoryConfigStore {
     }
 }
 
+/// Conditional ConfigStore implementation for MemoryConfigStore
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
+impl ConfigStore for MemoryConfigStore {
+    async fn get(&self, key: &str) -> Result<Option<Value>> {
+        Ok(self.data.read().await.get(key).cloned())
+    }
+
+    async fn set(&self, key: &str, value: Value) -> Result<()> {
+        let old_value = self.data.write().await.insert(key.to_string(), value.clone());
+
+        let change_event = ConfigChangeEvent {
+            key: key.to_string(),
+            value: Some(value),
+            old_value,
+            tier: self.tier,
+            timestamp: Utc::now(),
+            source: "memory_store".to_string(),
+            correlation_id: None,
+        };
+
+        let _ = self.change_sender.send(change_event);
+        Ok(())
+    }
+
+    async fn delete(&self, key: &str) -> Result<()> {
+        self.data.write().await.remove(key);
+        Ok(())
+    }
+
+    async fn list_keys(&self, prefix: &str) -> Result<Vec<String>> {
+        let data = self.data.read().await;
+        let keys: Vec<String> = data.keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect();
+        Ok(keys)
+    }
+
+    async fn watch(&self, _key: &str) -> Result<ConfigWatcher> {
+        Ok(ConfigWatcher::new(self.change_sender.subscribe()))
+    }
+
+    fn tier(&self) -> ConfigurationTier {
+        self.tier
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
 impl ConfigStore for MemoryConfigStore {
     async fn get(&self, key: &str) -> Result<Option<Value>> {
         Ok(self.data.read().await.get(key).cloned())

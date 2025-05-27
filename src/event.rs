@@ -87,8 +87,32 @@ impl Default for EventPriority {
 }
 
 /// Event handler trait for processing events
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait EventHandler: Send + Sync + Debug {
+    /// Handle an event
+    async fn handle(&self, event: &dyn Event) -> Result<()>;
+
+    /// Get handler name for debugging
+    fn name(&self) -> &str;
+
+    /// Get event types this handler is interested in
+    fn event_types(&self) -> Vec<&'static str>;
+
+    /// Whether this handler should receive all events (wildcard)
+    fn is_wildcard(&self) -> bool {
+        false
+    }
+
+    /// Get handler priority (affects processing order)
+    fn priority(&self) -> i32 {
+        0
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait EventHandler: Sync + Debug {
     /// Handle an event
     async fn handle(&self, event: &dyn Event) -> Result<()>;
 
@@ -610,7 +634,85 @@ impl EventBusManager {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
+impl Manager for EventBusManager {
+    fn name(&self) -> &str {
+        "event_bus_manager"
+    }
+
+    fn id(&self) -> Uuid {
+        Uuid::new_v4() // Simplified
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
+
+        // Start event processing workers
+        self.start_workers().await?;
+
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
+        tracing::info!(
+            "Event bus manager initialized with {} workers",
+            self.config.worker_count
+        );
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
+
+        // Stop processing new events
+        self.stop_workers().await;
+
+        // Clear subscriptions
+        self.subscriptions.clear();
+
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
+        tracing::info!("Event bus manager shut down");
+        Ok(())
+    }
+
+    async fn status(&self) -> ManagerStatus {
+        let mut status = self.state.status().await;
+        let stats = self.get_stats().await;
+
+        status.add_metadata(
+            "total_published",
+            serde_json::Value::from(stats.total_published),
+        );
+        status.add_metadata(
+            "total_processed",
+            serde_json::Value::from(stats.total_processed),
+        );
+        status.add_metadata("total_failed", serde_json::Value::from(stats.total_failed));
+        status.add_metadata(
+            "active_subscriptions",
+            serde_json::Value::from(stats.active_subscriptions),
+        );
+        status.add_metadata(
+            "worker_count",
+            serde_json::Value::from(self.config.worker_count),
+        );
+        status.add_metadata(
+            "avg_processing_time_ms",
+            serde_json::Value::from(stats.avg_processing_time_ms),
+        );
+
+        status
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
 impl Manager for EventBusManager {
     fn name(&self) -> &str {
         "event_bus_manager"

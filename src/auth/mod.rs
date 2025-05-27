@@ -157,6 +157,7 @@ pub enum AuthProviderType {
     LDAP { server: String },
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait AuthProvider: Send + Sync {
     async fn authenticate(&self, credentials: &Credentials) -> Result<AuthResult>;
@@ -165,6 +166,16 @@ pub trait AuthProvider: Send + Sync {
     fn provider_type(&self) -> AuthProviderType;
 }
 
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait AuthProvider: Sync {
+    async fn authenticate(&self, credentials: &Credentials) -> Result<AuthResult>;
+    async fn refresh_token(&self, refresh_token: &str) -> Result<TokenPair>;
+    async fn validate_token(&self, token: &str) -> Result<Claims>;
+    fn provider_type(&self) -> AuthProviderType;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait SessionStore: Send + Sync {
     async fn create_session(&self, session: UserSession) -> Result<()>;
@@ -174,8 +185,31 @@ pub trait SessionStore: Send + Sync {
     async fn cleanup_expired_sessions(&self) -> Result<u64>;
 }
 
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait SessionStore: Sync {
+    async fn create_session(&self, session: UserSession) -> Result<()>;
+    async fn get_session(&self, session_id: Uuid) -> Result<Option<UserSession>>;
+    async fn update_session(&self, session: UserSession) -> Result<()>;
+    async fn delete_session(&self, session_id: Uuid) -> Result<()>;
+    async fn cleanup_expired_sessions(&self) -> Result<u64>;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait UserStore: Send + Sync {
+    async fn create_user(&self, user: User) -> Result<()>;
+    async fn get_user(&self, user_id: UserId) -> Result<Option<User>>;
+    async fn get_user_by_username(&self, username: &str) -> Result<Option<User>>;
+    async fn get_user_by_email(&self, email: &str) -> Result<Option<User>>;
+    async fn update_user(&self, user: User) -> Result<()>;
+    async fn delete_user(&self, user_id: UserId) -> Result<()>;
+    async fn list_users(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<User>>;
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait UserStore: Sync {
     async fn create_user(&self, user: User) -> Result<()>;
     async fn get_user(&self, user_id: UserId) -> Result<Option<User>>;
     async fn get_user_by_username(&self, username: &str) -> Result<Option<User>>;
@@ -211,7 +245,6 @@ impl PermissionCache {
     }
 
     fn clear_user_cache(&mut self, user_id: UserId) {
-        // self.cache.retain(|(id, _, _)| *id != user_id);
         self.cache.retain(|(id, _, _), _value| *id != user_id);
         self.last_updated = Utc::now();
     }
@@ -494,7 +527,86 @@ impl AccountManager {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
+impl Manager for AccountManager {
+    fn name(&self) -> &str {
+        "account_manager"
+    }
+
+    fn id(&self) -> Uuid {
+        self.state.id()
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
+
+        // Initialize default auth providers, create admin user if needed, etc.
+
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
+
+        // Cleanup sessions, etc.
+        let _ = self.cleanup_expired_sessions().await;
+
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
+        Ok(())
+    }
+
+    async fn status(&self) -> ManagerStatus {
+        let mut status = self.state.status().await;
+
+        let current_user_id = self
+            .current_user()
+            .await
+            .map(|u| u.id.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        status.add_metadata("current_user", serde_json::Value::String(current_user_id));
+        status.add_metadata(
+            "auth_providers",
+            serde_json::Value::from(self.auth_providers.len()),
+        );
+        status.add_metadata(
+            "security_policy",
+            serde_json::to_value(&self.security_policy).unwrap_or_default(),
+        );
+
+        status
+    }
+
+    fn required_permissions(&self) -> Vec<String> {
+        vec![
+            "auth.login".to_string(),
+            "auth.logout".to_string(),
+            "auth.manage_users".to_string(),
+        ]
+    }
+
+    fn platform_requirements(&self) -> PlatformRequirements {
+        PlatformRequirements {
+            requires_filesystem: false,
+            requires_network: true,
+            requires_database: true,
+            requires_native_apis: false,
+            minimum_permissions: self.required_permissions(),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
 impl Manager for AccountManager {
     fn name(&self) -> &str {
         "account_manager"
@@ -583,7 +695,41 @@ impl MemorySessionStore {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
+impl SessionStore for MemorySessionStore {
+    async fn create_session(&self, session: UserSession) -> Result<()> {
+        self.sessions.write().await.insert(session.id, session);
+        Ok(())
+    }
+
+    async fn get_session(&self, session_id: Uuid) -> Result<Option<UserSession>> {
+        Ok(self.sessions.read().await.get(&session_id).cloned())
+    }
+
+    async fn update_session(&self, session: UserSession) -> Result<()> {
+        self.sessions.write().await.insert(session.id, session);
+        Ok(())
+    }
+
+    async fn delete_session(&self, session_id: Uuid) -> Result<()> {
+        self.sessions.write().await.remove(&session_id);
+        Ok(())
+    }
+
+    async fn cleanup_expired_sessions(&self) -> Result<u64> {
+        let now = Utc::now();
+        let mut sessions = self.sessions.write().await;
+        let original_count = sessions.len();
+
+        sessions.retain(|_, session| session.expires_at > now);
+
+        Ok((original_count - sessions.len()) as u64)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
 impl SessionStore for MemorySessionStore {
     async fn create_session(&self, session: UserSession) -> Result<()> {
         self.sessions.write().await.insert(session.id, session);
@@ -627,7 +773,66 @@ impl MemoryUserStore {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
+impl UserStore for MemoryUserStore {
+    async fn create_user(&self, user: User) -> Result<()> {
+        self.users.write().await.insert(user.id, user);
+        Ok(())
+    }
+
+    async fn get_user(&self, user_id: UserId) -> Result<Option<User>> {
+        Ok(self.users.read().await.get(&user_id).cloned())
+    }
+
+    async fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
+        Ok(self
+            .users
+            .read()
+            .await
+            .values()
+            .find(|u| u.username == username)
+            .cloned())
+    }
+
+    async fn get_user_by_email(&self, email: &str) -> Result<Option<User>> {
+        Ok(self
+            .users
+            .read()
+            .await
+            .values()
+            .find(|u| u.email == email)
+            .cloned())
+    }
+
+    async fn update_user(&self, user: User) -> Result<()> {
+        self.users.write().await.insert(user.id, user);
+        Ok(())
+    }
+
+    async fn delete_user(&self, user_id: UserId) -> Result<()> {
+        self.users.write().await.remove(&user_id);
+        Ok(())
+    }
+
+    async fn list_users(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<User>> {
+        let users: Vec<User> = self.users.read().await.values().cloned().collect();
+
+        let offset = offset.unwrap_or(0) as usize;
+        let limit = limit.map(|l| l as usize);
+
+        let mut result: Vec<User> = users.into_iter().skip(offset).collect();
+
+        if let Some(limit) = limit {
+            result.truncate(limit);
+        }
+
+        Ok(result)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
 impl UserStore for MemoryUserStore {
     async fn create_user(&self, user: User) -> Result<()> {
         self.users.write().await.insert(user.id, user);
