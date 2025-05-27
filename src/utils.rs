@@ -482,10 +482,10 @@ pub mod validation {
 }
 
 /// Compression utilities
+#[cfg(not(target_arch = "wasm32"))]
 pub mod compression {
     use super::*;
 
-    /// Compress data using gzip
     pub fn compress_gzip(data: &[u8]) -> Result<Vec<u8>> {
         use flate2::write::GzEncoder;
         use flate2::Compression;
@@ -504,7 +504,6 @@ pub mod compression {
         })
     }
 
-    /// Decompress gzip data
     pub fn decompress_gzip(data: &[u8]) -> Result<Vec<u8>> {
         use flate2::read::GzDecoder;
         use std::io::Read;
@@ -516,6 +515,19 @@ pub mod compression {
             .map_err(|e| Error::new(ErrorKind::Io, format!("Failed to decompress data: {}", e)))?;
 
         Ok(decompressed)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub mod compression {
+    use super::*;
+
+    pub fn compress_gzip(_data: &[u8]) -> Result<Vec<u8>> {
+        Err(Error::new(ErrorKind::Io, "Compression not available on web"))
+    }
+
+    pub fn decompress_gzip(_data: &[u8]) -> Result<Vec<u8>> {
+        Err(Error::new(ErrorKind::Io, "Decompression not available on web"))
     }
 }
 

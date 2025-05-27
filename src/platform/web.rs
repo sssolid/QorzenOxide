@@ -5,11 +5,22 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::*;
+use web_sys::{Request, RequestInit, Response, Storage, Window, Navigator};
 
 use crate::error::{Error, Result};
 use crate::platform::*;
 
-/// Creates web platform providers
+// Set up panic hook and allocator for web
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub fn main() {
+    console_error_panic_hook::set_once();
+}
+
 pub fn create_providers() -> Result<PlatformProviders> {
     Ok(PlatformProviders {
         filesystem: Box::new(WebFileSystem::new()?),
@@ -19,7 +30,6 @@ pub fn create_providers() -> Result<PlatformProviders> {
     })
 }
 
-/// Detects web platform capabilities
 pub fn detect_capabilities() -> PlatformCapabilities {
     let window = web_sys::window().unwrap();
 
@@ -45,50 +55,87 @@ pub fn detect_capabilities() -> PlatformCapabilities {
     }
 }
 
-/// Web platform initialization
 pub async fn initialize() -> Result<()> {
-    // Initialize IndexedDB, check permissions, etc.
     web_sys::console::log_1(&"Initializing web platform".into());
     Ok(())
 }
 
-/// Web platform cleanup
 pub async fn cleanup() -> Result<()> {
     web_sys::console::log_1(&"Cleaning up web platform".into());
     Ok(())
 }
 
-/// Web filesystem implementation (limited)
-pub struct WebFileSystem {
-    // Web implementation uses different storage strategies
-}
+pub struct WebFileSystem;
 
 impl WebFileSystem {
     fn new() -> Result<Self> {
-        Ok(Self {})
+        Ok(Self)
+    }
+}
+
+#[async_trait]
+impl FileSystemProvider for WebFileSystem {
+    async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
+        if path.starts_with("http://") || path.starts_with("https://") {
+            self.fetch_from_url(path).await
+        } else {
+            Err(Error::platform(
+                "web",
+                "filesystem",
+                "Only HTTP/HTTPS URLs supported in web platform",
+            ))
+        }
     }
 
-    async fn read_user_file(&self, _path: &str) -> Result<Vec<u8>> {
-        // Would implement File API for user-selected files
+    async fn write_file(&self, _path: &str, _data: &[u8]) -> Result<()> {
         Err(Error::platform(
             "web",
             "filesystem",
-            "User file reading not implemented",
+            "File writing not supported in web platform",
         ))
     }
 
-    async fn store_user_file(&self, _path: &str, _data: &[u8]) -> Result<()> {
-        // Would implement File API for user file downloads
+    async fn delete_file(&self, _path: &str) -> Result<()> {
         Err(Error::platform(
             "web",
             "filesystem",
-            "User file storage not implemented",
+            "File deletion not supported in web platform",
         ))
     }
 
-    async fn fetch_from_server(&self, path: &str) -> Result<Vec<u8>> {
+    async fn list_directory(&self, _path: &str) -> Result<Vec<FileInfo>> {
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "Directory listing not supported in web platform",
+        ))
+    }
+
+    async fn create_directory(&self, _path: &str) -> Result<()> {
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "Directory creation not supported in web platform",
+        ))
+    }
+
+    async fn file_exists(&self, _path: &str) -> bool {
+        false
+    }
+
+    async fn get_metadata(&self, _path: &str) -> Result<FileMetadata> {
+        Err(Error::platform(
+            "web",
+            "filesystem",
+            "File metadata not available in web platform",
+        ))
+    }
+}
+
+impl WebFileSystem {
+    async fn fetch_from_url(&self, url: &str) -> Result<Vec<u8>> {
         let window = web_sys::window().unwrap();
-        let request = Request::new_with_str(path).unwrap();
+        let request = Request::new_with_str(url).unwrap();
 
         let response_value = JsFuture::from(window.fetch_with_request(&request))
             .await
@@ -117,85 +164,8 @@ impl WebFileSystem {
         let uint8_array = js_sys::Uint8Array::new(&array_buffer);
         Ok(uint8_array.to_vec())
     }
-
-    async fn upload_to_server(&self, _path: &str, _data: &[u8]) -> Result<()> {
-        // Would implement server upload
-        Err(Error::platform(
-            "web",
-            "filesystem",
-            "Server upload not implemented",
-        ))
-    }
 }
 
-#[async_trait]
-impl FileSystemProvider for WebFileSystem {
-    async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
-        if path.starts_with("user://") {
-            self.read_user_file(path).await
-        } else if path.starts_with("server://") {
-            self.fetch_from_server(&path[9..]).await // Remove "server://" prefix
-        } else {
-            Err(Error::platform(
-                "web",
-                "filesystem",
-                "Invalid path for web platform",
-            ))
-        }
-    }
-
-    async fn write_file(&self, path: &str, data: &[u8]) -> Result<()> {
-        if path.starts_with("user://") {
-            self.store_user_file(path, data).await
-        } else if path.starts_with("server://") {
-            self.upload_to_server(path, data).await
-        } else {
-            Err(Error::platform(
-                "web",
-                "filesystem",
-                "Invalid path for web platform",
-            ))
-        }
-    }
-
-    async fn delete_file(&self, _path: &str) -> Result<()> {
-        Err(Error::platform(
-            "web",
-            "filesystem",
-            "File deletion not supported in web platform",
-        ))
-    }
-
-    async fn list_directory(&self, _path: &str) -> Result<Vec<FileInfo>> {
-        Err(Error::platform(
-            "web",
-            "filesystem",
-            "Directory listing not supported in web platform",
-        ))
-    }
-
-    async fn create_directory(&self, _path: &str) -> Result<()> {
-        Err(Error::platform(
-            "web",
-            "filesystem",
-            "Directory creation not supported in web platform",
-        ))
-    }
-
-    async fn file_exists(&self, _path: &str) -> bool {
-        false // Cannot check file existence in web
-    }
-
-    async fn get_metadata(&self, _path: &str) -> Result<FileMetadata> {
-        Err(Error::platform(
-            "web",
-            "filesystem",
-            "File metadata not available in web platform",
-        ))
-    }
-}
-
-/// IndexedDB database implementation
 pub struct IndexedDbDatabase {
     database_name: String,
 }
@@ -211,7 +181,6 @@ impl IndexedDbDatabase {
 #[async_trait]
 impl DatabaseProvider for IndexedDbDatabase {
     async fn execute(&self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
-        // Implementation would use IndexedDB API
         Err(Error::platform(
             "web",
             "database",
@@ -220,33 +189,19 @@ impl DatabaseProvider for IndexedDbDatabase {
     }
 
     async fn query(&self, _query: &str, _params: &[serde_json::Value]) -> Result<Vec<Row>> {
-        // Implementation would use IndexedDB API
         Ok(Vec::new())
     }
 
-    async fn transaction<F, R>(&self, f: F) -> Result<R>
-    where
-        F: FnOnce(&mut Transaction) -> Result<R> + Send,
-        R: Send,
-    {
-        let mut tx = Transaction {};
-        f(&mut tx)
-    }
-
     async fn migrate(&self, _migrations: &[Migration]) -> Result<()> {
-        // Implementation would handle IndexedDB schema migrations
         Ok(())
     }
 }
 
-/// Fetch API network implementation
-pub struct FetchNetwork {
-    // Fetch API implementation
-}
+pub struct FetchNetwork;
 
 impl FetchNetwork {
     fn new() -> Self {
-        Self {}
+        Self
     }
 }
 
@@ -285,9 +240,7 @@ impl NetworkProvider for FetchNetwork {
         let response: Response = response_value.dyn_into().unwrap();
         let status_code = response.status() as u16;
 
-        // Get headers
-        let mut headers = HashMap::new();
-        // Note: In a real implementation, you'd iterate over response.headers()
+        let headers = HashMap::new(); // Simplified for now
 
         let body = JsFuture::from(response.array_buffer().unwrap())
             .await
@@ -332,14 +285,11 @@ impl NetworkProvider for FetchNetwork {
     }
 }
 
-/// Web storage implementation (localStorage/sessionStorage)
-pub struct WebStorage {
-    // Web storage implementation
-}
+pub struct WebStorage;
 
 impl WebStorage {
     fn new() -> Result<Self> {
-        Ok(Self {})
+        Ok(Self)
     }
 
     fn get_storage(&self) -> Result<Storage> {
@@ -357,7 +307,7 @@ impl StorageProvider for WebStorage {
 
         match storage.get_item(key) {
             Ok(Some(value)) => {
-                // In a real implementation, you'd decode from base64 or use a proper encoding
+                // Simple UTF-8 encoding for now
                 Ok(Some(value.into_bytes()))
             }
             Ok(None) => Ok(None),
@@ -371,8 +321,6 @@ impl StorageProvider for WebStorage {
 
     async fn set(&self, key: &str, value: &[u8]) -> Result<()> {
         let storage = self.get_storage()?;
-
-        // In a real implementation, you'd encode to base64 or use a proper encoding
         let value_str = String::from_utf8_lossy(value);
 
         storage

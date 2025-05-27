@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::sync::RwLock;
 use uuid::Uuid;
 

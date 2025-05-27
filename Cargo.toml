@@ -2,89 +2,84 @@
 name = "qorzen-oxide"
 version = "0.1.0"
 edition = "2021"
-description = "A cross-platform, plugin-based application framework built with Rust and Dioxus"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/sssolid/QorzenOxide"
-homepage = "https://qorzen.dev"
-authors = ["Qorzen Team <team@qorzen.dev>"]
+
+[features]
+default = []
+desktop = ["dioxus/desktop", "native-deps"]
+web = ["dioxus/web", "web-deps", "getrandom/js"]
+native-deps = [
+    "tokio/full",
+    "notify",
+    "dirs",
+    "hostname",
+    "flate2",
+    "tracing-appender",
+    "reqwest",
+    "serde_yaml",
+    "toml"
+]
+web-deps = [
+    "wasm-bindgen",
+    "wasm-bindgen-futures",
+    "web-sys",
+    "js-sys",
+    "console_error_panic_hook",
+    "wee_alloc",
+]
 
 [dependencies]
-# Core framework
-dioxus = { version = "0.5", features = ["desktop"] }
-# Separate crates for different platforms
-dioxus-desktop = { version = "0.5", optional = true }
-dioxus-web = { version = "0.5", optional = true }
-dioxus-router = { version = "0.5", optional = true }
-tokio = { version = "1.0", features = ["full"] }
-async-trait = "0.1"
-uuid = { version = "1.0", features = ["v4", "serde"] }
+# Core dependencies (always included)
+dioxus = { version = "0.5", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
-
-# Error handling and logging
-anyhow = "1.0"
-thiserror = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-tracing-appender = "0.2"
-
-# Configuration
-serde_yaml = "0.9"
-toml = "0.8"
-
-# Async utilities
+async-trait = "0.1"
 futures = "0.3"
+tracing = "0.1"
+parking_lot = "0.12"
+crossbeam = "0.8"
+num_cpus = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+rand = "0.8"
+getrandom = { version = "0.2", optional = true, features = ["js"] }
+uuid = { version = "1.0", features = ["v4", "serde", "js"] }
 dashmap = "5.0"
 
-# Networking
-reqwest = { version = "0.11", features = ["json"] }
+# Conditional dependencies
+tokio = { version = "1.0", features = ["macros", "rt"], optional = true }
+tokio-util = { version = "0.7", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
+notify = { version = "6.0", optional = true }
+dirs = { version = "5.0", optional = true }
+hostname = { version = "0.3", optional = true }
+flate2 = { version = "1.0", optional = true }
+tracing-appender = { version = "0.2", optional = true }
+reqwest = { version = "0.12", features = ["json"], optional = true }
+serde_yaml = { version = "0.9", optional = true }
+toml = { version = "0.8", optional = true }
 
-# File handling
-notify = "6.0"
-sha2 = "0.10"
-flate2 = "1.0"
+# Web-only dependencies
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+web-sys = { version = "0.3", optional = true }
+js-sys = { version = "0.3", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+wee_alloc = { version = "0.4", optional = true }
 
-# CLI
-clap = { version = "4.0", features = ["derive"] }
-
-# System information
-num_cpus = "1.0"
-hostname = "0.3"
-
-# Concurrency
-crossbeam = "0.8"
-parking_lot = "0.12"
-rand = "0.9.1"
-tokio-util = "0.7.15"
-
-# Platform-specific dependencies
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dirs = "5.0"
-tempfile = "3.0"
-
+# Target-specific dependencies
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+wee_alloc = "0.4"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 js-sys = "0.3"
 
-[dev-dependencies]
-tokio-test = "0.4"
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7"
+reqwest = { version = "0.12", features = ["json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [build-dependencies]
-rustc_version = "0.4.1"
-
-[features]
-default = ["desktop"]
-desktop = ["dioxus-desktop", "dioxus/desktop"]
-web = ["dioxus-web", "dioxus/web"]
-router = ["dioxus-router"]
-
-[[bin]]
-name = "qorzen-oxide"
-path = "src/main.rs"
-
-[lib]
-name = "qorzen_oxide"
-path = "src/lib.rs"
+rustc_version = "0.4"

@@ -330,7 +330,6 @@ impl ThreadPool {
                 };
 
                 if join_result.is_err() {
-                    // Use eprintln instead of tracing to avoid the tokio runtime issue
                     eprintln!("Worker thread {} did not shut down gracefully", worker.id);
                 }
             }
@@ -348,7 +347,6 @@ impl ThreadPool {
         task_counter: Arc<AtomicU64>,
         work_stealing: bool,
     ) {
-        // Use eprintln instead of tracing to avoid tokio runtime issues
         eprintln!("Worker thread {} started", worker_id);
 
         while !*shutdown_signal.lock() {
@@ -440,19 +438,19 @@ impl ThreadPool {
 pub struct AsyncWorkCoordinator {
     semaphore: Arc<Semaphore>,
     work_sender: mpsc::UnboundedSender<AsyncWorkItem>,
-    work_receiver: Arc<parking_lot::Mutex<mpsc::UnboundedReceiver<AsyncWorkItem>>>,
     stats: Arc<RwLock<AsyncCoordinatorStats>>,
 }
 
 struct AsyncWorkItem {
-    task: Box<dyn FnOnce() + Send>,
-    // result_sender: oneshot::Sender<Result<()>>,
+    task: Box<dyn FnOnce() -> Result<serde_json::Value> + Send>,
+    result_sender: oneshot::Sender<Result<serde_json::Value>>,
 }
 
 impl fmt::Debug for AsyncWorkItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AsyncWorkItem")
-            .field("task", &"<FnOnce>") // placeholder string
+            .field("task", &"FnOnce(..)")
+            .field("result_sender", &"oneshot::Sender")
             .finish()
     }
 }
@@ -467,13 +465,23 @@ pub struct AsyncCoordinatorStats {
 
 impl AsyncWorkCoordinator {
     pub fn new(max_concurrent: usize) -> Self {
-        let (work_sender, work_receiver) = mpsc::unbounded_channel();
+        let (work_sender, mut work_receiver): (
+            mpsc::UnboundedSender<AsyncWorkItem>,
+            mpsc::UnboundedReceiver<AsyncWorkItem>,
+        ) = mpsc::unbounded_channel();
         let semaphore = Arc::new(Semaphore::new(max_concurrent));
+
+        // Start work processor
+        tokio::spawn(async move {
+            while let Some(work_item) = work_receiver.recv().await {
+                let result = (work_item.task)();
+                let _ = work_item.result_sender.send(result);
+            }
+        });
 
         Self {
             semaphore,
             work_sender,
-            work_receiver: Arc::new(parking_lot::Mutex::new(work_receiver)),
             stats: Arc::new(RwLock::new(AsyncCoordinatorStats {
                 total_coordinated: 0,
                 active_permits: 0,
@@ -486,7 +494,7 @@ impl AsyncWorkCoordinator {
     pub async fn coordinate<F, R>(&self, task: F) -> Result<R>
     where
         F: FnOnce() -> R + Send + 'static,
-        R: Send + 'static,
+        R: serde::Serialize + serde::de::DeserializeOwned + Send + 'static,
     {
         // Acquire permit
         let _permit = self.semaphore.acquire().await.map_err(|_| {
@@ -501,15 +509,19 @@ impl AsyncWorkCoordinator {
 
         let start_time = Instant::now();
 
-        // Execute task
         let (result_sender, result_receiver) = oneshot::channel();
+
         let work_item = AsyncWorkItem {
             task: Box::new(move || {
-                let result = task();
-                let _ = result_sender.send(Ok(result));
-                // Store result for retrieval (simplified)
-                // In practice, you'd need a more sophisticated mechanism
+                let val = task();
+                serde_json::to_value(val).map_err(|e| {
+                    Error::new(
+                        ErrorKind::Serialization,
+                        format!("Failed to serialize result: {}", e),
+                    )
+                })
             }),
+            result_sender,
         };
 
         self.work_sender.send(work_item).map_err(|_| {
@@ -535,14 +547,18 @@ impl AsyncWorkCoordinator {
 
         // Update stats
         let coordination_time = start_time.elapsed();
-        self.update_stats(coordination_time);
+        self.update_stats(coordination_time).await;
 
-        // This is a simplified implementation - in practice you'd return the actual result
-        // Ok(unsafe { std::mem::zeroed() }) // Placeholder - would return actual result
-        Ok(result)
+        // Deserialize the result into R
+        serde_json::from_value(result).map_err(|e| {
+            Error::new(
+                ErrorKind::Serialization,
+                format!("Failed to deserialize result: {}", e),
+            )
+        })
     }
 
-    fn update_stats(&self, coordination_time: Duration) {
+    async fn update_stats(&self, coordination_time: Duration) {
         let mut stats = self.stats.write();
         stats.total_coordinated += 1;
         stats.active_permits = self.semaphore.available_permits();
@@ -552,7 +568,7 @@ impl AsyncWorkCoordinator {
             (total_time + coordination_time.as_millis() as f64) / stats.total_coordinated as f64;
     }
 
-    pub fn stats(&self) -> AsyncCoordinatorStats {
+    pub async fn stats(&self) -> AsyncCoordinatorStats {
         self.stats.read().clone()
     }
 }
@@ -563,12 +579,10 @@ pub struct ConcurrencyManager {
     config: ConcurrencyConfig,
     thread_pools: HashMap<ThreadPoolType, ThreadPool>,
     async_coordinator: AsyncWorkCoordinator,
-    runtime_handle: tokio::runtime::Handle,
 }
 
 impl ConcurrencyManager {
     pub fn new(config: ConcurrencyConfig) -> Result<Self> {
-        let runtime_handle = tokio::runtime::Handle::current();
         let async_coordinator = AsyncWorkCoordinator::new(config.thread_pool_size * 2);
 
         let mut thread_pools = HashMap::new();
@@ -605,7 +619,6 @@ impl ConcurrencyManager {
             config,
             thread_pools,
             async_coordinator,
-            runtime_handle,
         })
     }
 
@@ -669,22 +682,6 @@ impl ConcurrencyManager {
         blocking_pool.submit_async(task).await
     }
 
-    pub fn spawn<F>(&self, future: F) -> tokio::task::JoinHandle<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        self.runtime_handle.spawn(future)
-    }
-
-    pub fn spawn_blocking<F, R>(&self, task: F) -> tokio::task::JoinHandle<R>
-    where
-        F: FnOnce() -> R + Send + 'static,
-        R: Send + 'static,
-    {
-        self.runtime_handle.spawn_blocking(task)
-    }
-
     pub fn get_thread_pool_stats(&self, pool_type: ThreadPoolType) -> Option<ThreadPoolStats> {
         self.thread_pools.get(&pool_type).map(|pool| pool.stats())
     }
@@ -696,8 +693,8 @@ impl ConcurrencyManager {
             .collect()
     }
 
-    pub fn get_async_coordinator_stats(&self) -> AsyncCoordinatorStats {
-        self.async_coordinator.stats()
+    pub async fn get_async_coordinator_stats(&self) -> AsyncCoordinatorStats {
+        self.async_coordinator.stats().await
     }
 
     pub fn create_custom_pool(&mut self, pool_id: u8, config: ThreadPoolConfig) -> Result<()> {
@@ -734,7 +731,7 @@ impl Manager for ConcurrencyManager {
     }
 
     fn id(&self) -> Uuid {
-        Uuid::new_v4() // Simplified
+        Uuid::new_v4()
     }
 
     async fn initialize(&mut self) -> Result<()> {
@@ -814,7 +811,7 @@ impl Manager for ConcurrencyManager {
         );
 
         // Add async coordinator stats
-        let coordinator_stats = self.get_async_coordinator_stats();
+        let coordinator_stats = self.get_async_coordinator_stats().await;
         status.add_metadata(
             "async_coordinated_tasks",
             serde_json::Value::from(coordinator_stats.total_coordinated),
@@ -901,11 +898,7 @@ pub mod utils {
     }
 
     pub async fn synchronize_at_barrier(
-        tasks: Vec<
-            Box<
-                dyn FnOnce(Arc<Barrier>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send,
-            >,
-        >,
+        tasks: Vec<Box <dyn FnOnce(Arc<Barrier>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send, >, >,
     ) -> Result<()> {
         let barrier = Arc::new(Barrier::new(tasks.len()));
         let handles: Vec<_> = tasks
@@ -963,7 +956,7 @@ mod tests {
         let result = pool
             .submit_async(move || {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
-                42i32 // Changed to i32 to fix type issue
+                42i32
             })
             .await
             .unwrap();
@@ -993,9 +986,8 @@ mod tests {
         let result = manager
             .execute_compute(|| {
                 // Simulate CPU-intensive work
-                let mut sum = 0i32; // Changed to i32
+                let mut sum = 0i32;
                 for i in 0..1000i32 {
-                    // Changed to i32
                     sum += i;
                 }
                 sum
@@ -1016,7 +1008,6 @@ mod tests {
 
         // Execute some tasks
         for i in 0..5i32 {
-            // Changed to i32
             let _ = pool
                 .submit_async(move || {
                     thread::sleep(Duration::from_millis(10));
@@ -1043,14 +1034,14 @@ mod tests {
 
         for (i, result) in results.into_iter().enumerate() {
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), (i + 1) as i32); // Fixed: Cast to i32
+            assert_eq!(result.unwrap(), (i + 1) as i32);
         }
     }
 
     #[tokio::test]
     async fn test_utils_execute_with_limit() {
         let counter = Arc::new(AtomicU32::new(0));
-        let tasks: Vec<_> = (0..10i32) // Changed to i32
+        let tasks: Vec<_> = (0..10i32)
             .map(|i| {
                 let counter = Arc::clone(&counter);
                 async move {

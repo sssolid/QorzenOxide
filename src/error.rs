@@ -95,7 +95,7 @@ pub enum ErrorKind {
     },
     Application,
     Io,
-    Serialization(String),
+    Serialization,
     Timeout,
     ResourceExhausted,
 }

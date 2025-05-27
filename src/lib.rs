@@ -32,7 +32,6 @@
 //! }
 //! ```
 
-// #![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![cfg_attr(test, allow(unsafe_code))]
 #![warn(
@@ -53,24 +52,29 @@
 
 pub mod app;
 pub mod auth;
-pub mod concurrency;
 pub mod error;
 pub mod event;
-pub mod file;
-pub mod logging;
 pub mod manager;
 pub mod config;
 pub mod platform;
 pub mod plugin;
-pub mod task;
 pub mod types;
 pub mod ui;
 pub mod utils;
+
+// Native-only modules
+#[cfg(not(target_arch = "wasm32"))]
+pub mod concurrency;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod file;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod logging;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod task;
 
 // Re-export commonly used types
 pub use app::ApplicationCore;
 pub use error::{Error, ErrorKind, Result, ResultExt};
 pub use manager::{Manager, ManagerState, ManagerStatus};
 
-/// Current version of the Qorzen Core library
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

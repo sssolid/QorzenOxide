@@ -8,7 +8,10 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::sync::RwLock;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::platform::native;
 use uuid::Uuid;
 
 use crate::auth::{Permission, User};
@@ -780,7 +783,7 @@ impl PluginManager {
             database: None,
             file_system: PluginFileSystem::new(
                 plugin_id.to_string(),
-                Arc::new(crate::platform::native::NativeFileSystem::new()?),
+                Arc::new(NativeFileSystem::new()?),
             ),
             logger: crate::logging::Logger::new(format!("plugin.{}", plugin_id)),
         })

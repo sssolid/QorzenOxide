@@ -8,6 +8,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -399,6 +400,10 @@ mod tests {
                 state: ManagedState::new(Uuid::new_v4(), name),
             }
         }
+
+        async fn current_state(&self) -> ManagerState {
+            self.state.state().await
+        }
     }
 
     #[async_trait]
@@ -431,13 +436,14 @@ mod tests {
         let mut manager = TestManager::new("test_manager");
 
         assert_eq!(manager.name(), "test_manager");
-        assert_eq!(manager.state().await, ManagerState::Created);
+        assert_eq!(manager.current_state().await, ManagerState::Created);
 
         manager.initialize().await.unwrap();
-        assert_eq!(manager.state().await, ManagerState::Running);
+        assert_eq!(manager.current_state().await, ManagerState::Running);
 
         manager.shutdown().await.unwrap();
-        assert_eq!(manager.state().await, ManagerState::Shutdown);
+        assert_eq!(manager.current_state().await, ManagerState::Shutdown);
+
     }
 
     #[tokio::test]
