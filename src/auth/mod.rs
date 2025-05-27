@@ -5,18 +5,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
-use crate::platform::StorageProvider;
 
-/// User ID type
 pub type UserId = Uuid;
 
-/// User entity
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: UserId,
@@ -31,7 +28,6 @@ pub struct User {
     pub is_active: bool,
 }
 
-/// User role
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Role {
     pub id: String,
@@ -42,7 +38,6 @@ pub struct Role {
     pub is_system_role: bool,
 }
 
-/// Permission definition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Permission {
     pub resource: String, // "user.profile", "plugin.inventory", "system.config"
@@ -50,7 +45,6 @@ pub struct Permission {
     pub scope: PermissionScope,
 }
 
-/// Permission scope
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PermissionScope {
     Own,                // User's own resources
@@ -58,7 +52,6 @@ pub enum PermissionScope {
     Global,             // All resources
 }
 
-/// User preferences
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserPreferences {
     pub theme: String,
@@ -80,7 +73,6 @@ impl Default for UserPreferences {
     }
 }
 
-/// User profile
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserProfile {
     pub display_name: String,
@@ -91,7 +83,6 @@ pub struct UserProfile {
     pub contact_info: ContactInfo,
 }
 
-/// Contact information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContactInfo {
     pub phone: Option<String>,
@@ -99,7 +90,6 @@ pub struct ContactInfo {
     pub emergency_contact: Option<String>,
 }
 
-/// User session
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSession {
     pub id: Uuid,
@@ -112,7 +102,6 @@ pub struct UserSession {
     pub is_active: bool,
 }
 
-/// Authentication credentials
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Credentials {
     Password {
@@ -133,7 +122,6 @@ pub enum Credentials {
     },
 }
 
-/// Authentication result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthResult {
     pub user: User,
@@ -142,7 +130,6 @@ pub struct AuthResult {
     pub requires_mfa: bool,
 }
 
-/// Token pair (access + refresh)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenPair {
     pub access_token: String,
@@ -151,7 +138,6 @@ pub struct TokenPair {
     pub expires_in: u64,
 }
 
-/// JWT claims
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String, // user ID
@@ -163,7 +149,6 @@ pub struct Claims {
     pub permissions: Vec<String>,
 }
 
-/// Authentication provider types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuthProviderType {
     Local,
@@ -172,7 +157,6 @@ pub enum AuthProviderType {
     LDAP { server: String },
 }
 
-/// Authentication provider trait
 #[async_trait]
 pub trait AuthProvider: Send + Sync {
     async fn authenticate(&self, credentials: &Credentials) -> Result<AuthResult>;
@@ -181,7 +165,6 @@ pub trait AuthProvider: Send + Sync {
     fn provider_type(&self) -> AuthProviderType;
 }
 
-/// Session store trait
 #[async_trait]
 pub trait SessionStore: Send + Sync {
     async fn create_session(&self, session: UserSession) -> Result<()>;
@@ -191,7 +174,6 @@ pub trait SessionStore: Send + Sync {
     async fn cleanup_expired_sessions(&self) -> Result<u64>;
 }
 
-/// User store trait
 #[async_trait]
 pub trait UserStore: Send + Sync {
     async fn create_user(&self, user: User) -> Result<()>;
@@ -203,7 +185,6 @@ pub trait UserStore: Send + Sync {
     async fn list_users(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<User>>;
 }
 
-/// Permission cache for fast permission checks
 pub struct PermissionCache {
     cache: HashMap<(UserId, String, String), bool>,
     last_updated: DateTime<Utc>,
@@ -236,7 +217,6 @@ impl PermissionCache {
     }
 }
 
-/// Security policy configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityPolicy {
     pub password_min_length: u32,
@@ -268,7 +248,6 @@ impl Default for SecurityPolicy {
     }
 }
 
-/// Main account manager
 pub struct AccountManager {
     state: ManagedState,
     auth_providers: HashMap<String, Box<dyn AuthProvider>>,
@@ -289,7 +268,6 @@ impl std::fmt::Debug for AccountManager {
 }
 
 impl AccountManager {
-    /// Creates a new account manager
     pub fn new(
         session_store: Box<dyn SessionStore>,
         user_store: Box<dyn UserStore>,
@@ -307,12 +285,10 @@ impl AccountManager {
         }
     }
 
-    /// Registers an authentication provider
     pub fn register_auth_provider(&mut self, name: String, provider: Box<dyn AuthProvider>) {
         self.auth_providers.insert(name, provider);
     }
 
-    /// Authenticates a user
     pub async fn authenticate(
         &self,
         credentials: Credentials,
@@ -346,7 +322,6 @@ impl AccountManager {
         Ok(auth_result)
     }
 
-    /// Validates a token
     pub async fn validate_token(&self, token: &str, provider: Option<&str>) -> Result<Claims> {
         let provider_name = provider.unwrap_or("local");
         let auth_provider = self.auth_providers.get(provider_name).ok_or_else(|| {
@@ -359,7 +334,6 @@ impl AccountManager {
         auth_provider.validate_token(token).await
     }
 
-    /// Refreshes an access token
     pub async fn refresh_token(
         &self,
         refresh_token: &str,
@@ -376,7 +350,6 @@ impl AccountManager {
         auth_provider.refresh_token(refresh_token).await
     }
 
-    /// Logs out the current user
     pub async fn logout(&self, session_id: Option<Uuid>) -> Result<()> {
         if let Some(id) = session_id {
             self.session_store.delete_session(id).await?;
@@ -391,17 +364,14 @@ impl AccountManager {
         Ok(())
     }
 
-    /// Gets the current authenticated user
     pub async fn current_user(&self) -> Option<User> {
         self.current_user.read().await.clone()
     }
 
-    /// Gets the current session
     pub async fn current_session(&self) -> Option<UserSession> {
         self.current_session.read().await.clone()
     }
 
-    /// Checks if a user has permission for a resource and action
     pub async fn check_permission(
         &self,
         user_id: UserId,
@@ -438,7 +408,6 @@ impl AccountManager {
         Ok(has_permission)
     }
 
-    /// Checks if current user has permission
     pub async fn check_current_user_permission(
         &self,
         resource: &str,
@@ -452,7 +421,6 @@ impl AccountManager {
         self.check_permission(user.id, resource, action).await
     }
 
-    /// Creates a new user
     pub async fn create_user(&self, mut user: User) -> Result<()> {
         // Set creation timestamp
         user.created_at = Utc::now();
@@ -464,7 +432,6 @@ impl AccountManager {
         Ok(())
     }
 
-    /// Updates a user
     pub async fn update_user(&self, user: User) -> Result<()> {
         self.user_store.update_user(user.clone()).await?;
 
@@ -484,22 +451,18 @@ impl AccountManager {
         Ok(())
     }
 
-    /// Gets a user by ID
     pub async fn get_user(&self, user_id: UserId) -> Result<Option<User>> {
         self.user_store.get_user(user_id).await
     }
 
-    /// Gets a user by username
     pub async fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
         self.user_store.get_user_by_username(username).await
     }
 
-    /// Lists all users
     pub async fn list_users(&self, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<User>> {
         self.user_store.list_users(limit, offset).await
     }
 
-    /// Cleans up expired sessions
     pub async fn cleanup_expired_sessions(&self) -> Result<u64> {
         self.session_store.cleanup_expired_sessions().await
     }
@@ -608,7 +571,6 @@ impl Manager for AccountManager {
     }
 }
 
-/// Simple in-memory session store for development
 pub struct MemorySessionStore {
     sessions: Arc<RwLock<HashMap<Uuid, UserSession>>>,
 }
@@ -653,7 +615,6 @@ impl SessionStore for MemorySessionStore {
     }
 }
 
-/// Simple in-memory user store for development
 pub struct MemoryUserStore {
     users: Arc<RwLock<HashMap<UserId, User>>>,
 }

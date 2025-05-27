@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use futures::channel::broadcast;
-use parking_lot::RwLock;
+use tokio::sync::broadcast;
+use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 use uuid::Uuid;
@@ -31,20 +31,13 @@ use crate::types::Metadata;
 pub mod tiered;
 pub use tiered::{ConfigurationTier, TieredConfigManager, MemoryConfigStore};
 
-/// Configuration change event
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigChangeEvent {
-    /// The configuration key that changed
     pub key: String,
-    /// The new value
     pub value: Value,
-    /// The old value (if any)
     pub old_value: Option<Value>,
-    /// When the change occurred
     pub timestamp: DateTime<Utc>,
-    /// Source of the change
     pub source: String,
-    /// Additional metadata
     pub metadata: Metadata,
 }
 
@@ -70,23 +63,16 @@ impl Event for ConfigChangeEvent {
     }
 }
 
-/// Settings schema for plugin configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingsSchema {
-    /// Schema version
     pub version: String,
-    /// Schema definition (JSON Schema)
     pub schema: Value,
-    /// Default values
     pub defaults: Value,
 }
 
-/// Configuration validation error
 #[derive(Debug, Clone)]
 pub struct ValidationError {
-    /// The configuration key that failed validation
     pub key: String,
-    /// Description of the validation error
     pub message: String,
 }
 
@@ -96,19 +82,14 @@ impl fmt::Display for ValidationError {
     }
 }
 
-/// Configuration format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigFormat {
-    /// YAML format
     Yaml,
-    /// JSON format
     Json,
-    /// TOML format
     Toml,
 }
 
 impl ConfigFormat {
-    /// Detect format from file extension
     pub fn from_extension(path: &Path) -> Option<Self> {
         match path.extension()?.to_str()? {
             "yaml" | "yml" => Some(Self::Yaml),
@@ -119,52 +100,32 @@ impl ConfigFormat {
     }
 }
 
-/// Configuration source
 #[derive(Debug, Clone)]
 pub enum ConfigSource {
-    /// File-based configuration
     File { path: PathBuf, format: ConfigFormat },
-    /// Environment variables
     Environment { prefix: String },
-    /// In-memory configuration
     Memory { data: Value },
 }
 
-/// Configuration layer for hierarchical configuration
 #[derive(Debug, Clone)]
 pub struct ConfigLayer {
-    /// Layer name
     pub name: String,
-    /// Layer source
     pub source: ConfigSource,
-    /// Layer priority (higher values override lower ones)
     pub priority: u32,
-    /// Whether this layer can be hot-reloaded
     pub hot_reload: bool,
 }
 
-/// Main application configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    /// Application settings
     pub app: AppSettings,
-    /// Logging configuration
     pub logging: LoggingConfig,
-    /// Event bus configuration
     pub event_bus: EventBusConfig,
-    /// File management configuration
     pub files: FileConfig,
-    /// Task management configuration
     pub tasks: TaskConfig,
-    /// Concurrency configuration
     pub concurrency: ConcurrencyConfig,
-    /// Plugin configuration
     pub plugins: PluginConfig,
-    /// Database configuration
     pub database: DatabaseConfig,
-    /// Network configuration
     pub network: NetworkConfig,
-    /// Security configuration
     pub security: SecurityConfig,
 }
 
@@ -185,26 +146,16 @@ impl Default for AppConfig {
     }
 }
 
-/// Application settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
-    /// Application name
     pub name: String,
-    /// Application version
     pub version: String,
-    /// Application description
     pub description: String,
-    /// Environment (development, staging, production)
     pub environment: String,
-    /// Debug mode enabled
     pub debug: bool,
-    /// Data directory
     pub data_dir: PathBuf,
-    /// Configuration directory
     pub config_dir: PathBuf,
-    /// Log directory
     pub log_dir: PathBuf,
-    /// PID file path
     pub pid_file: Option<PathBuf>,
 }
 
@@ -224,16 +175,11 @@ impl Default for AppSettings {
     }
 }
 
-/// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggingConfig {
-    /// Log level filter
     pub level: String,
-    /// Log format (json, pretty, compact)
     pub format: LogFormat,
-    /// Console logging configuration
     pub console: ConsoleLogConfig,
-    /// File logging configuration
     pub file: Option<FileLogConfig>,
 }
 
@@ -248,25 +194,17 @@ impl Default for LoggingConfig {
     }
 }
 
-/// Log format options
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LogFormat {
-    /// JSON structured logging
     Json,
-    /// Pretty human-readable format
     Pretty,
-    /// Compact format
     Compact,
 }
 
-/// Console logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsoleLogConfig {
-    /// Whether console logging is enabled
     pub enabled: bool,
-    /// Optional override to global logging
     pub level: String,
-    /// Whether to use colored output
     pub colored: bool,
 }
 
@@ -280,16 +218,11 @@ impl Default for ConsoleLogConfig {
     }
 }
 
-/// File logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileLogConfig {
-    /// Log file path
     pub path: PathBuf,
-    /// Maximum file size before rotation
     pub max_size: u64,
-    /// Maximum number of rotated files to keep
     pub max_files: u32,
-    /// Whether to compress rotated files
     pub compress: bool,
 }
 
@@ -304,18 +237,12 @@ impl Default for FileLogConfig {
     }
 }
 
-/// Event bus configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventBusConfig {
-    /// Number of worker threads
     pub worker_count: usize,
-    /// Queue size for events
     pub queue_size: usize,
-    /// Publish timeout in milliseconds
     pub publish_timeout_ms: u64,
-    /// Whether to enable event persistence
     pub enable_persistence: bool,
-    /// Whether to enable metrics collection
     pub enable_metrics: bool,
 }
 
@@ -331,21 +258,14 @@ impl Default for EventBusConfig {
     }
 }
 
-/// File management configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileConfig {
-    /// Default file permissions (Unix octal)
     pub default_permissions: u32,
-    /// Maximum file size for operations
     pub max_file_size: u64,
-    /// Temporary directory (native only)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temp_dir: Option<PathBuf>,
-    /// File operation timeout in seconds
     pub operation_timeout_secs: u64,
-    /// Whether to enable file watching
     pub enable_watching: bool,
-    /// Whether to enable file compression
     pub enable_compression: bool,
 }
 
@@ -363,7 +283,6 @@ impl Default for FileConfig {
 }
 
 impl FileConfig {
-    /// Resolve a path inside the temp directory, or panic if not available
     pub fn temp_path(&self, filename: &str) -> PathBuf {
         self.temp_dir
             .as_ref()
@@ -396,16 +315,11 @@ fn get_default_temp_dir() -> Option<PathBuf> {
     }
 }
 
-/// Task management configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskConfig {
-    /// Maximum concurrent tasks
     pub max_concurrent: usize,
-    /// Default task timeout in milliseconds
     pub default_timeout_ms: u64,
-    /// Whether to keep completed tasks in memory
     pub keep_completed: bool,
-    /// Progress update interval in milliseconds
     pub progress_update_interval_ms: u64,
 }
 
@@ -420,18 +334,12 @@ impl Default for TaskConfig {
     }
 }
 
-/// Concurrency configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConcurrencyConfig {
-    /// Thread pool size for CPU-bound tasks
     pub thread_pool_size: usize,
-    /// Thread pool size for I/O operations
     pub io_thread_pool_size: usize,
-    /// Thread pool size for blocking operations
     pub blocking_thread_pool_size: usize,
-    /// Maximum queue size per thread pool
     pub max_queue_size: usize,
-    /// Thread keep-alive time in seconds
     pub thread_keep_alive_secs: u64,
 }
 
@@ -447,18 +355,12 @@ impl Default for ConcurrencyConfig {
     }
 }
 
-/// Plugin configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginConfig {
-    /// Plugin directory
     pub plugin_dir: PathBuf,
-    /// Whether to auto-load plugins on startup
     pub auto_load: bool,
-    /// Plugin loading timeout in seconds
     pub load_timeout_secs: u64,
-    /// Maximum number of plugins
     pub max_plugins: usize,
-    /// Whether to enable plugin hot-reloading
     pub hot_reload: bool,
 }
 
@@ -474,20 +376,13 @@ impl Default for PluginConfig {
     }
 }
 
-/// Database configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseConfig {
-    /// Database URL/connection string
     pub url: String,
-    /// Maximum number of connections in the pool
     pub max_connections: u32,
-    /// Connection timeout in seconds
     pub connect_timeout_secs: u64,
-    /// Query timeout in seconds
     pub query_timeout_secs: u64,
-    /// Whether to enable connection pooling
     pub enable_pooling: bool,
-    /// Whether to enable query logging
     pub enable_query_logging: bool,
 }
 
@@ -504,22 +399,14 @@ impl Default for DatabaseConfig {
     }
 }
 
-/// Network configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkConfig {
-    /// HTTP server bind address
     pub bind_address: String,
-    /// HTTP server port
     pub port: u16,
-    /// Whether to enable TLS
     pub enable_tls: bool,
-    /// TLS certificate file path
     pub tls_cert_path: Option<PathBuf>,
-    /// TLS private key file path
     pub tls_key_path: Option<PathBuf>,
-    /// Request timeout in seconds
     pub request_timeout_secs: u64,
-    /// Maximum request body size in bytes
     pub max_request_size: u64,
 }
 
@@ -537,22 +424,14 @@ impl Default for NetworkConfig {
     }
 }
 
-/// Security configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityConfig {
-    /// JWT secret key
     pub jwt_secret: String,
-    /// JWT token expiration in seconds
     pub jwt_expiration_secs: u64,
-    /// API key for authentication
     pub api_key: Option<String>,
-    /// Whether to enable rate limiting
     pub enable_rate_limiting: bool,
-    /// Rate limit (requests per minute)
     pub rate_limit_rpm: u64,
-    /// Whether to enable CORS
     pub enable_cors: bool,
-    /// Allowed CORS origins
     pub cors_origins: Vec<String>,
 }
 
@@ -570,7 +449,6 @@ impl Default for SecurityConfig {
     }
 }
 
-/// Configuration manager
 pub struct ConfigManager {
     state: ManagedState,
     layers: Vec<ConfigLayer>,
@@ -592,7 +470,6 @@ impl fmt::Debug for ConfigManager {
 }
 
 impl ConfigManager {
-    /// Create a new configuration manager
     pub fn new() -> Self {
         let (change_notifier, _) = broadcast::channel(100);
 
@@ -607,14 +484,12 @@ impl ConfigManager {
         }
     }
 
-    /// Create configuration manager with a config file
     pub fn with_config_file<P: AsRef<Path>>(config_path: P) -> Self {
         let mut manager = Self::new();
         let _ = manager.add_file_layer("default", config_path, 0, true);
         manager
     }
 
-    /// Add a file-based configuration layer
     pub fn add_file_layer<P: AsRef<Path>>(
         &mut self,
         name: impl Into<String>,
@@ -639,7 +514,6 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// Add an environment variable layer
     pub fn add_env_layer(
         &mut self,
         name: impl Into<String>,
@@ -659,7 +533,6 @@ impl ConfigManager {
         self.layers.sort_by_key(|l| l.priority);
     }
 
-    /// Add an in-memory configuration layer
     pub fn add_memory_layer(&mut self, name: impl Into<String>, data: Value, priority: u32) {
         let layer = ConfigLayer {
             name: name.into(),
@@ -672,12 +545,10 @@ impl ConfigManager {
         self.layers.sort_by_key(|l| l.priority);
     }
 
-    /// Set event bus for publishing configuration change events
     pub fn set_event_bus(&mut self, event_bus: Arc<EventBusManager>) {
         self.event_bus = Some(event_bus);
     }
 
-    /// Set a configuration value dynamically
     pub async fn set<T>(&self, key: &str, value: T) -> Result<()>
     where
         T: Serialize,
@@ -716,7 +587,6 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// Get a configuration value
     pub async fn get<T>(&self, key: &str) -> Result<T>
     where
         T: for<'de> Deserialize<'de>,
@@ -743,7 +613,6 @@ impl ConfigManager {
         })
     }
 
-    /// Get the complete merged configuration
     pub async fn get_config(&self) -> AppConfig {
         let config = self.merged_config.read().await;
         match serde_json::from_value(config.clone()) {
@@ -756,12 +625,10 @@ impl ConfigManager {
         }
     }
 
-    /// Subscribe to configuration changes
     pub fn subscribe_to_changes(&self) -> broadcast::Receiver<ConfigChangeEvent> {
         self.change_notifier.subscribe()
     }
 
-    /// Reload configuration from all sources
     pub async fn reload(&self) -> Result<()> {
         self.merge_configurations().await?;
 
@@ -784,7 +651,6 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// Validate the current configuration
     pub async fn validate(&self) -> Result<Vec<ValidationError>> {
         let _config = self.merged_config.read().await;
         let errors = Vec::new();
@@ -796,7 +662,6 @@ impl ConfigManager {
         Ok(errors)
     }
 
-    /// Merge all configuration layers
     async fn merge_configurations(&self) -> Result<()> {
         let mut merged = Value::Object(Map::new());
 
@@ -810,7 +675,6 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// Load configuration from a single layer
     async fn load_layer_config(&self, layer: &ConfigLayer) -> Result<Value> {
         match &layer.source {
             ConfigSource::File { path, format } => {
@@ -828,7 +692,15 @@ impl ConfigManager {
                         #[cfg(feature = "toml")]
                         ConfigFormat::Toml => toml::from_str(&content)
                             .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e))),
-                        _ => Err(Error::config("Unsupported config format for this platform")),
+                        #[cfg(not(any(feature = "serde_yaml", feature = "toml")))]
+                        _ => {
+                            if matches!(format, ConfigFormat::Json) {
+                                serde_json::from_str(&content)
+                                    .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e)))
+                            } else {
+                                Err(Error::config("Unsupported config format for this platform"))
+                            }
+                        }
                     }
                 }
                 #[cfg(target_arch = "wasm32")]
@@ -859,7 +731,6 @@ impl ConfigManager {
         }
     }
 
-    /// Merge two JSON values recursively
     fn merge_values(&self, target: &mut Value, source: Value) {
         match (target, source) {
             (Value::Object(target_map), Value::Object(source_map)) => {
@@ -880,7 +751,6 @@ impl ConfigManager {
         }
     }
 
-    /// Get a nested value from configuration using dot notation
     fn get_nested_value(&self, config: &Value, key: &str) -> Option<Value> {
         let keys: Vec<&str> = key.split('.').collect();
         let mut current = config;
@@ -892,7 +762,6 @@ impl ConfigManager {
         Some(current.clone())
     }
 
-    /// Set a nested value in configuration using dot notation
     fn set_nested_value(&self, config: &mut Value, key: &str, value: Value) {
         let keys: Vec<&str> = key.split('.').collect();
         let mut current = config;
@@ -920,7 +789,6 @@ impl ConfigManager {
         }
     }
 
-    /// Set a nested environment variable value
     fn set_nested_env_value(&self, config: &mut Map<String, Value>, keys: &[&str], value: String) {
         if keys.is_empty() {
             return;
@@ -951,13 +819,11 @@ impl ConfigManager {
         }
     }
 
-    /// Get configuration as JSON for debugging
     pub async fn debug_config(&self) -> Value {
         let config = self.merged_config.read().await;
         config.clone()
     }
 
-    /// Get metadata about the configuration manager
     pub fn get_metadata(&self) -> Value {
         serde_json::json!({
             "layers": self.layers.len(),

@@ -49,6 +49,7 @@
     unused_qualifications
 )]
 #![allow(clippy::module_name_repetitions)]
+#![cfg_attr(test, allow(unsafe_code))]
 
 pub mod app;
 pub mod auth;
