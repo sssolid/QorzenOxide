@@ -255,8 +255,7 @@ pub struct UILayoutManager {
     layouts: Arc<RwLock<HashMap<String, UILayout>>>,
     themes: Arc<RwLock<HashMap<String, Theme>>>,
     current_layout: Arc<RwLock<Option<UILayout>>>,
-    current_theme: Arc<RwLock<Option<Theme>>>,
-    _plugin_manager: Option<Arc<PluginManager>>,
+    current_theme: Arc<RwLock<Option<Theme>>>
 }
 
 impl std::fmt::Debug for UILayoutManager {
@@ -273,14 +272,8 @@ impl UILayoutManager {
             layouts: Arc::new(RwLock::new(HashMap::new())),
             themes: Arc::new(RwLock::new(HashMap::new())),
             current_layout: Arc::new(RwLock::new(None)),
-            current_theme: Arc::new(RwLock::new(None)),
-            _plugin_manager: None,
+            current_theme: Arc::new(RwLock::new(None))
         }
-    }
-
-    /// Sets the plugin manager for UI integration
-    pub fn set_plugin_manager(&mut self, plugin_manager: Arc<PluginManager>) {
-        self._plugin_manager = Some(plugin_manager);
     }
 
     /// Registers a layout

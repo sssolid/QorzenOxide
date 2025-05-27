@@ -453,7 +453,8 @@ impl EventBusManager {
     }
 
     /// Subscribe with a handler
-    pub async fn subscribe_with_handler<H: EventHandler + 'static>(
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn subscribe_with_handler<H: EventHandler + 'static + Send>(
         &self,
         filter: EventFilter,
         handler: Arc<H>,
@@ -470,17 +471,17 @@ impl EventBusManager {
                     Ok(()) => {
                         let processing_time = start_time.elapsed();
                         tracing::trace!(
-                            "Handler '{}' processed event in {:?}",
-                            handler_name,
-                            processing_time
-                        );
+                        "Handler '{}' processed event in {:?}",
+                        handler_name,
+                        processing_time
+                    );
                     }
                     Err(e) => {
                         tracing::error!(
-                            "Handler '{}' failed to process event: {}",
-                            handler_name,
-                            e
-                        );
+                        "Handler '{}' failed to process event: {}",
+                        handler_name,
+                        e
+                    );
                     }
                 }
             }
@@ -488,6 +489,44 @@ impl EventBusManager {
 
         // Store the handle (simplified - in practice you'd want to track these)
         drop(handle);
+
+        // Return a dummy subscription ID
+        Ok(Uuid::new_v4())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub async fn subscribe_with_handler<H: EventHandler + 'static>(
+        &self,
+        filter: EventFilter,
+        handler: Arc<H>,
+    ) -> Result<Uuid> {
+        let mut receiver = self.subscribe(filter).await?;
+        let handler_name = handler.name().to_string();
+
+        // For WASM, we'll use a simpler approach without tokio::spawn
+        wasm_bindgen_futures::spawn_local(async move {
+            while let Some(event) = receiver.recv().await {
+                let start_time = Instant::now();
+
+                match handler.handle(event.as_ref()).await {
+                    Ok(()) => {
+                        let processing_time = start_time.elapsed();
+                        web_sys::console::log_1(&format!(
+                            "Handler '{}' processed event in {:?}",
+                            handler_name,
+                            processing_time
+                        ).into());
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!(
+                            "Handler '{}' failed to process event: {}",
+                            handler_name,
+                            e
+                        ).into());
+                    }
+                }
+            }
+        });
 
         // Return a dummy subscription ID
         Ok(Uuid::new_v4())

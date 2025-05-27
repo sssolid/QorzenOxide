@@ -161,7 +161,7 @@ pub mod retry {
                     duration.as_millis() as i32,
                 )
                 .unwrap();
-            std::mem::forget(timeout_id);
+            let _ = timeout_id;
         });
         let _ = JsFuture::from(promise).await;
     }

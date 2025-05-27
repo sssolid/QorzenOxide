@@ -213,7 +213,7 @@ impl NetworkProvider for FetchNetwork {
 
         if let Some(body) = request.body {
             let uint8_array = js_sys::Uint8Array::from(&body[..]);
-            opts.set_body(Some(&uint8_array));
+            opts.set_body(&uint8_array);
         }
 
         let req = Request::new_with_str(&request.url).map_err(|e| {
