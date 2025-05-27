@@ -237,6 +237,17 @@ impl Default for FileLogConfig {
     }
 }
 
+fn get_default_cpu_count() -> usize {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        num_cpus::get()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        1 // Default to 1 for WASM
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventBusConfig {
     pub worker_count: usize,
@@ -249,7 +260,7 @@ pub struct EventBusConfig {
 impl Default for EventBusConfig {
     fn default() -> Self {
         Self {
-            worker_count: num_cpus::get(),
+            worker_count: get_default_cpu_count() * 2,
             queue_size: 10000,
             publish_timeout_ms: 5000,
             enable_persistence: false,
@@ -345,10 +356,11 @@ pub struct ConcurrencyConfig {
 
 impl Default for ConcurrencyConfig {
     fn default() -> Self {
+        let cpu_count = get_default_cpu_count();
         Self {
-            thread_pool_size: num_cpus::get(),
-            io_thread_pool_size: num_cpus::get() * 2,
-            blocking_thread_pool_size: num_cpus::get().max(4),
+            thread_pool_size: cpu_count,
+            io_thread_pool_size: cpu_count * 2,
+            blocking_thread_pool_size: cpu_count.max(4),
             max_queue_size: 1000,
             thread_keep_alive_secs: 60,
         }

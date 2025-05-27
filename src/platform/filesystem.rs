@@ -27,8 +27,21 @@ pub struct FileMetadata {
 }
 
 /// File system operations
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait FileSystemProvider: Send + Sync {
+    async fn read_file(&self, path: &str) -> Result<Vec<u8>>;
+    async fn write_file(&self, path: &str, data: &[u8]) -> Result<()>;
+    async fn delete_file(&self, path: &str) -> Result<()>;
+    async fn list_directory(&self, path: &str) -> Result<Vec<FileInfo>>;
+    async fn create_directory(&self, path: &str) -> Result<()>;
+    async fn file_exists(&self, path: &str) -> bool;
+    async fn get_metadata(&self, path: &str) -> Result<FileMetadata>;
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait FileSystemProvider: Sync {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>>;
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<()>;
     async fn delete_file(&self, path: &str) -> Result<()>;

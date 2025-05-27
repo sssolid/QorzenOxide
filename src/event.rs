@@ -273,10 +273,21 @@ pub struct EventBusConfig {
     pub max_retry_delay: Duration,
 }
 
+fn get_default_worker_count() -> usize {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        num_cpus::get()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        1
+    }
+}
+
 impl Default for EventBusConfig {
     fn default() -> Self {
         Self {
-            worker_count: num_cpus::get(),
+            worker_count: get_default_worker_count(),
             queue_capacity: 10000,
             default_timeout: Duration::from_secs(30),
             enable_persistence: false,

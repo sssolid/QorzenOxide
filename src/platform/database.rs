@@ -34,8 +34,17 @@ pub struct Migration {
 }
 
 /// Database operations - made dyn compatible by removing generic transaction method
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait DatabaseProvider: Send + Sync {
+    async fn execute(&self, query: &str, params: &[serde_json::Value]) -> Result<QueryResult>;
+    async fn query(&self, query: &str, params: &[serde_json::Value]) -> Result<Vec<Row>>;
+    async fn migrate(&self, migrations: &[Migration]) -> Result<()>;
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait DatabaseProvider: Sync {
     async fn execute(&self, query: &str, params: &[serde_json::Value]) -> Result<QueryResult>;
     async fn query(&self, query: &str, params: &[serde_json::Value]) -> Result<Vec<Row>>;
     async fn migrate(&self, migrations: &[Migration]) -> Result<()>;

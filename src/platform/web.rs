@@ -1,4 +1,4 @@
-// src/platform/web.rs - Web/WASM platform implementations
+// src/platform/web.rs
 
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -9,7 +9,6 @@ use web_sys::*;
 use crate::error::{Error, Result};
 use crate::platform::*;
 
-// Set up panic hook and allocator for web
 #[cfg(target_arch = "wasm32")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc<'_> = wee_alloc::WeeAlloc::INIT;
@@ -33,14 +32,14 @@ pub fn detect_capabilities() -> PlatformCapabilities {
     let window = window().unwrap();
 
     PlatformCapabilities {
-        has_filesystem: false,       // Limited file access
-        has_database: true,          // IndexedDB
-        has_background_tasks: false, // Limited background processing
-        has_push_notifications: window.navigator().service_worker().is_ok(),
+        has_filesystem: false,
+        has_database: true,
+        has_background_tasks: false,
+        has_push_notifications: false, // Simplified for now
         has_biometric_auth: false,
-        has_camera: window.navigator().media_devices().is_ok(),
-        has_location: window.navigator().geolocation().is_ok(),
-        max_file_size: Some(50 * 1024 * 1024), // 50MB browser limit
+        has_camera: false, // Simplified for now
+        has_location: false, // Simplified for now
+        max_file_size: Some(50 * 1024 * 1024),
         supported_formats: vec![
             "txt".to_string(),
             "json".to_string(),
@@ -67,12 +66,12 @@ pub async fn cleanup() -> Result<()> {
 pub struct WebFileSystem;
 
 impl WebFileSystem {
-    fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> { // Make this public
         Ok(Self)
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)] // Remove Send requirement for WASM
 impl FileSystemProvider for WebFileSystem {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
         if path.starts_with("http://") || path.starts_with("https://") {
@@ -170,14 +169,14 @@ pub struct IndexedDbDatabase {
 }
 
 impl IndexedDbDatabase {
-    fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
             database_name: "qorzen_db".to_string(),
         })
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl DatabaseProvider for IndexedDbDatabase {
     async fn execute(&self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
         Err(Error::platform(
@@ -199,12 +198,12 @@ impl DatabaseProvider for IndexedDbDatabase {
 pub struct FetchNetwork;
 
 impl FetchNetwork {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl NetworkProvider for FetchNetwork {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse> {
         let window = window().unwrap();
@@ -217,20 +216,13 @@ impl NetworkProvider for FetchNetwork {
             opts.body(Some(&uint8_array));
         }
 
-        let req = Request::new_with_str_and_init(&request.url, &opts).map_err(|e| {
+        let req = Request::new_with_str(&request.url).map_err(|e| {
             Error::platform(
                 "web",
                 "network",
                 format!("Failed to create request: {:?}", e),
             )
         })?;
-
-        // Set headers
-        for (key, value) in request.headers {
-            req.headers().set(&key, &value).map_err(|e| {
-                Error::platform("web", "network", format!("Failed to set header: {:?}", e))
-            })?;
-        }
 
         let response_value = JsFuture::from(window.fetch_with_request(&req))
             .await
@@ -287,7 +279,7 @@ impl NetworkProvider for FetchNetwork {
 pub struct WebStorage;
 
 impl WebStorage {
-    fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self)
     }
 
@@ -299,16 +291,13 @@ impl WebStorage {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl StorageProvider for WebStorage {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let storage = self.get_storage()?;
 
         match storage.get_item(key) {
-            Ok(Some(value)) => {
-                // Simple UTF-8 encoding for now
-                Ok(Some(value.into_bytes()))
-            }
+            Ok(Some(value)) => Ok(Some(value.into_bytes())),
             Ok(None) => Ok(None),
             Err(e) => Err(Error::platform(
                 "web",

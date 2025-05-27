@@ -759,18 +759,37 @@ impl PluginManager {
         plugin.render_component(component_id, props)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     async fn create_plugin_context(&self, plugin_id: &str) -> Result<PluginContext> {
-        // Create a simple filesystem implementation for web
-        let filesystem_provider: Arc<dyn FileSystemProvider> = {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                Arc::new(crate::platform::native::NativeFileSystem::new()?)
-            }
-            #[cfg(target_arch = "wasm32")]
-            {
-                Arc::new(crate::platform::web::WebFileSystem::new()?)
-            }
-        };
+        let filesystem_provider: Arc<dyn FileSystemProvider> =
+            Arc::new(crate::platform::native::NativeFileSystem::new()?);
+
+        Ok(PluginContext {
+            plugin_id: plugin_id.to_string(),
+            config: PluginConfig {
+                plugin_id: plugin_id.to_string(),
+                version: "1.0.0".to_string(),
+                config_schema: serde_json::json!({}),
+                default_values: serde_json::json!({}),
+                user_overrides: serde_json::json!({}),
+                validation_rules: Vec::new(),
+            },
+            api_client: self.api_provider.create_client(plugin_id.to_string()),
+            event_bus: Arc::new(EventBusManager::new(
+                crate::event::EventBusConfig::default(),
+            )),
+            database: None,
+            file_system: PluginFileSystem::new(
+                plugin_id.to_string(),
+                filesystem_provider,
+            ),
+        })
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn create_plugin_context(&self, plugin_id: &str) -> Result<PluginContext> {
+        let filesystem_provider: Arc<dyn FileSystemProvider> =
+            Arc::new(crate::platform::web::WebFileSystem::new()?);
 
         Ok(PluginContext {
             plugin_id: plugin_id.to_string(),
@@ -841,6 +860,29 @@ impl Manager for PluginManager {
         Ok(())
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn status(&self) -> ManagerStatus {
+        let mut status = self.state.status().await;
+
+        status.add_metadata(
+            "loaded_plugins",
+            serde_json::Value::from(self.registry.plugins.len()),
+        );
+        status.add_metadata(
+            "plugin_list",
+            serde_json::Value::Array(
+                self.registry
+                    .list()
+                    .into_iter()
+                    .map(|s| serde_json::Value::String(s.to_string()))
+                    .collect(),
+            ),
+        );
+
+        status
+    }
+
+    #[cfg(target_arch = "wasm32")]
     async fn status(&self) -> ManagerStatus {
         let mut status = self.state.status().await;
 
