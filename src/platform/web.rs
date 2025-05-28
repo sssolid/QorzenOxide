@@ -17,12 +17,6 @@ use crate::platform::storage::StorageBounds;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc<'_> = wee_alloc::WeeAlloc::INIT;
 
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub fn main() {
-    console_error_panic_hook::set_once();
-}
-
 pub fn create_providers() -> Result<PlatformProviders> {
     Ok(PlatformProviders {
         filesystem: Arc::new(WebFileSystem::new()?),

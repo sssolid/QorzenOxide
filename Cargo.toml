@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["desktop"]
+default = []
 desktop = []
 web = []
 
@@ -12,11 +12,10 @@ web = []
 name = "qorzen_oxide"
 crate-type = ["cdylib", "rlib"]
 
-# Binary that works for both desktop and WASM
 [[bin]]
 name = "qorzen_bin"
 path = "src/main.rs"
-# Remove required-features to allow WASM compilation
+required-features = ["desktop"]
 
 [dependencies]
 # Core dependencies

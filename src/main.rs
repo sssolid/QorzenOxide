@@ -39,12 +39,6 @@ enum Commands {
     ValidateConfig { #[arg(short, long)] config: Option<PathBuf> },
 }
 
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    console_error_panic_hook::set_once();
-    dioxus::launch(app);
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     let cli = Cli::parse();
