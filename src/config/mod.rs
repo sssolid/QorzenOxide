@@ -690,8 +690,8 @@ impl ConfigManager {
 
     async fn load_layer_config(&self, layer: &ConfigLayer) -> Result<Value> {
         match &layer.source {
-            ConfigSource::File { path: path, format: format } => {
-                #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm32"))]
+            ConfigSource::File { path, format } => {
                 {
                     let content = std::fs::read_to_string(path)
                         .map_err(|e| Error::config(format!("Failed to read config file: {}", e)))?;
@@ -705,29 +705,37 @@ impl ConfigManager {
                             .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e))),
                     }
                 }
-                #[cfg(target_arch = "wasm32")]
-                {
-                    Err(Error::config("File loading not supported in web platform"))
-                }
-            }
+            },
+            
+            #[cfg(target_arch = "wasm32")]
+            ConfigSource::File { .. } => {
+                Err(Error::config("File loading not supported in web platform"))
+            },
+
+            #[cfg(not(target_arch = "wasm32"))]
             ConfigSource::Environment { prefix } => {
                 let mut env_config = serde_json::Map::new();
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    for (key, value) in std::env::vars() {
-                        if key.starts_with(prefix) {
-                            let config_key = key
-                                .strip_prefix(prefix)
-                                .unwrap()
-                                .trim_start_matches('_')
-                                .to_lowercase();
-                            let nested_keys: Vec<&str> = config_key.split('_').collect();
-                            self.set_nested_env_value(&mut env_config, &nested_keys, value);
-                        }
+
+                for (key, value) in std::env::vars() {
+                    if key.starts_with(prefix) {
+                        let config_key = key
+                            .strip_prefix(prefix)
+                            .unwrap()
+                            .trim_start_matches('_')
+                            .to_lowercase();
+                        let nested_keys: Vec<&str> = config_key.split('_').collect();
+                        self.set_nested_env_value(&mut env_config, &nested_keys, value);
                     }
                 }
+
                 Ok(Value::Object(env_config))
-            }
+            },
+
+            #[cfg(target_arch = "wasm32")]
+            ConfigSource::Environment { .. } => {
+                Ok(Value::Object(serde_json::Map::new()))
+            },
+            
             ConfigSource::Memory { data } => Ok(data.clone()),
         }
     }

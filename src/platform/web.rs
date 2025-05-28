@@ -77,7 +77,8 @@ impl WebFileSystem {
 
 impl filesystem::FileSystemBounds for WebFileSystem {}
 
-#[async_trait(?Send)]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl FileSystemProvider for WebFileSystem {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
         if path.starts_with("http://") || path.starts_with("https://") {
@@ -184,7 +185,8 @@ impl IndexedDbDatabase {
 
 impl DatabaseBounds for IndexedDbDatabase {}
 
-#[async_trait(?Send)]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl DatabaseProvider for IndexedDbDatabase {
     async fn execute(&self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
         Err(Error::platform(
@@ -213,35 +215,38 @@ impl FetchNetwork {
 
 impl NetworkBounds for FetchNetwork {}
 
-#[async_trait(?Send)]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl NetworkProvider for FetchNetwork {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse> {
-        let window = window().unwrap();
+        let window = web_sys::window().unwrap();
 
-        let opts = RequestInit::new();
-        opts.set_method(&request.method);
+        // Everything non-Send is scoped and dropped before .await
+        let fetch_promise = {
+            let mut opts = RequestInit::new();
+            opts.set_method(&request.method);
 
-        if let Some(body) = request.body {
-            let uint8_array = js_sys::Uint8Array::from(&body[..]);
-            opts.set_body(&uint8_array);
-        }
+            if let Some(body) = request.body {
+                let uint8_array = js_sys::Uint8Array::from(&body[..]);
+                opts.set_body(&uint8_array.into());
+            }
 
-        let req = Request::new_with_str(&request.url).map_err(|e| {
-            Error::platform(
-                "web",
-                "network",
-                format!("Failed to create request: {:?}", e),
-            )
-        })?;
+            let req = Request::new_with_str_and_init(&request.url, &opts).map_err(|e| {
+                Error::platform("web", "network", format!("Failed to create request: {:?}", e))
+            })?;
 
-        let response_value = JsFuture::from(window.fetch_with_request(&req))
+            window.fetch_with_request(&req) // <- return immediately
+        };
+
+        // No web_sys types live across this await
+        let response_value = JsFuture::from(fetch_promise)
             .await
             .map_err(|e| Error::platform("web", "network", format!("Fetch failed: {:?}", e)))?;
 
         let response: Response = response_value.dyn_into().unwrap();
         let status_code = response.status() as u16;
 
-        let headers = HashMap::new(); // Simplified for now
+        let headers = HashMap::new(); // Simplified
 
         let body = JsFuture::from(response.array_buffer().unwrap())
             .await
@@ -303,7 +308,8 @@ impl WebStorage {
 
 impl StorageBounds for WebStorage {}
 
-#[async_trait(?Send)]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl StorageProvider for WebStorage {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let storage = self.get_storage()?;

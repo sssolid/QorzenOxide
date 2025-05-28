@@ -761,8 +761,8 @@ impl PluginManager {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-#[async_trait(?Send)]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl Manager for PluginManager {
     fn name(&self) -> &str {
         "plugin_manager"

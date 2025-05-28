@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::auth::{Permission, User, UserSession};
 use crate::error::Result;
 use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
-use crate::plugin::{MenuItem, PluginManager};
+use crate::plugin::{MenuItem};
 
 /// UI layout configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
