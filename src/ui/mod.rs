@@ -595,7 +595,7 @@ impl Manager for UILayoutManager {
 }
 
 /// Simple UI components for demo purposes
-pub fn App() -> Element {
+pub fn app() -> Element {
     rsx! {
         div {
             class: "qorzen-app",

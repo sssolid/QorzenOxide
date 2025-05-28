@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use dioxus::prelude::*;
-
 use crate::auth::{Permission, User};
 use crate::error::{Error, Result};
 use crate::event::{Event, EventBusManager};
@@ -798,86 +797,15 @@ impl Manager for PluginManager {
 
         for plugin_id in load_order {
             if let Err(e) = self.unload_plugin(&plugin_id).await {
-                web_sys::console::error_1(&format!("Failed to unload plugin {}: {}", plugin_id, e).into());
-            }
-        }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    log::error!("Failed to unload plugin {}: {}", plugin_id, e);
+                }
 
-        self.state
-            .set_state(crate::manager::ManagerState::Shutdown)
-            .await;
-        Ok(())
-    }
-
-    async fn status(&self) -> ManagerStatus {
-        let mut status = self.state.status().await;
-
-        status.add_metadata(
-            "loaded_plugins",
-            serde_json::Value::from(self.registry.plugins.len()),
-        );
-        status.add_metadata(
-            "plugin_list",
-            serde_json::Value::Array(
-                self.registry
-                    .list()
-                    .into_iter()
-                    .map(|s| serde_json::Value::String(s.to_string()))
-                    .collect(),
-            ),
-        );
-
-        status
-    }
-
-    fn platform_requirements(&self) -> PlatformRequirements {
-        PlatformRequirements {
-            requires_filesystem: true,
-            requires_network: false,
-            requires_database: false,
-            requires_native_apis: false,
-            minimum_permissions: vec!["plugin.load".to_string(), "plugin.manage".to_string()],
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[async_trait]
-impl Manager for PluginManager {
-    fn name(&self) -> &str {
-        "plugin_manager"
-    }
-
-    fn id(&self) -> Uuid {
-        self.state.id()
-    }
-
-    async fn initialize(&mut self) -> Result<()> {
-        self.state
-            .set_state(crate::manager::ManagerState::Initializing)
-            .await;
-
-        // Load plugins from plugin directory
-        // Initialize all loaded plugins
-        self.initialize_plugins().await?;
-
-        self.state
-            .set_state(crate::manager::ManagerState::Running)
-            .await;
-        Ok(())
-    }
-
-    async fn shutdown(&mut self) -> Result<()> {
-        self.state
-            .set_state(crate::manager::ManagerState::ShuttingDown)
-            .await;
-
-        // Shutdown all plugins in reverse order
-        let mut load_order = self.registry.load_order().to_vec();
-        load_order.reverse();
-
-        for plugin_id in load_order {
-            if let Err(e) = self.unload_plugin(&plugin_id).await {
-                tracing::error!("Failed to unload plugin {}: {}", plugin_id, e);
+                #[cfg(target_arch = "wasm32")]
+                {
+                    web_sys::console::error_1(&format!("Failed to unload plugin {}: {}", plugin_id, e).into());
+                }
             }
         }
 

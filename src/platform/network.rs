@@ -33,7 +33,7 @@ pub type NetworkArc = Arc<DynNetwork>;
 
 /// Network operations
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait NetworkProvider: NetworkBounds {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse>;
     async fn upload_file(&self, url: &str, file_data: &[u8]) -> Result<NetworkResponse>;

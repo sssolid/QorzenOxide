@@ -3811,6 +3811,7 @@ dependencies = [
  "getrandom 0.2.12",
  "hostname",
  "js-sys",
+ "log",
  "notify",
  "num_cpus",
  "parking_lot",

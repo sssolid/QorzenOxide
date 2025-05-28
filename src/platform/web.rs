@@ -223,7 +223,7 @@ impl NetworkProvider for FetchNetwork {
 
         // Everything non-Send is scoped and dropped before .await
         let fetch_promise = {
-            let mut opts = RequestInit::new();
+            let opts = RequestInit::new();
             opts.set_method(&request.method);
 
             if let Some(body) = request.body {

@@ -8,7 +8,7 @@ use std::process;
 #[cfg(not(target_arch = "wasm32"))]
 use clap::{Parser, Subcommand};
 
-use qorzen_oxide::ui::App;
+use qorzen_oxide::ui::app;
 use qorzen_oxide::error::Result;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -42,7 +42,7 @@ enum Commands {
 #[cfg(target_arch = "wasm32")]
 fn main() {
     console_error_panic_hook::set_once();
-    dioxus::launch(App);
+    dioxus::launch(app);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -99,7 +99,7 @@ fn setup_logging(cli: &Cli) {
 fn run_ui_application(_cli: &Cli) {
     tracing::info!("Starting Qorzen Oxide v{}", qorzen_oxide::VERSION);
     // This should work now with desktop features enabled
-    dioxus::launch(App);
+    dioxus::launch(app);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
