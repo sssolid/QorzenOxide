@@ -690,7 +690,7 @@ impl ConfigManager {
 
     async fn load_layer_config(&self, layer: &ConfigLayer) -> Result<Value> {
         match &layer.source {
-            ConfigSource::File { path, format } => {
+            ConfigSource::File { path: path, format: format } => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     let content = std::fs::read_to_string(path)
@@ -699,14 +699,10 @@ impl ConfigManager {
                     match format {
                         ConfigFormat::Json => serde_json::from_str(&content)
                             .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e))),
-                        #[cfg(feature = "serde_yaml")]
                         ConfigFormat::Yaml => serde_yaml::from_str(&content)
                             .map_err(|e| Error::config(format!("Failed to parse YAML config: {}", e))),
-                        #[cfg(feature = "toml")]
                         ConfigFormat::Toml => toml::from_str(&content)
                             .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e))),
-                        #[cfg(not(any(feature = "serde_yaml", feature = "toml")))]
-                        _ => Err(Error::config("Unsupported config format for this platform")),
                     }
                 }
                 #[cfg(target_arch = "wasm32")]

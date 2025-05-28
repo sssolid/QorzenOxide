@@ -10,7 +10,6 @@ use web_sys::*;
 use crate::error::{Error, Result};
 use crate::platform::*;
 use crate::platform::database::DatabaseBounds;
-use crate::platform::native::NativeNetwork;
 use crate::platform::network::NetworkBounds;
 use crate::platform::storage::StorageBounds;
 
@@ -75,6 +74,8 @@ impl WebFileSystem {
         Ok(Self)
     }
 }
+
+impl filesystem::FileSystemBounds for WebFileSystem {}
 
 #[async_trait(?Send)]
 impl FileSystemProvider for WebFileSystem {
@@ -181,14 +182,9 @@ impl IndexedDbDatabase {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl DatabaseBounds for IndexedDbDatabase {}
 
-#[cfg(target_arch = "wasm32")]
-impl DatabaseBounds for IndexedDbDatabase {}
-
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[async_trait(?Send)]
 impl DatabaseProvider for IndexedDbDatabase {
     async fn execute(&self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
         Err(Error::platform(
@@ -215,19 +211,14 @@ impl FetchNetwork {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl NetworkBounds for FetchNetwork {}
 
-#[cfg(target_arch = "wasm32")]
-impl NetworkBounds for FetchNetwork {}
-
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[async_trait(?Send)]
 impl NetworkProvider for FetchNetwork {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse> {
         let window = window().unwrap();
 
-        let mut opts = RequestInit::new();
+        let opts = RequestInit::new();
         opts.set_method(&request.method);
 
         if let Some(body) = request.body {
@@ -310,14 +301,9 @@ impl WebStorage {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl StorageBounds for WebStorage {}
 
-#[cfg(target_arch = "wasm32")]
-impl StorageBounds for WebStorage {}
-
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[async_trait(?Send)]
 impl StorageProvider for WebStorage {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let storage = self.get_storage()?;

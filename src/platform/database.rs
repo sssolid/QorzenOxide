@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use crate::error::Result;
-use crate::platform::FileSystemProvider;
 
 /// Database query result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,7 +32,6 @@ pub struct Migration {
     pub up_sql: String,
     pub down_sql: String,
 }
-
 
 #[cfg(not(target_arch = "wasm32"))]
 pub type DynDatabase = dyn DatabaseProvider + Send + Sync;

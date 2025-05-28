@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use crate::error::Result;
 
 #[cfg(not(target_arch = "wasm32"))]

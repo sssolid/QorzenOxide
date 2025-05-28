@@ -31,6 +31,10 @@ uuid = { version = "1.0", features = ["v4", "serde", "js"] }
 dashmap = "5.0"
 rand = "0.8"
 
+# Configuration parsing
+serde_yaml = "0.9"
+toml = "0.8"
+
 # Target-specific dependencies
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus = { version = "0.6", features = ["macro", "html", "desktop"] }
@@ -44,8 +48,6 @@ hostname = "0.3"
 flate2 = "1.0"
 tracing-appender = "0.2"
 reqwest = { version = "0.12", features = ["json"] }
-serde_yaml = "0.9"
-toml = "0.8"
 sha2 = "0.10"
 num_cpus = "1.0"
 
@@ -56,19 +58,6 @@ getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
-#    "console",
-#    "Window",
-#    "Navigator",
-#    "MediaDevices",
-#    "Geolocation",
-#    "ServiceWorkerContainer",
-#    "Request",
-#    "RequestInit",
-#    "Response",
-#    "Headers",
-#    "Storage",
-#    "ArrayBuffer",
-#    "Uint8Array",
     "console",
     "Window",
     "Navigator",

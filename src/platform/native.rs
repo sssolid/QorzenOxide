@@ -105,6 +105,8 @@ impl NativeFileSystem {
     }
 }
 
+impl filesystem::FileSystemBounds for NativeFileSystem {}
+
 #[async_trait]
 impl FileSystemProvider for NativeFileSystem {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
@@ -250,8 +252,9 @@ impl SqliteDatabase {
     }
 }
 
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+impl DatabaseBounds for SqliteDatabase {}
+
+#[async_trait]
 impl DatabaseProvider for SqliteDatabase {
     async fn execute(&self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
         // Implementation would use SQLite
@@ -272,13 +275,6 @@ impl DatabaseProvider for SqliteDatabase {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-impl DatabaseBounds for SqliteDatabase {}
-
-#[cfg(target_arch = "wasm32")]
-impl DatabaseBounds for SqliteDatabase {}
-
-
 /// Native network implementation
 pub struct NativeNetwork {
     client: reqwest::Client,
@@ -292,14 +288,9 @@ impl NativeNetwork {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl NetworkBounds for NativeNetwork {}
 
-#[cfg(target_arch = "wasm32")]
-impl NetworkBounds for NativeNetwork {}
-
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[async_trait]
 impl NetworkProvider for NativeNetwork {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse> {
         let mut req = match request.method.as_str() {
@@ -403,12 +394,7 @@ impl NativeStorage {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl StorageBounds for NativeStorage {}
-
-#[cfg(target_arch = "wasm32")]
-impl StorageBounds for NativeStorage {}
-
 
 #[async_trait]
 impl StorageProvider for NativeStorage {

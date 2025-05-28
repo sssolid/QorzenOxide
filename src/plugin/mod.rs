@@ -12,7 +12,6 @@ use crate::auth::{Permission, User};
 use crate::error::{Error, Result};
 use crate::event::{Event, EventBusManager};
 use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
-use crate::platform::{DatabaseProvider, FileSystemProvider};
 use crate::config::SettingsSchema;
 use crate::platform::database::DatabaseArc;
 use crate::platform::filesystem::FileSystemArc;
@@ -287,15 +286,6 @@ impl PluginDatabase {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-#[derive(Clone)]
-pub struct PluginFileSystem {
-    plugin_id: String,
-    provider: FileSystemArc,
-    base_path: String,
-}
-
-#[cfg(target_arch = "wasm32")]
 #[derive(Clone)]
 pub struct PluginFileSystem {
     plugin_id: String,
@@ -442,13 +432,6 @@ pub struct ApiRequest {
     pub body: Option<serde_json::Value>,
     pub user: Option<User>,
 }
-
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct ApiResponse {
-//     pub status_code: u16,
-//     pub headers: HashMap<String, String>,
-//     pub body: Option<serde_json::Value>,
-// }
 
 #[derive(Debug)]
 pub struct PluginRegistry {
@@ -725,7 +708,7 @@ impl PluginManager {
 
     #[cfg(not(target_arch = "wasm32"))]
     async fn create_plugin_context(&self, plugin_id: &str) -> Result<PluginContext> {
-        let filesystem_provider: Arc<dyn FileSystemProvider + Send + Sync> =
+        let filesystem_provider: FileSystemArc =
             Arc::new(crate::platform::native::NativeFileSystem::new()?);
 
         Ok(PluginContext {
@@ -779,7 +762,7 @@ impl PluginManager {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[async_trait::async_trait(?Send)]
+#[async_trait(?Send)]
 impl Manager for PluginManager {
     fn name(&self) -> &str {
         "plugin_manager"
@@ -858,7 +841,7 @@ impl Manager for PluginManager {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-#[async_trait::async_trait]
+#[async_trait]
 impl Manager for PluginManager {
     fn name(&self) -> &str {
         "plugin_manager"

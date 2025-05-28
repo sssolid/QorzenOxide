@@ -8,7 +8,6 @@
 #![warn(clippy::all)]
 #![allow(clippy::module_name_repetitions)]
 
-
 // Core modules (always available)
 pub mod app;
 pub mod auth;
@@ -19,9 +18,7 @@ pub mod config;
 pub mod platform;
 pub mod plugin;
 pub mod types;
-pub mod ui {
-    pub use crate::ui;
-}
+pub mod ui;
 pub mod utils;
 
 // Native-only modules

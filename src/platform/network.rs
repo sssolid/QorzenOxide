@@ -24,7 +24,6 @@ pub struct NetworkResponse {
     pub body: Vec<u8>,
 }
 
-
 #[cfg(not(target_arch = "wasm32"))]
 pub type DynNetwork = dyn NetworkProvider + Send + Sync;
 
@@ -35,7 +34,7 @@ pub type NetworkArc = Arc<DynNetwork>;
 
 /// Network operations
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait)]
 pub trait NetworkProvider: NetworkBounds {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse>;
     async fn upload_file(&self, url: &str, file_data: &[u8]) -> Result<NetworkResponse>;
