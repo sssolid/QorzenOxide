@@ -14,6 +14,8 @@ use crate::event::{Event, EventBusManager};
 use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
 use crate::platform::{DatabaseProvider, FileSystemProvider};
 use crate::config::SettingsSchema;
+use crate::platform::database::DatabaseArc;
+use crate::platform::filesystem::FileSystemArc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
@@ -227,7 +229,7 @@ impl PluginApiClient {
 #[derive(Clone)]
 pub struct PluginDatabase {
     plugin_id: String,
-    provider: Arc<dyn DatabaseProvider>,
+    provider: DatabaseArc,
     permissions: DatabasePermissions,
 }
 
@@ -243,7 +245,7 @@ pub struct DatabasePermissions {
 impl PluginDatabase {
     pub fn new(
         plugin_id: String,
-        provider: Arc<dyn DatabaseProvider>,
+        provider: DatabaseArc,
         permissions: DatabasePermissions,
     ) -> Self {
         Self {
@@ -285,15 +287,24 @@ impl PluginDatabase {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 pub struct PluginFileSystem {
     plugin_id: String,
-    provider: Arc<dyn FileSystemProvider>,
+    provider: FileSystemArc,
+    base_path: String,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone)]
+pub struct PluginFileSystem {
+    plugin_id: String,
+    provider: FileSystemArc,
     base_path: String,
 }
 
 impl PluginFileSystem {
-    pub fn new(plugin_id: String, provider: Arc<dyn FileSystemProvider>) -> Self {
+    pub fn new(plugin_id: String, provider: FileSystemArc) -> Self {
         Self {
             plugin_id: plugin_id.clone(),
             provider,
@@ -575,7 +586,7 @@ impl DependencyResolver {
 pub struct PluginManager {
     state: ManagedState,
     registry: PluginRegistry,
-    loader: Box<dyn PluginLoader>,
+    loader: Box<dyn PluginLoader + Send + Sync>,
     sandbox: PluginSandbox,
     api_provider: PluginApiProvider,
     dependency_resolver: DependencyResolver,
@@ -605,7 +616,7 @@ impl PluginApiProvider {
 }
 
 impl PluginManager {
-    pub fn new(loader: Box<dyn PluginLoader>) -> Self {
+    pub fn new(loader: Box<dyn PluginLoader + Send + Sync>) -> Self {
         Self {
             state: ManagedState::new(Uuid::new_v4(), "plugin_manager"),
             registry: PluginRegistry::new(),
@@ -714,7 +725,7 @@ impl PluginManager {
 
     #[cfg(not(target_arch = "wasm32"))]
     async fn create_plugin_context(&self, plugin_id: &str) -> Result<PluginContext> {
-        let filesystem_provider: Arc<dyn FileSystemProvider> =
+        let filesystem_provider: Arc<dyn FileSystemProvider + Send + Sync> =
             Arc::new(crate::platform::native::NativeFileSystem::new()?);
 
         Ok(PluginContext {
@@ -741,7 +752,7 @@ impl PluginManager {
 
     #[cfg(target_arch = "wasm32")]
     async fn create_plugin_context(&self, plugin_id: &str) -> Result<PluginContext> {
-        let filesystem_provider: Arc<dyn FileSystemProvider> =
+        let filesystem_provider: FileSystemArc =
             Arc::new(crate::platform::web::WebFileSystem::new()?);
 
         Ok(PluginContext {
@@ -768,7 +779,7 @@ impl PluginManager {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[async_trait(?Send)]
+#[async_trait::async_trait(?Send)]
 impl Manager for PluginManager {
     fn name(&self) -> &str {
         "plugin_manager"
@@ -847,7 +858,7 @@ impl Manager for PluginManager {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-#[async_trait]
+#[async_trait::async_trait]
 impl Manager for PluginManager {
     fn name(&self) -> &str {
         "plugin_manager"

@@ -19,7 +19,9 @@ pub mod config;
 pub mod platform;
 pub mod plugin;
 pub mod types;
-pub mod ui;
+pub mod ui {
+    pub use crate::ui;
+}
 pub mod utils;
 
 // Native-only modules
@@ -36,6 +38,5 @@ pub mod task;
 pub use app::ApplicationCore;
 pub use error::{Error, ErrorKind, Result, ResultExt};
 pub use manager::{Manager, ManagerState, ManagerStatus};
-pub use ui::App;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

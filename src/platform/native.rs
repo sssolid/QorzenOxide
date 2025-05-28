@@ -2,19 +2,23 @@
 
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::fs;
 
 use crate::error::Error;
 use crate::error::Result;
 use crate::platform::*;
+use crate::platform::database::DatabaseBounds;
+use crate::platform::network::NetworkBounds;
+use crate::platform::storage::StorageBounds;
 
 /// Creates native platform providers
 pub fn create_providers() -> Result<PlatformProviders> {
     Ok(PlatformProviders {
-        filesystem: Box::new(NativeFileSystem::new()?),
-        database: Box::new(SqliteDatabase::new()?),
-        network: Box::new(NativeNetwork::new()),
-        storage: Box::new(NativeStorage::new()?),
+        filesystem: Arc::new(NativeFileSystem::new()?),
+        database: Arc::new(SqliteDatabase::new()?),
+        network: Arc::new(NativeNetwork::new()),
+        storage: Arc::new(NativeStorage::new()?),
     })
 }
 
@@ -246,7 +250,8 @@ impl SqliteDatabase {
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 impl DatabaseProvider for SqliteDatabase {
     async fn execute(&self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
         // Implementation would use SQLite
@@ -267,6 +272,13 @@ impl DatabaseProvider for SqliteDatabase {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+impl DatabaseBounds for SqliteDatabase {}
+
+#[cfg(target_arch = "wasm32")]
+impl DatabaseBounds for SqliteDatabase {}
+
+
 /// Native network implementation
 pub struct NativeNetwork {
     client: reqwest::Client,
@@ -280,7 +292,14 @@ impl NativeNetwork {
     }
 }
 
-#[async_trait]
+#[cfg(not(target_arch = "wasm32"))]
+impl NetworkBounds for NativeNetwork {}
+
+#[cfg(target_arch = "wasm32")]
+impl NetworkBounds for NativeNetwork {}
+
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 impl NetworkProvider for NativeNetwork {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse> {
         let mut req = match request.method.as_str() {
@@ -383,6 +402,13 @@ impl NativeStorage {
         self.storage_path.join(format!("{}.bin", safe_key))
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+impl StorageBounds for NativeStorage {}
+
+#[cfg(target_arch = "wasm32")]
+impl StorageBounds for NativeStorage {}
+
 
 #[async_trait]
 impl StorageProvider for NativeStorage {

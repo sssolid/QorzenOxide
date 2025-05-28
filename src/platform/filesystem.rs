@@ -1,5 +1,6 @@
 // src/platform/filesystem.rs
 
+use std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -26,10 +27,18 @@ pub struct FileMetadata {
     pub accessed: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub type DynFileSystem = dyn FileSystemProvider + Send + Sync;
+
+#[cfg(target_arch = "wasm32")]
+pub type DynFileSystem = dyn FileSystemProvider + Send + Sync;
+
+pub type FileSystemArc = Arc<DynFileSystem>;
+
 /// File system operations
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-pub trait FileSystemProvider: Send + Sync {
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+pub trait FileSystemProvider {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>>;
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<()>;
     async fn delete_file(&self, path: &str) -> Result<()>;
@@ -39,14 +48,8 @@ pub trait FileSystemProvider: Send + Sync {
     async fn get_metadata(&self, path: &str) -> Result<FileMetadata>;
 }
 
-// #[cfg(target_arch = "wasm32")]
-// #[async_trait(?Send)]
-// pub trait FileSystemProvider: Sync {
-//     async fn read_file(&self, path: &str) -> Result<Vec<u8>>;
-//     async fn write_file(&self, path: &str, data: &[u8]) -> Result<()>;
-//     async fn delete_file(&self, path: &str) -> Result<()>;
-//     async fn list_directory(&self, path: &str) -> Result<Vec<FileInfo>>;
-//     async fn create_directory(&self, path: &str) -> Result<()>;
-//     async fn file_exists(&self, path: &str) -> bool;
-//     async fn get_metadata(&self, path: &str) -> Result<FileMetadata>;
-// }
+#[cfg(not(target_arch = "wasm32"))]
+pub trait FileSystemBounds: Send + Sync {}
+
+#[cfg(target_arch = "wasm32")]
+pub trait FileSystemBounds: Sync {}

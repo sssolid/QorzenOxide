@@ -22,6 +22,10 @@ pub use database::{DatabaseProvider, Migration, QueryResult, Row, Transaction};
 pub use filesystem::{FileInfo, FileMetadata, FileSystemProvider};
 pub use network::{NetworkProvider, NetworkRequest, NetworkResponse};
 pub use storage::StorageProvider;
+use crate::platform::database::DatabaseArc;
+use crate::platform::filesystem::FileSystemArc;
+use crate::platform::network::NetworkArc;
+use crate::platform::storage::StorageArc;
 
 /// Platform capabilities detection
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,10 +64,10 @@ impl Default for PlatformCapabilities {
 /// Main platform manager that coordinates all platform providers
 pub struct PlatformManager {
     state: ManagedState,
-    filesystem: Box<dyn FileSystemProvider>,
-    database: Box<dyn DatabaseProvider>,
-    network: Box<dyn NetworkProvider>,
-    storage: Box<dyn StorageProvider>,
+    filesystem: FileSystemArc,
+    database: DatabaseArc,
+    network: NetworkArc,
+    storage: StorageArc,
     capabilities: PlatformCapabilities,
 }
 
@@ -275,8 +279,8 @@ impl Manager for PlatformManager {
 
 /// Platform provider collection
 pub struct PlatformProviders {
-    pub filesystem: Box<dyn FileSystemProvider>,
-    pub database: Box<dyn DatabaseProvider>,
-    pub network: Box<dyn NetworkProvider>,
-    pub storage: Box<dyn StorageProvider>,
+    pub filesystem: FileSystemArc,
+    pub database: DatabaseArc,
+    pub network: NetworkArc,
+    pub storage: StorageArc,
 }

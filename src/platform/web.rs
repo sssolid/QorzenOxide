@@ -2,12 +2,17 @@
 
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::*;
 
 use crate::error::{Error, Result};
 use crate::platform::*;
+use crate::platform::database::DatabaseBounds;
+use crate::platform::native::NativeNetwork;
+use crate::platform::network::NetworkBounds;
+use crate::platform::storage::StorageBounds;
 
 #[cfg(target_arch = "wasm32")]
 #[global_allocator]
@@ -21,10 +26,10 @@ pub fn main() {
 
 pub fn create_providers() -> Result<PlatformProviders> {
     Ok(PlatformProviders {
-        filesystem: Box::new(WebFileSystem::new()?),
-        database: Box::new(IndexedDbDatabase::new()?),
-        network: Box::new(FetchNetwork::new()),
-        storage: Box::new(WebStorage::new()?),
+        filesystem: Arc::new(WebFileSystem::new()?),
+        database: Arc::new(IndexedDbDatabase::new()?),
+        network: Arc::new(FetchNetwork::new()),
+        storage: Arc::new(WebStorage::new()?),
     })
 }
 
@@ -176,7 +181,14 @@ impl IndexedDbDatabase {
     }
 }
 
-#[async_trait(?Send)]
+#[cfg(not(target_arch = "wasm32"))]
+impl DatabaseBounds for IndexedDbDatabase {}
+
+#[cfg(target_arch = "wasm32")]
+impl DatabaseBounds for IndexedDbDatabase {}
+
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 impl DatabaseProvider for IndexedDbDatabase {
     async fn execute(&self, _query: &str, _params: &[serde_json::Value]) -> Result<QueryResult> {
         Err(Error::platform(
@@ -203,7 +215,14 @@ impl FetchNetwork {
     }
 }
 
-#[async_trait(?Send)]
+#[cfg(not(target_arch = "wasm32"))]
+impl NetworkBounds for FetchNetwork {}
+
+#[cfg(target_arch = "wasm32")]
+impl NetworkBounds for FetchNetwork {}
+
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 impl NetworkProvider for FetchNetwork {
     async fn request(&self, request: NetworkRequest) -> Result<NetworkResponse> {
         let window = window().unwrap();
@@ -291,7 +310,14 @@ impl WebStorage {
     }
 }
 
-#[async_trait(?Send)]
+#[cfg(not(target_arch = "wasm32"))]
+impl StorageBounds for WebStorage {}
+
+#[cfg(target_arch = "wasm32")]
+impl StorageBounds for WebStorage {}
+
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 impl StorageProvider for WebStorage {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let storage = self.get_storage()?;
