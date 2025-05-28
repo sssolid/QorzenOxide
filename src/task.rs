@@ -195,6 +195,52 @@ pub trait ProgressReporter: Send + Sync + fmt::Debug {
     }
 }
 
+// Platform-specific cancellation token implementation
+#[derive(Debug, Clone)]
+pub struct CancellationToken {
+    #[cfg(not(target_arch = "wasm32"))]
+    inner: tokio_util::sync::CancellationToken,
+    #[cfg(target_arch = "wasm32")]
+    cancelled: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl CancellationToken {
+    pub fn new() -> Self {
+        Self {
+            #[cfg(not(target_arch = "wasm32"))]
+            inner: tokio_util::sync::CancellationToken::new(),
+            #[cfg(target_arch = "wasm32")]
+            cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.inner.cancel();
+        #[cfg(target_arch = "wasm32")]
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.inner.is_cancelled();
+        #[cfg(target_arch = "wasm32")]
+        return self.cancelled.load(Ordering::SeqCst);
+    }
+
+    pub async fn cancelled(&self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.inner.cancelled().await;
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Simple polling implementation for WASM
+            while !self.is_cancelled() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TaskContext {
     pub task_id: Uuid,
@@ -203,7 +249,7 @@ pub struct TaskContext {
     pub plugin_id: Option<String>,
     pub correlation_id: Option<CorrelationId>,
     pub progress: Arc<dyn ProgressReporter>,
-    pub cancellation_token: tokio_util::sync::CancellationToken,
+    pub cancellation_token: CancellationToken,
     pub metadata: Metadata,
 }
 
@@ -231,8 +277,8 @@ impl TaskContext {
 
 pub type TaskFunction = Arc<
     dyn Fn(TaskContext) -> Pin<Box<dyn Future<Output = Result<serde_json::Value>> + Send>>
-        + Send
-        + Sync,
+    + Send
+    + Sync,
 >;
 
 pub struct TaskDefinition {
@@ -343,7 +389,7 @@ impl TaskInfo {
 struct TaskExecution {
     info: TaskInfo,
     definition: TaskDefinition,
-    cancellation_token: tokio_util::sync::CancellationToken,
+    cancellation_token: CancellationToken,
     progress_sender: broadcast::Sender<TaskProgress>,
 }
 
@@ -542,7 +588,7 @@ impl TaskManager {
         }
 
         let (progress_sender, _) = broadcast::channel(100);
-        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        let cancellation_token = CancellationToken::new();
 
         let execution = TaskExecution {
             info: task_info.clone(),
@@ -622,7 +668,7 @@ impl TaskManager {
                 TaskStatus::Running,
                 TaskStatus::Cancelled,
             )
-            .await;
+                .await;
 
             Ok(true)
         } else {
@@ -1100,7 +1146,8 @@ impl TaskManager {
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl Manager for TaskManager {
     fn name(&self) -> &str {
         "task_manager"

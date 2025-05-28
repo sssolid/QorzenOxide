@@ -181,18 +181,16 @@ impl Default for ManagerMetrics {
     }
 }
 
-// Native platforms require Send + Sync
+// Platform-specific trait bounds
 #[cfg(not(target_arch = "wasm32"))]
 pub trait PlatformSync: Send + Sync {}
 #[cfg(not(target_arch = "wasm32"))]
 impl<T: Send + Sync> PlatformSync for T {}
 
-// WASM does not require Send
 #[cfg(target_arch = "wasm32")]
 pub trait PlatformSync {}
 #[cfg(target_arch = "wasm32")]
 impl<T> PlatformSync for T {}
-
 
 /// Core trait for all system managers - conditional Send requirement based on target
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -312,123 +310,6 @@ pub trait Manager: PlatformSync + fmt::Debug {
     }
 }
 
-// #[cfg(target_arch = "wasm32")]
-// #[async_trait(?Send)]
-// pub trait Manager: Sync + fmt::Debug {
-//     /// Returns the manager name
-//     fn name(&self) -> &str;
-// 
-//     /// Returns the manager ID
-//     fn id(&self) -> Uuid;
-// 
-//     /// Initializes the manager
-//     async fn initialize(&mut self) -> Result<()>;
-// 
-//     /// Shuts down the manager
-//     async fn shutdown(&mut self) -> Result<()>;
-// 
-//     /// Returns current status
-//     async fn status(&self) -> ManagerStatus;
-// 
-//     /// Performs health check
-//     async fn health_check(&self) -> HealthStatus {
-//         let status = self.status().await;
-//         match status.state {
-//             ManagerState::Running => HealthStatus::Healthy,
-//             ManagerState::Paused | ManagerState::Maintenance => HealthStatus::Degraded,
-//             ManagerState::Error => HealthStatus::Unhealthy,
-//             _ => HealthStatus::Unknown,
-//         }
-//     }
-// 
-//     /// Pauses the manager
-//     async fn pause(&mut self) -> Result<()> {
-//         Err(Error::manager(
-//             self.name(),
-//             ManagerOperation::Pause,
-//             "Pause operation not supported",
-//         ))
-//     }
-// 
-//     /// Resumes the manager
-//     async fn resume(&mut self) -> Result<()> {
-//         Err(Error::manager(
-//             self.name(),
-//             ManagerOperation::Resume,
-//             "Resume operation not supported",
-//         ))
-//     }
-// 
-//     /// Restarts the manager
-//     async fn restart(&mut self) -> Result<()> {
-//         self.shutdown().await?;
-//         self.initialize().await
-//     }
-// 
-//     /// Gets current configuration
-//     async fn get_config(&self) -> Option<serde_json::Value> {
-//         None
-//     }
-// 
-//     /// Updates configuration
-//     async fn update_config(&mut self, _config: serde_json::Value) -> Result<()> {
-//         Err(Error::manager(
-//             self.name(),
-//             ManagerOperation::Configure,
-//             "Configuration update not supported",
-//         ))
-//     }
-// 
-//     /// Returns dependencies
-//     fn dependencies(&self) -> Vec<String> {
-//         Vec::new()
-//     }
-// 
-//     /// Returns initialization priority
-//     fn priority(&self) -> i32 {
-//         0
-//     }
-// 
-//     /// Checks if manager is essential for system operation
-//     fn is_essential(&self) -> bool {
-//         false
-//     }
-// 
-//     /// Returns manager version
-//     fn version(&self) -> Option<String> {
-//         None
-//     }
-// 
-//     /// Returns manager description
-//     fn description(&self) -> Option<String> {
-//         None
-//     }
-// 
-//     /// Checks if manager supports runtime reloading
-//     fn supports_runtime_reload(&self) -> bool {
-//         false
-//     }
-// 
-//     /// Reloads configuration at runtime
-//     async fn reload_config(&mut self, _config: serde_json::Value) -> Result<()> {
-//         Err(Error::manager(
-//             self.name(),
-//             ManagerOperation::Reload,
-//             "Runtime configuration reload not supported",
-//         ))
-//     }
-// 
-//     /// Returns required permissions
-//     fn required_permissions(&self) -> Vec<String> {
-//         Vec::new()
-//     }
-// 
-//     /// Returns platform requirements
-//     fn platform_requirements(&self) -> PlatformRequirements {
-//         PlatformRequirements::default()
-//     }
-// }
-
 /// Managed state container for managers
 pub struct ManagedState {
     id: Uuid,
@@ -535,53 +416,26 @@ mod tests {
         }
     }
 
-    // #[async_trait]
-    // impl Manager for TestManager {
-    //     fn name(&self) -> &str {
-    //         self.state.name()
-    //     }
-    // 
-    //     fn id(&self) -> Uuid {
-    //         self.state.id()
-    //     }
-    // 
-    //     async fn initialize(&mut self) -> Result<()> {
-    //         self.state.set_state(ManagerState::Running).await;
-    //         Ok(())
-    //     }
-    // 
-    //     async fn shutdown(&mut self) -> Result<()> {
-    //         self.state.set_state(ManagerState::Shutdown).await;
-    //         Ok(())
-    //     }
-    // 
-    //     async fn status(&self) -> ManagerStatus {
-    //         self.state.status().await
-    //     }
-    // }
-    // 
-    // #[tokio::test]
-    // async fn test_manager_lifecycle() {
-    //     let mut manager = TestManager::new("test_manager");
-    // 
-    //     assert_eq!(manager.name(), "test_manager");
-    //     assert_eq!(manager.current_state().await, ManagerState::Created);
-    // 
-    //     manager.initialize().await.unwrap();
-    //     assert_eq!(manager.current_state().await, ManagerState::Running);
-    // 
-    //     manager.shutdown().await.unwrap();
-    //     assert_eq!(manager.current_state().await, ManagerState::Shutdown);
-    // 
-    // }
-    // 
-    // #[tokio::test]
-    // async fn test_manager_status() {
-    //     let manager = TestManager::new("test_manager");
-    //     let status = manager.status().await;
-    // 
-    //     assert_eq!(status.name, "test_manager");
-    //     assert_eq!(status.state, ManagerState::Created);
-    //     assert_eq!(status.health, HealthStatus::Unknown);
-    // }
+    #[test]
+    fn test_manager_status_creation() {
+        let manager = TestManager::new("test_manager");
+        assert_eq!(manager.state.name(), "test_manager");
+    }
+
+    #[tokio::test]
+    async fn test_managed_state_operations() {
+        let state = ManagedState::new(Uuid::new_v4(), "test");
+
+        assert_eq!(state.state().await, ManagerState::Created);
+
+        state.set_state(ManagerState::Running).await;
+        assert_eq!(state.state().await, ManagerState::Running);
+
+        state.set_health(HealthStatus::Healthy).await;
+        assert_eq!(state.health().await, HealthStatus::Healthy);
+
+        state.set_message("Test message").await;
+        let status = state.status().await;
+        assert_eq!(status.message, Some("Test message".to_string()));
+    }
 }

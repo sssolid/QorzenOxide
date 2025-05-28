@@ -181,8 +181,20 @@ impl Error {
             correlation_id: None,
             timestamp: Utc::now(),
             metadata: std::collections::HashMap::new(),
-            backtrace: Some(std::backtrace::Backtrace::capture().to_string()),
+            backtrace: Self::capture_backtrace(),
             causes: Vec::new(),
+        }
+    }
+
+    /// Capture backtrace if available on the platform
+    fn capture_backtrace() -> Option<String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Some(std::backtrace::Backtrace::capture().to_string())
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            None
         }
     }
 
@@ -247,7 +259,7 @@ impl Error {
             },
             message,
         )
-        .severity(ErrorSeverity::High)
+            .severity(ErrorSeverity::High)
     }
 
     /// Creates a manager operation error
@@ -263,7 +275,7 @@ impl Error {
             },
             message,
         )
-        .severity(ErrorSeverity::High)
+            .severity(ErrorSeverity::High)
     }
 
     /// Creates a platform-specific error
@@ -280,7 +292,7 @@ impl Error {
             },
             message,
         )
-        .severity(ErrorSeverity::Medium)
+            .severity(ErrorSeverity::Medium)
     }
 
     /// Creates a permission error
@@ -292,7 +304,7 @@ impl Error {
             },
             message,
         )
-        .severity(ErrorSeverity::High)
+            .severity(ErrorSeverity::High)
     }
 
     /// Creates a plugin error
@@ -305,7 +317,7 @@ impl Error {
             },
             message,
         )
-        .severity(ErrorSeverity::Medium)
+            .severity(ErrorSeverity::Medium)
     }
 
     /// Creates an authentication error
@@ -318,7 +330,7 @@ impl Error {
             },
             msg,
         )
-        .severity(ErrorSeverity::High)
+            .severity(ErrorSeverity::High)
     }
 
     /// Creates an authorization error
@@ -335,7 +347,7 @@ impl Error {
             },
             message,
         )
-        .severity(ErrorSeverity::High)
+            .severity(ErrorSeverity::High)
     }
 
     /// Creates a file operation error
@@ -449,7 +461,7 @@ where
                 },
                 e.to_string(),
             )
-            .caused_by(e)
+                .caused_by(e)
         })
     }
 
