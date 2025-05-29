@@ -1,9 +1,9 @@
 [build]
-target = "public/index.html"
+target = "index.html"
 dist = "dist"
 
 [watch]
-watch = ["src"]
+watch = ["src", "public"]
 ignore = ["dist", "target"]
 
 [serve]
@@ -11,6 +11,12 @@ addresses = ["127.0.0.1"]
 port = 8080
 open = false
 
+# Copy the entire public directory
 [[copy]]
-source = "public/tailwind.css"
-dest = "tailwind.css"
+source = "public/"
+dest = "./"
+
+# Alternatively, if you want more control, copy specific files:
+# [[copy]]
+# source = "public/tailwind.css"
+# dest = "tailwind.css"

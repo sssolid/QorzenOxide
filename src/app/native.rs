@@ -17,7 +17,7 @@ use crate::auth::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 use crate::concurrency::ConcurrencyManager;
-use crate::error::{Error, ErrorKind, ManagerOperation, Result, ResultExt};
+use crate::error::{Error, ErrorKind, Result};  // Removed unused imports
 use crate::event::EventBusManager;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::file::FileManager;

@@ -232,7 +232,7 @@ fn InstalledPluginsTab(plugins: Vec<PluginInfo>, search_query: String) -> Elemen
                 for plugin in filtered_plugins {
                     PluginCard {
                         key: "{plugin.id}",
-                        plugin: plugin,
+                        plugin: plugin.clone(),
                         is_installed: true
                     }
                 }
@@ -268,7 +268,7 @@ fn AvailablePluginsTab(plugins: Vec<PluginInfo>, search_query: String) -> Elemen
                 for plugin in filtered_plugins {
                     PluginCard {
                         key: "{plugin.id}",
-                        plugin: plugin,
+                        plugin: plugin.clone(),
                         is_installed: false
                     }
                 }
@@ -295,7 +295,7 @@ fn UpdatesTab() -> Element {
                 for update in updates {
                     UpdateCard {
                         key: "{update.plugin_id}",
-                        update: update
+                        update: update.clone()
                     }
                 }
             }

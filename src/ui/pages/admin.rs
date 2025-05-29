@@ -327,7 +327,7 @@ fn UsersTab() -> Element {
                 ul {
                     class: "divide-y divide-gray-200",
                     for user in filtered_users {
-                        UserListItem { key: "{user.id}", user: user }
+                        UserListItem { key: "{user.id}", user: user.clone() }
                     }
                 }
             }
@@ -503,7 +503,7 @@ fn PluginsTab() -> Element {
             div {
                 class: "space-y-4",
                 for plugin in plugins {
-                    PluginListItem { key: "{plugin.id}", plugin: plugin }
+                    PluginListItem { key: "{plugin.id}", plugin: plugin.clone() }
                 }
             }
         }
@@ -619,7 +619,7 @@ fn LogsTab() -> Element {
                 div {
                     class: "space-y-2",
                     for log in logs {
-                        LogEntry { key: "{log.id}", log: log }
+                        LogEntry { key: "{log.id}", log: log.clone() }
                     }
                 }
             }
@@ -741,7 +741,7 @@ fn SystemAlerts() -> Element {
             div {
                 class: "space-y-3",
                 for alert in alerts {
-                    SystemAlertItem { key: "{alert.id}", alert: alert }
+                    SystemAlertItem { key: "{alert.id}", alert: alert.clone() }
                 }
             }
         }
@@ -843,7 +843,7 @@ fn SystemServicesList() -> Element {
         div {
             class: "space-y-3",
             for service in services {
-                SystemServiceItem { key: "{service.name}", service: service }
+                SystemServiceItem { key: "{service.name}", service: service.clone() }
             }
         }
     }

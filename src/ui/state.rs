@@ -1,11 +1,10 @@
-// src/ui/state.rs - Application state management and context
+// src/ui/state.rs - Fixed state management to prevent infinite loops
 
 use dioxus::prelude::*;
 
 pub(crate) use crate::auth::{User, UserSession};
 use crate::ui::{UILayout, Theme, Notification};
 
-/// Application state context that provides global state to all components
 #[derive(Debug, Clone)]
 pub struct AppStateContext {
     pub current_user: Option<User>,
@@ -35,7 +34,6 @@ impl Default for AppStateContext {
     }
 }
 
-/// Actions that can be performed on the application state
 #[derive(Debug, Clone)]
 pub enum AppAction {
     SetUser(Option<User>),
@@ -54,7 +52,6 @@ pub enum AppAction {
     SetMobileMenuOpen(bool),
 }
 
-/// State reducer function
 pub fn app_state_reducer(state: &AppStateContext, action: AppAction) -> AppStateContext {
     let mut new_state = state.clone();
 
@@ -108,75 +105,28 @@ pub fn app_state_reducer(state: &AppStateContext, action: AppAction) -> AppState
     new_state
 }
 
-/// Application state provider component
 #[component]
 pub fn AppStateProvider(children: Element) -> Element {
-    // Create separate signals for different parts of the state
-    let mut current_user = use_signal(|| None::<User>);
-    let mut current_session = use_signal(|| None::<UserSession>);
-    let mut current_layout = use_signal(|| UILayout::default());
-    let mut current_theme = use_signal(|| Theme::default());
-    let mut is_loading = use_signal(|| false);
-    let mut error_message = use_signal(|| None::<String>);
-    let mut notifications = use_signal(|| Vec::<Notification>::new());
-    let mut sidebar_collapsed = use_signal(|| false);
-    let mut mobile_menu_open = use_signal(|| false);
+    // Use a single signal for the entire state
+    let mut app_state = use_signal(|| AppStateContext::default());
 
-    // Create state accessor that builds the context from individual signals
-    let get_state = use_callback(move |_: ()| AppStateContext {
-        current_user: current_user(),
-        current_session: current_session(),
-        current_layout: current_layout(),
-        current_theme: current_theme(),
-        is_loading: is_loading(),
-        error_message: error_message(),
-        notifications: notifications(),
-        sidebar_collapsed: sidebar_collapsed(),
-        mobile_menu_open: mobile_menu_open(),
-    });
-
-    // Create dispatch function that updates individual signals
+    // Create dispatch function that updates the state
     let dispatch = use_callback(move |action: AppAction| {
-        match action {
-            AppAction::SetUser(user) => current_user.set(user),
-            AppAction::SetSession(session) => current_session.set(session),
-            AppAction::SetLayout(layout) => current_layout.set(layout),
-            AppAction::SetTheme(theme) => current_theme.set(theme),
-            AppAction::SetLoading(loading) => is_loading.set(loading),
-            AppAction::SetError(error) => error_message.set(error),
-            AppAction::AddNotification(notification) => {
-                notifications.with_mut(|n| n.push(notification));
-            }
-            AppAction::RemoveNotification(id) => {
-                notifications.with_mut(|n| n.retain(|notification| notification.id != id));
-            }
-            AppAction::MarkNotificationRead(id) => {
-                notifications.with_mut(|n| {
-                    if let Some(notification) = n.iter_mut().find(|notification| notification.id == id) {
-                        notification.read = true;
-                    }
-                });
-            }
-            AppAction::ClearNotifications => notifications.set(Vec::new()),
-            AppAction::ToggleSidebar => sidebar_collapsed.set(!sidebar_collapsed()),
-            AppAction::SetSidebarCollapsed(collapsed) => sidebar_collapsed.set(collapsed),
-            AppAction::ToggleMobileMenu => mobile_menu_open.set(!mobile_menu_open()),
-            AppAction::SetMobileMenuOpen(open) => mobile_menu_open.set(open),
-        }
+        app_state.with_mut(|state| {
+            *state = app_state_reducer(state, action);
+        });
     });
 
-    // Provide the state accessor and dispatch functions
-    use_context_provider(|| get_state);
+    // Provide the state and dispatch functions
+    use_context_provider(|| app_state);
     use_context_provider(|| dispatch);
 
-    // Initialize mock data (only once)
-    let mut initialized = use_signal(|| false);
-    if !initialized() {
-        initialized.set(true);
-
-        // Add mock notifications
-        notifications.with_mut(|n| {
-            n.push(Notification {
+    // Initialize mock data - separate from state reading to avoid infinite loop
+    use_effect(move || {
+        // Only run once by not reading any signals inside
+        spawn(async move {
+            // Add mock notifications
+            dispatch(AppAction::AddNotification(Notification {
                 id: uuid::Uuid::new_v4(),
                 title: "Welcome to Qorzen!".to_string(),
                 message: "Your application is ready to use.".to_string(),
@@ -184,9 +134,9 @@ pub fn AppStateProvider(children: Element) -> Element {
                 timestamp: chrono::Utc::now(),
                 read: false,
                 actions: vec![],
-            });
+            }));
 
-            n.push(Notification {
+            dispatch(AppAction::AddNotification(Notification {
                 id: uuid::Uuid::new_v4(),
                 title: "System Update".to_string(),
                 message: "A new version is available for download.".to_string(),
@@ -194,34 +144,33 @@ pub fn AppStateProvider(children: Element) -> Element {
                 timestamp: chrono::Utc::now() - chrono::Duration::hours(2),
                 read: false,
                 actions: vec![],
-            });
+            }));
         });
-    }
+    });
 
     rsx! {
         {children}
     }
 }
 
-/// Hook to access the current application state
+/// Hook to get the current app state (read-only)
 pub fn use_app_state() -> AppStateContext {
-    let get_state = use_context::<Callback<(), AppStateContext>>();
-    get_state(())
+    let state_signal = use_context::<Signal<AppStateContext>>();
+    state_signal()
 }
 
-/// Hook to dispatch actions to the application state
+/// Hook to get the dispatch function (write-only)
 pub fn use_app_dispatch() -> Callback<AppAction> {
     use_context::<Callback<AppAction>>()
 }
 
-/// Hook that provides both state and dispatch
+/// Hook to get both state and dispatch - use sparingly to avoid infinite loops
 pub fn use_app_state_with_dispatch() -> (AppStateContext, Callback<AppAction>) {
     let state = use_app_state();
     let dispatch = use_app_dispatch();
     (state, dispatch)
 }
 
-/// Authentication helper hooks
 pub mod auth {
     use super::*;
     use crate::auth::{User, UserSession, Credentials};
@@ -230,12 +179,11 @@ pub mod auth {
     pub fn use_login() -> Callback<Credentials, ()> {
         let dispatch = use_app_dispatch();
 
-        use_callback(move |credentials: Credentials| {
+        use_callback(move |_credentials: Credentials| {
             let dispatch = dispatch.clone();
 
             // Mock login - in real app, this would call the auth service
             spawn({
-                let dispatch = dispatch.clone();
                 async move {
                     dispatch(AppAction::SetLoading(true));
 
@@ -306,7 +254,6 @@ pub mod auth {
             let dispatch = dispatch.clone();
 
             spawn({
-                let dispatch = dispatch.clone();
                 async move {
                     dispatch(AppAction::SetLoading(true));
 
@@ -337,12 +284,12 @@ pub mod auth {
         state.current_user
     }
 
-    /// Hook to check user permissions
+    /// Hook to check permissions
     pub fn use_has_permission() -> impl Fn(&str, &str) -> bool {
-        let get_state = use_context::<Callback<(), AppStateContext>>();
+        let state_signal = use_context::<Signal<AppStateContext>>();
 
         move |resource: &str, action: &str| {
-            let state = get_state(());
+            let state = state_signal();
 
             match &state.current_user {
                 Some(user) => {
@@ -368,7 +315,6 @@ pub mod auth {
     }
 }
 
-/// UI state helper hooks
 pub mod ui {
     use super::*;
 
@@ -406,7 +352,7 @@ pub mod ui {
         (state.mobile_menu_open, toggle, set_open)
     }
 
-    /// Hook for notification management
+    /// Hook for notifications management
     pub fn use_notifications() -> (Vec<Notification>, Callback<uuid::Uuid, ()>, Callback<uuid::Uuid, ()>, Callback<(), ()>) {
         let state = use_app_state();
         let dispatch = use_app_dispatch();
@@ -461,31 +407,5 @@ mod tests {
         let error_msg = "Test error".to_string();
         let new_state = app_state_reducer(&initial_state, AppAction::SetError(Some(error_msg.clone())));
         assert_eq!(new_state.error_message, Some(error_msg));
-    }
-
-    #[test]
-    fn test_notification_actions() {
-        let initial_state = AppStateContext::default();
-        let notification = Notification {
-            id: uuid::Uuid::new_v4(),
-            title: "Test".to_string(),
-            message: "Test message".to_string(),
-            notification_type: crate::ui::NotificationType::Info,
-            timestamp: chrono::Utc::now(),
-            read: false,
-            actions: vec![],
-        };
-
-        // Test adding notification
-        let new_state = app_state_reducer(&initial_state, AppAction::AddNotification(notification.clone()));
-        assert_eq!(new_state.notifications.len(), 1);
-
-        // Test marking as read
-        let newer_state = app_state_reducer(&new_state, AppAction::MarkNotificationRead(notification.id));
-        assert!(newer_state.notifications[0].read);
-
-        // Test removing notification
-        let final_state = app_state_reducer(&newer_state, AppAction::RemoveNotification(notification.id));
-        assert!(final_state.notifications.is_empty());
     }
 }

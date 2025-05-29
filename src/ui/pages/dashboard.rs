@@ -10,10 +10,11 @@ use crate::ui::{
 };
 
 /// Main dashboard component
+// Main dashboard component
 #[component]
 pub fn Dashboard() -> Element {
     let app_state = use_app_state();
-    let mut loading = use_signal(|| false);
+    let loading = use_signal(|| false);  // Remove mut since we're not modifying
 
     // Clone user data to avoid borrowing issues
     let current_user = app_state.current_user.clone();
@@ -71,6 +72,7 @@ pub fn Dashboard() -> Element {
     }
 }
 
+/// Refresh button component
 /// Refresh button component
 #[component]
 fn RefreshButton(loading: Signal<bool>) -> Element {
@@ -192,14 +194,14 @@ fn StatisticsCards(stats: Vec<DashboardStat>) -> Element {
     rsx! {
         div {
             class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8",
-            for stat in stats {
+            for stat in stats.iter() {  // Use .iter() to avoid moving
                 StatCard {
                     key: "{stat.id}",
-                    title: stat.title,
-                    value: stat.value,
-                    change: stat.change,
-                    trend: stat.trend,
-                    icon: stat.icon
+                    title: stat.title.clone(),
+                    value: stat.value.clone(),
+                    change: stat.change.clone(),
+                    trend: stat.trend.clone(),
+                    icon: stat.icon.clone()
                 }
             }
         }
@@ -364,8 +366,11 @@ fn QuickActionsCard(actions: Vec<QuickAction>) -> Element {
                 class: "px-4 py-5 sm:p-6",
                 div {
                     class: "space-y-3",
-                    for action in actions {
-                        QuickActionItem { key: "{action.id}", action: action }
+                    for action in actions.iter() {  // Use .iter() to avoid moving
+                        QuickActionItem {
+                            key: "{action.id}",
+                            action: action.clone()  // Clone the action
+                        }
                     }
                 }
             }

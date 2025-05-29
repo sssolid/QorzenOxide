@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -33,14 +32,14 @@ pub struct ApplicationHealth {
     pub status: HealthStatus,
     pub uptime: Duration,
     pub managers: HashMap<String, HealthStatus>,
-    pub last_check: DateTime<Utc>,
+    pub last_check: f64,
     pub details: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationStats {
     pub version: String,
-    pub started_at: DateTime<Utc>,
+    pub started_at: f64,
     pub uptime: Duration,
     pub state: ApplicationState,
     pub manager_count: usize,
@@ -78,7 +77,7 @@ impl SystemInfo {
 
 pub struct ApplicationCore {
     state: ManagedState,
-    started_at: DateTime<Utc>,
+    started_at: f64,
 
     // Core managers for web
     platform_manager: Option<PlatformManager>,
@@ -109,7 +108,7 @@ impl ApplicationCore {
     pub fn new() -> Self {
         Self {
             state: ManagedState::new(Uuid::new_v4(), "application_core"),
-            started_at: Utc::now(),
+            started_at: js_sys::Date::now(),
             platform_manager: None,
             config_manager: None,
             event_bus_manager: None,
@@ -294,26 +293,24 @@ impl ApplicationCore {
             HealthStatus::Degraded
         };
 
+        let uptime = Duration::from_millis((js_sys::Date::now() - self.started_at) as u64);
+
         ApplicationHealth {
             status: overall_status,
-            uptime: Utc::now()
-                .signed_duration_since(self.started_at)
-                .to_std()
-                .unwrap_or_default(),
+            uptime: uptime,
             managers: manager_health,
-            last_check: Utc::now(),
+            last_check: js_sys::Date::now(),
             details: HashMap::new(),
         }
     }
 
     pub async fn get_stats(&self) -> ApplicationStats {
+        let uptime = Duration::from_millis((js_sys::Date::now() - self.started_at) as u64);
+        
         ApplicationStats {
             version: crate::VERSION.to_string(),
             started_at: self.started_at,
-            uptime: Utc::now()
-                .signed_duration_since(self.started_at)
-                .to_std()
-                .unwrap_or_default(),
+            uptime: uptime,
             state: ApplicationState::Running, // Simplified
             manager_count: 6, // Approximate count
             initialized_managers: 6,

@@ -1,4 +1,7 @@
-// src/main.rs - Application entry point with enhanced UI integration
+// src/main.rs - Fixed application entry point with proper WASM handling
+
+#![cfg_attr(all(target_os = "windows", not(target_arch = "wasm32")), windows_subsystem = "windows")]
+
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
@@ -7,77 +10,61 @@ use std::process;
 
 #[cfg(not(target_arch = "wasm32"))]
 use clap::{Parser, Subcommand};
+use dioxus::prelude::Element;
 use qorzen_oxide::ui::App;
 use qorzen_oxide::error::Result;
 
 #[cfg(not(target_arch = "wasm32"))]
 use qorzen_oxide::app::ApplicationCore;
 
-/// Command-line interface for native platforms
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Parser)]
 #[command(name = "qorzen-oxide", version = qorzen_oxide::VERSION)]
 #[command(about = "A modular, cross-platform application framework built with Rust and Dioxus")]
 struct Cli {
-    /// Configuration file path
     #[arg(short, long, value_name = "FILE")]
     config: Option<PathBuf>,
 
-    /// Enable verbose logging
     #[arg(short, long)]
     verbose: bool,
 
-    /// Enable debug logging
     #[arg(short, long)]
     debug: bool,
 
-    /// Run in headless mode (no GUI)
     #[arg(long)]
     headless: bool,
 
-    /// Subcommands
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
-/// Available commands
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Subcommand)]
 enum Commands {
-    /// Run the application
     Run {
-        /// Run in headless mode
         #[arg(long)]
         headless: bool
     },
 
-    /// Show application status
     Status,
 
-    /// Check application health
     Health,
 
-    /// Validate configuration file
     ValidateConfig {
-        /// Configuration file to validate
         #[arg(short, long)]
         config: Option<PathBuf>
     },
 
-    /// Start development server with hot reload
     #[cfg(debug_assertions)]
     Dev {
-        /// Port to serve on
         #[arg(short, long, default_value = "8080")]
         port: u16,
 
-        /// Host to bind to
         #[arg(long, default_value = "localhost")]
         host: String,
     },
 }
 
-/// Main entry point for native platforms
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     let cli = Cli::parse();
@@ -120,23 +107,19 @@ fn main() {
     }
 }
 
-/// Main entry point for WASM/web platform
+/// WASM entry point - Fixed to use web renderer instead of fullstack
 #[cfg(target_arch = "wasm32")]
 fn main() {
     // Set up panic hook for better error reporting in browser
     console_error_panic_hook::set_once();
 
-    // Initialize logging for web
-    wasm_logger::init(wasm_logger::Config::default());
+    // Set up logging for WASM
+    tracing_wasm::set_as_global_default();
 
-    // Log application start
-    web_sys::console::log_1(&format!("Starting Qorzen Oxide v{}", qorzen_oxide::VERSION).into());
-
-    // Launch the Dioxus application without hydration
+    // Launch the Dioxus application for web - use web renderer, not fullstack
     dioxus::launch(App);
 }
 
-/// Set up logging based on CLI arguments
 #[cfg(not(target_arch = "wasm32"))]
 fn setup_logging(cli: &Cli) {
     let level = if cli.debug {
@@ -156,7 +139,6 @@ fn setup_logging(cli: &Cli) {
     tracing::info!("Logging initialized at level: {:?}", level);
 }
 
-/// Print system information for debugging
 #[cfg(not(target_arch = "wasm32"))]
 fn print_system_info() {
     tracing::info!("=== System Information ===");
@@ -181,16 +163,27 @@ fn print_system_info() {
     tracing::info!("================================");
 }
 
-/// Run the UI application (desktop mode)
 #[cfg(not(target_arch = "wasm32"))]
 fn run_ui_application(_cli: &Cli) {
     tracing::info!("Starting Qorzen Oxide v{} (Desktop UI)", qorzen_oxide::VERSION);
-    
-    // Launch the desktop application
-    dioxus::launch(App);
+
+    // For Dioxus 0.6, we use the launch function with custom CSS injected via the App component
+    dioxus::launch(AppWithDesktopCSS);
 }
 
-/// Run the application in headless mode
+// Wrapper component for desktop that includes CSS
+#[cfg(not(target_arch = "wasm32"))]
+fn AppWithDesktopCSS() -> Element {
+    use dioxus::prelude::*;
+
+    rsx! {
+        document::Style {
+            {include_str!("../public/tailwind.css")}
+        }
+        App {}
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn run_headless_application(cli: &Cli) {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
@@ -203,7 +196,6 @@ fn run_headless_application(cli: &Cli) {
     });
 }
 
-/// Run a headless command
 #[cfg(not(target_arch = "wasm32"))]
 fn run_headless_command<F>(command: F)
 where
@@ -219,7 +211,6 @@ where
     });
 }
 
-/// Run the application core asynchronously
 #[cfg(not(target_arch = "wasm32"))]
 async fn run_application_async(cli: &Cli, headless: bool) -> Result<()> {
     tracing::info!("Starting Qorzen Oxide v{} (Headless)", qorzen_oxide::VERSION);
@@ -243,7 +234,6 @@ async fn run_application_async(cli: &Cli, headless: bool) -> Result<()> {
     Ok(())
 }
 
-/// Development server for hot reloading
 #[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
 fn run_dev_server(port: u16, host: String) {
     tracing::info!("Starting development server on {}:{}", host, port);
@@ -253,10 +243,9 @@ fn run_dev_server(port: u16, host: String) {
     println!("Open http://{}:{} in your browser", host, port);
 
     // Launch desktop app for now
-    dioxus::launch(App);
+    dioxus::launch(AppWithDesktopCSS);
 }
 
-/// Show application status
 #[cfg(not(target_arch = "wasm32"))]
 fn show_status() -> Result<()> {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
@@ -278,7 +267,6 @@ fn show_status() -> Result<()> {
     })
 }
 
-/// Check application health
 #[cfg(not(target_arch = "wasm32"))]
 fn check_health() -> Result<()> {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
@@ -309,7 +297,6 @@ fn check_health() -> Result<()> {
     })
 }
 
-/// Validate configuration file
 #[cfg(not(target_arch = "wasm32"))]
 fn validate_config(config_path: Option<PathBuf>) -> Result<()> {
     println!("Validating configuration...");

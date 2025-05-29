@@ -523,7 +523,7 @@ pub fn Tabs(
             class: format!("border-b border-gray-200 {}", class),
             nav {
                 class: "-mb-px flex space-x-8",
-                for tab in tabs {
+                for tab in tabs.iter() {  // Use .iter() instead of consuming
                     button {
                         key: "{tab.id}",
                         r#type: "button",
@@ -535,9 +535,13 @@ pub fn Tabs(
                                 "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                             }
                         ),
-                        onclick: move |_| {
-                            if let Some(handler) = &on_tab_change {
-                                handler.call(tab.id.clone());
+                        onclick: {
+                            let tab_id = tab.id.clone();
+                            let handler = on_tab_change.clone();
+                            move |_| {
+                                if let Some(ref handler) = handler {
+                                    handler.call(tab_id.clone());
+                                }
                             }
                         },
                         "{tab.label}"
