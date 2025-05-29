@@ -2,7 +2,6 @@
 
 #![cfg_attr(all(target_os = "windows", not(target_arch = "wasm32")), windows_subsystem = "windows")]
 
-
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
@@ -107,16 +106,19 @@ fn main() {
     }
 }
 
-/// WASM entry point - Fixed to use web renderer instead of fullstack
+/// WASM entry point - Fixed to use web launcher
 #[cfg(target_arch = "wasm32")]
 fn main() {
     // Set up panic hook for better error reporting in browser
     console_error_panic_hook::set_once();
+    
+    console_log::init_with_level(log::Level::Debug).expect("failed to init logger");
 
     // Set up logging for WASM
+    #[cfg(feature = "tracing-wasm")]
     tracing_wasm::set_as_global_default();
 
-    // Launch the Dioxus application for web - use web renderer, not fullstack
+    // Launch the Dioxus application for web
     dioxus::launch(App);
 }
 
@@ -167,7 +169,7 @@ fn print_system_info() {
 fn run_ui_application(_cli: &Cli) {
     tracing::info!("Starting Qorzen Oxide v{} (Desktop UI)", qorzen_oxide::VERSION);
 
-    // For Dioxus 0.6, we use the launch function with custom CSS injected via the App component
+    // For Dioxus desktop, we use the launch function with custom CSS injected via the App component
     dioxus::launch(AppWithDesktopCSS);
 }
 
@@ -178,6 +180,7 @@ fn AppWithDesktopCSS() -> Element {
 
     rsx! {
         document::Style {
+            // Include Tailwind CSS for desktop builds
             {include_str!("../public/tailwind.css")}
         }
         App {}

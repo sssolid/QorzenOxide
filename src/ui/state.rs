@@ -1,9 +1,11 @@
-// src/ui/state.rs - Fixed state management to prevent infinite loops
+// src/ui/state.rs - Fixed state management with cross-platform time support
 
 use dioxus::prelude::*;
 
 pub(crate) use crate::auth::{User, UserSession};
 use crate::ui::{UILayout, Theme, Notification};
+use crate::utils::Time;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub struct AppStateContext {
@@ -125,13 +127,16 @@ pub fn AppStateProvider(children: Element) -> Element {
     use_effect(move || {
         // Only run once by not reading any signals inside
         spawn(async move {
-            // Add mock notifications
+            // Add mock notifications using cross-platform time
+            let now = Time::now();
+            let two_hours_ago = now - Time::duration_hours(2);
+
             dispatch(AppAction::AddNotification(Notification {
                 id: uuid::Uuid::new_v4(),
                 title: "Welcome to Qorzen!".to_string(),
                 message: "Your application is ready to use.".to_string(),
                 notification_type: crate::ui::NotificationType::Info,
-                timestamp: chrono::Utc::now(),
+                timestamp: now,
                 read: false,
                 actions: vec![],
             }));
@@ -141,7 +146,7 @@ pub fn AppStateProvider(children: Element) -> Element {
                 title: "System Update".to_string(),
                 message: "A new version is available for download.".to_string(),
                 notification_type: crate::ui::NotificationType::System,
-                timestamp: chrono::Utc::now() - chrono::Duration::hours(2),
+                timestamp: two_hours_ago,
                 read: false,
                 actions: vec![],
             }));
@@ -182,7 +187,6 @@ pub mod auth {
         use_callback(move |_credentials: Credentials| {
             let dispatch = dispatch.clone();
 
-            // Mock login - in real app, this would call the auth service
             spawn({
                 async move {
                     dispatch(AppAction::SetLoading(true));
@@ -193,7 +197,11 @@ pub mod auth {
                     #[cfg(target_arch = "wasm32")]
                     gloo_timers::future::TimeoutFuture::new(1000).await;
 
-                    // Mock successful login
+                    // Mock successful login - using the Time utility correctly
+                    let now = Time::now();
+                    let thirty_days_ago = now - Time::duration_days(30);
+                    let eight_hours_from_now = now + Time::duration_hours(8);
+
                     let mock_user = User {
                         id: uuid::Uuid::new_v4(),
                         username: "demo_user".to_string(),
@@ -213,17 +221,17 @@ pub mod auth {
                                 emergency_contact: None,
                             },
                         },
-                        created_at: chrono::Utc::now() - chrono::Duration::days(30),
-                        last_login: Some(chrono::Utc::now()),
+                        created_at: thirty_days_ago,
+                        last_login: Some(now),
                         is_active: true,
                     };
 
                     let mock_session = UserSession {
                         id: uuid::Uuid::new_v4(),
                         user_id: mock_user.id,
-                        created_at: chrono::Utc::now(),
-                        expires_at: chrono::Utc::now() + chrono::Duration::hours(8),
-                        last_activity: chrono::Utc::now(),
+                        created_at: now,
+                        expires_at: eight_hours_from_now,
+                        last_activity: now,
                         ip_address: Some("127.0.0.1".to_string()),
                         user_agent: Some("Qorzen App".to_string()),
                         is_active: true,
@@ -237,7 +245,7 @@ pub mod auth {
                         title: "Login Successful".to_string(),
                         message: "Welcome back! You have been successfully logged in.".to_string(),
                         notification_type: crate::ui::NotificationType::Success,
-                        timestamp: chrono::Utc::now(),
+                        timestamp: Time::now(),
                         read: false,
                         actions: vec![],
                     }));

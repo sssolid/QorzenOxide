@@ -20,6 +20,7 @@ pub mod plugin;
 pub mod types;
 pub mod ui;
 pub mod utils;
+pub mod utils_general;
 
 // Native-only modules
 #[cfg(not(target_arch = "wasm32"))]
@@ -37,14 +38,3 @@ pub use error::{Error, ErrorKind, Result, ResultExt};
 pub use manager::{Manager, ManagerState, ManagerStatus};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-// WASM entry point
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub fn main() {
-    console_error_panic_hook::set_once();
-    dioxus::launch(ui::app);
-}

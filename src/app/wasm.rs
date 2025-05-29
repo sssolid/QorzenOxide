@@ -1,4 +1,4 @@
-// src/app/wasm.rs - WASM-specific application core
+// src/app/wasm.rs - Fixed WASM-specific application core
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,6 +16,7 @@ use crate::platform::PlatformManager;
 use crate::plugin::PluginManager;
 use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
 use crate::ui::UILayoutManager;
+use crate::utils::Time;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ApplicationState {
@@ -108,7 +109,7 @@ impl ApplicationCore {
     pub fn new() -> Self {
         Self {
             state: ManagedState::new(Uuid::new_v4(), "application_core"),
-            started_at: js_sys::Date::now(),
+            started_at: Time::now_millis() as f64,
             platform_manager: None,
             config_manager: None,
             event_bus_manager: None,
@@ -293,20 +294,22 @@ impl ApplicationCore {
             HealthStatus::Degraded
         };
 
-        let uptime = Duration::from_millis((js_sys::Date::now() - self.started_at) as u64);
+        let current_time = Time::now_millis() as f64;
+        let uptime = Duration::from_millis((current_time - self.started_at) as u64);
 
         ApplicationHealth {
             status: overall_status,
             uptime: uptime,
             managers: manager_health,
-            last_check: js_sys::Date::now(),
+            last_check: current_time,
             details: HashMap::new(),
         }
     }
 
     pub async fn get_stats(&self) -> ApplicationStats {
-        let uptime = Duration::from_millis((js_sys::Date::now() - self.started_at) as u64);
-        
+        let current_time = Time::now_millis() as f64;
+        let uptime = Duration::from_millis((current_time - self.started_at) as u64);
+
         ApplicationStats {
             version: crate::VERSION.to_string(),
             started_at: self.started_at,
@@ -327,6 +330,10 @@ impl ApplicationCore {
 
     pub async fn current_session(&self) -> Option<UserSession> {
         self.current_session.clone()
+    }
+
+    pub async fn get_state(&self) -> ApplicationState {
+        ApplicationState::Running // Simplified for WASM
     }
 }
 
