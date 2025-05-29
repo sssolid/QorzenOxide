@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use crate::utils::Time;
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -103,10 +104,10 @@ impl ManagerStatus {
             name: name.into(),
             state,
             health: HealthStatus::Unknown,
-            created_at: Utc::now(),
+            created_at: Time::now(),
             started_at: None,
             uptime: None,
-            last_updated: Utc::now(),
+            last_updated: Time::now(),
             message: None,
             metadata: HashMap::new(),
             metrics: ManagerMetrics::default(),
@@ -116,15 +117,15 @@ impl ManagerStatus {
     /// Updates the manager state
     pub fn update_state(&mut self, state: ManagerState) {
         self.state = state;
-        self.last_updated = Utc::now();
+        self.last_updated = Time::now();
 
         if state == ManagerState::Running && self.started_at.is_none() {
-            self.started_at = Some(Utc::now());
+            self.started_at = Some(Time::now());
         }
 
         if let Some(started) = self.started_at {
             if matches!(state, ManagerState::Running | ManagerState::Paused) {
-                self.uptime = Utc::now().signed_duration_since(started).to_std().ok();
+                self.uptime = Time::now().signed_duration_since(started).to_std().ok();
             }
         }
     }
@@ -132,25 +133,25 @@ impl ManagerStatus {
     /// Sets the health status
     pub fn set_health(&mut self, health: HealthStatus) {
         self.health = health;
-        self.last_updated = Utc::now();
+        self.last_updated = Time::now();
     }
 
     /// Sets a status message
     pub fn set_message(&mut self, message: impl Into<String>) {
         self.message = Some(message.into());
-        self.last_updated = Utc::now();
+        self.last_updated = Time::now();
     }
 
     /// Adds metadata to the status
     pub fn add_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
         self.metadata.insert(key.into(), value);
-        self.last_updated = Utc::now();
+        self.last_updated = Time::now();
     }
 
     /// Updates the metrics
     pub fn update_metrics(&mut self, metrics: ManagerMetrics) {
         self.metrics = metrics;
-        self.last_updated = Utc::now();
+        self.last_updated = Time::now();
     }
 }
 

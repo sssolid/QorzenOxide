@@ -16,10 +16,14 @@ impl Time {
         #[cfg(target_arch = "wasm32")]
         {
             let millis = js_sys::Date::now() as i64;
-            DateTime::from_timestamp_millis(millis).unwrap_or_else(|| {
-                // Fallback to a fixed date if conversion fails
-                DateTime::from_timestamp(1640995200, 0).unwrap() // 2022-01-01 00:00:00 UTC
-            })
+            match DateTime::from_timestamp_millis(millis) {
+                Some(dt) => dt,
+                None => {
+                    web_sys::console::error_1(&"Failed to create DateTime from JS timestamp".into());
+                    // Fallback to a fixed date
+                    DateTime::from_timestamp(1640995200, 0).unwrap()
+                }
+            }
         }
     }
 

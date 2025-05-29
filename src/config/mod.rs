@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use crate::utils::Time;
 use tokio::sync::broadcast;
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
@@ -586,7 +587,7 @@ impl ConfigManager {
             key: key.to_string(),
             value: serialized_value,
             old_value,
-            timestamp: Utc::now(),
+            timestamp: Time::now(),
             source: "config_manager".to_string(),
             metadata: HashMap::new(),
         };
@@ -650,7 +651,7 @@ impl ConfigManager {
             key: "_reload".to_string(),
             value: Value::String("reloaded".to_string()),
             old_value: None,
-            timestamp: Utc::now(),
+            timestamp: Time::now(),
             source: "config_manager".to_string(),
             metadata: HashMap::new(),
         };
@@ -1063,7 +1064,7 @@ mod tests {
             key: "test.value".to_string(),
             value: Value::Bool(false),
             old_value: None,
-            timestamp: Utc::now(),
+            timestamp: Time::now(),
             source: "test".to_string(),
             metadata: HashMap::new(),
         };

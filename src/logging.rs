@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use crate::utils::Time;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{Event, Subscriber};
@@ -239,7 +240,7 @@ where
         let entry = LogEntry {
             id: Uuid::new_v4(),
             level,
-            timestamp: Utc::now(),
+            timestamp: Time::now(),
             source: event.metadata().target().to_string(),
             message: format!("{:?}", event), // Simplified - would extract actual message
             target: event.metadata().target().to_string(),

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use crate::utils::Time;
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -228,7 +229,7 @@ impl PermissionCache {
     fn new() -> Self {
         Self {
             cache: HashMap::new(),
-            last_updated: Utc::now(),
+            last_updated: Time::now(),
         }
     }
 
@@ -241,12 +242,12 @@ impl PermissionCache {
     fn cache_permission(&mut self, user_id: UserId, resource: &str, action: &str, allowed: bool) {
         self.cache
             .insert((user_id, resource.to_string(), action.to_string()), allowed);
-        self.last_updated = Utc::now();
+        self.last_updated = Time::now();
     }
 
     fn clear_user_cache(&mut self, user_id: UserId) {
         self.cache.retain(|(id, _, _), _value| *id != user_id);
-        self.last_updated = Utc::now();
+        self.last_updated = Time::now();
     }
 }
 
@@ -456,7 +457,7 @@ impl AccountManager {
 
     pub async fn create_user(&self, mut user: User) -> Result<()> {
         // Set creation timestamp
-        user.created_at = Utc::now();
+        user.created_at = Time::now();
         user.id = Uuid::new_v4();
 
         // Store user
@@ -718,7 +719,7 @@ impl SessionStore for MemorySessionStore {
     }
 
     async fn cleanup_expired_sessions(&self) -> Result<u64> {
-        let now = Utc::now();
+        let now = Time::now();
         let mut sessions = self.sessions.write().await;
         let original_count = sessions.len();
 
@@ -751,7 +752,7 @@ impl SessionStore for MemorySessionStore {
     }
 
     async fn cleanup_expired_sessions(&self) -> Result<u64> {
-        let now = Utc::now();
+        let now = Time::now();
         let mut sessions = self.sessions.write().await;
         let original_count = sessions.len();
 
@@ -921,7 +922,7 @@ mod tests {
                     emergency_contact: None,
                 },
             },
-            created_at: Utc::now(),
+            created_at: Time::now(),
             last_login: None,
             is_active: true,
         };
@@ -969,7 +970,7 @@ mod tests {
                     emergency_contact: None,
                 },
             },
-            created_at: Utc::now(),
+            created_at: Time::now(),
             last_login: None,
             is_active: true,
         };

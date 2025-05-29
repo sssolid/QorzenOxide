@@ -115,7 +115,6 @@ fn main() {
     console_log::init_with_level(log::Level::Debug).expect("failed to init logger");
 
     // Set up logging for WASM
-    #[cfg(feature = "tracing-wasm")]
     tracing_wasm::set_as_global_default();
 
     // Launch the Dioxus application for web

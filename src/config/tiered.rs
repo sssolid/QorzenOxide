@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use crate::utils::Time;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{broadcast, RwLock};
@@ -190,7 +191,7 @@ impl ConfigChangeDetector {
                 value: Some(new_value.clone()),
                 old_value,
                 tier,
-                timestamp: Utc::now(),
+                timestamp: Time::now(),
                 source: source.to_string(),
                 correlation_id: None,
             };
@@ -212,7 +213,7 @@ impl ConfigSyncManager {
     pub fn new(sync_interval: Duration) -> Self {
         Self {
             sync_interval,
-            last_sync: RwLock::new(Utc::now()),
+            last_sync: RwLock::new(Time::now()),
             sync_enabled: true,
         }
     }
@@ -223,7 +224,7 @@ impl ConfigSyncManager {
         }
 
         // Implementation would sync with remote server
-        *self.last_sync.write().await = Utc::now();
+        *self.last_sync.write().await = Time::now();
         Ok(())
     }
 
@@ -693,7 +694,7 @@ impl ConfigStore for MemoryConfigStore {
             value: Some(value),
             old_value,
             tier: self.tier,
-            timestamp: Utc::now(),
+            timestamp: Time::now(),
             source: "memory_store".to_string(),
             correlation_id: None,
         };
@@ -740,7 +741,7 @@ impl ConfigStore for MemoryConfigStore {
             value: Some(value),
             old_value,
             tier: self.tier,
-            timestamp: Utc::now(),
+            timestamp: Time::now(),
             source: "memory_store".to_string(),
             correlation_id: None,
         };

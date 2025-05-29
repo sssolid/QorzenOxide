@@ -133,22 +133,35 @@ impl ApplicationCore {
         web_sys::console::log_1(&"Starting Qorzen web application initialization".into());
 
         // 1. Initialize platform manager
-        self.init_platform_manager().await?;
+        if let Err(e) = self.init_platform_manager().await {
+            web_sys::console::error_1(&format!("Platform manager init failed: {}", e).into());
+            return Err(e);
+        }
 
-        // 2. Initialize configuration system
-        self.init_config_manager().await?;
+        if let Err(e) = self.init_config_manager().await {
+            web_sys::console::error_1(&format!("Config manager init failed: {}", e).into());
+            return Err(e);
+        }
 
-        // 3. Initialize event bus
-        self.init_event_bus_manager().await?;
+        if let Err(e) = self.init_event_bus_manager().await {
+            web_sys::console::error_1(&format!("Event Bus manager init failed: {}", e).into());
+            return Err(e);
+        }
 
-        // 4. Initialize authentication
-        self.init_account_manager().await?;
+        if let Err(e) = self.init_account_manager().await {
+            web_sys::console::error_1(&format!("Account manager init failed: {}", e).into());
+            return Err(e);
+        }
 
-        // 5. Initialize UI system
-        self.init_ui_layout_manager().await?;
+        if let Err(e) = self.init_ui_layout_manager().await {
+            web_sys::console::error_1(&format!("UI Layout manager init failed: {}", e).into());
+            return Err(e);
+        }
 
-        // 6. Initialize plugin system
-        self.init_plugin_manager().await?;
+        if let Err(e) = self.init_plugin_manager().await {
+            web_sys::console::error_1(&format!("Plugin manager init failed: {}", e).into());
+            return Err(e);
+        }
 
         self.state.set_state(ManagerState::Running).await;
 

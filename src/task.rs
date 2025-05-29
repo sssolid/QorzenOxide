@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use crate::utils::Time;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock, Semaphore};
@@ -107,7 +108,7 @@ impl Default for TaskProgress {
             message: String::new(),
             current_step: None,
             total_steps: None,
-            updated_at: Utc::now(),
+            updated_at: Time::now(),
             metadata: HashMap::new(),
         }
     }
@@ -118,7 +119,7 @@ impl TaskProgress {
         Self {
             percent: percent.min(100),
             message: message.into(),
-            updated_at: Utc::now(),
+            updated_at: Time::now(),
             ..Default::default()
         }
     }
@@ -135,24 +136,24 @@ impl TaskProgress {
             message: message.into(),
             current_step: Some(current),
             total_steps: Some(total),
-            updated_at: Utc::now(),
+            updated_at: Time::now(),
             ..Default::default()
         }
     }
 
     pub fn set_percent(&mut self, percent: u8) {
         self.percent = percent.min(100);
-        self.updated_at = Utc::now();
+        self.updated_at = Time::now();
     }
 
     pub fn set_message(&mut self, message: impl Into<String>) {
         self.message = message.into();
-        self.updated_at = Utc::now();
+        self.updated_at = Time::now();
     }
 
     pub fn add_metadata(&mut self, key: impl Into<String>, value: serde_json::Value) {
         self.metadata.insert(key.into(), value);
-        self.updated_at = Utc::now();
+        self.updated_at = Time::now();
     }
 }
 
@@ -347,7 +348,7 @@ impl TaskInfo {
             status: TaskStatus::Pending,
             plugin_id: definition.plugin_id.clone(),
             dependencies: definition.dependencies.clone(),
-            created_at: Utc::now(),
+            created_at: Time::now(),
             started_at: None,
             completed_at: None,
             progress: TaskProgress::default(),
@@ -625,7 +626,7 @@ impl TaskManager {
                 name: task_info.name.clone(),
                 category: task_info.category,
                 priority: task_info.priority,
-                timestamp: Utc::now(),
+                timestamp: Time::now(),
                 source: "task_manager".to_string(),
                 metadata: task_info.metadata.clone(),
             };
@@ -649,7 +650,7 @@ impl TaskManager {
             // Cancel the task
             task.cancellation_token.cancel();
             task.info.status = TaskStatus::Cancelled;
-            task.info.completed_at = Some(Utc::now());
+            task.info.completed_at = Some(Time::now());
 
             // Update statistics
             {
@@ -824,7 +825,7 @@ impl TaskManager {
     }
 
     pub async fn cleanup_old_tasks(&self, max_age: Duration) -> u64 {
-        let cutoff_time = Utc::now() - chrono::Duration::from_std(max_age).unwrap_or_default();
+        let cutoff_time = Time::now() - chrono::Duration::from_std(max_age).unwrap_or_default();
         let mut removed_count = 0u64;
 
         let task_ids_to_remove: Vec<Uuid> = self
@@ -901,7 +902,7 @@ impl TaskManager {
 
                     if task_ref.info.status == TaskStatus::Pending {
                         task_ref.info.status = TaskStatus::Running;
-                        task_ref.info.started_at = Some(Utc::now());
+                        task_ref.info.started_at = Some(Time::now());
                         claimed = Some(task_id);
                         break;
                     }
@@ -939,7 +940,7 @@ impl TaskManager {
                                     name: task.info.name.clone(),
                                     old_status: TaskStatus::Pending,
                                     new_status: TaskStatus::Running,
-                                    timestamp: Utc::now(),
+                                    timestamp: Time::now(),
                                     source: "task_manager".to_string(),
                                     metadata: task.info.metadata.clone(),
                                 };
@@ -1041,7 +1042,7 @@ impl TaskManager {
                         if let Some(mut task_entry) = tasks.get_mut(&task_id) {
                             let task = task_entry.value_mut();
                             task.info.status = new_status;
-                            task.info.completed_at = Some(Utc::now());
+                            task.info.completed_at = Some(Time::now());
                             task.info.result = result;
 
                             // Send final progress update
@@ -1092,7 +1093,7 @@ impl TaskManager {
                                     .unwrap_or_default(),
                                 old_status: TaskStatus::Running,
                                 new_status,
-                                timestamp: Utc::now(),
+                                timestamp: Time::now(),
                                 source: "task_manager".to_string(),
                                 metadata: HashMap::new(),
                             };
@@ -1123,7 +1124,7 @@ impl TaskManager {
                 name: task_info.name.clone(),
                 old_status,
                 new_status,
-                timestamp: Utc::now(),
+                timestamp: Time::now(),
                 source: "task_manager".to_string(),
                 metadata: task_info.metadata.clone(),
             };

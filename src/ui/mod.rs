@@ -17,13 +17,13 @@ use crate::plugin::MenuItem;
 pub use app::App;
 
 // Module declarations
-mod app;
-mod components;
-mod layout;
-mod pages;
-mod router;
-mod state;
-mod desktop_css;
+pub mod app;
+pub mod components;
+pub mod layout;
+pub mod pages;
+pub mod router;
+pub mod state;
+pub mod desktop_css;
 
 // Re-exports for convenience
 pub use components::*;

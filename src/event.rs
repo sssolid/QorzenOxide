@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use crate::utils::Time;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
@@ -45,7 +46,7 @@ pub trait Event: Send + Sync + Debug {
 
     /// Get event timestamp (default implementation)
     fn timestamp(&self) -> DateTime<Utc> {
-        Utc::now()
+        Time::now()
     }
 
     /// Get event correlation ID if available
@@ -434,7 +435,7 @@ impl EventBusManager {
             id: subscription_id,
             filter,
             sender,
-            created_at: Utc::now(),
+            created_at: Time::now(),
             active: true,
             metadata: HashMap::new(),
         };
