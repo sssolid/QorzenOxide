@@ -38,7 +38,8 @@ log = "0.4.27"
 
 # Target-specific dependencies
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dioxus = { version = "0.6", features = ["macro", "html", "desktop"] }
+dioxus = { version = "0.6", features = ["macro", "html", "desktop", "router", "fullstack"] }
+dioxus-router = "0.6"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "sync", "time", "signal"] }
 tokio-util = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
@@ -53,7 +54,8 @@ sha2 = "0.10"
 num_cpus = "1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-dioxus = { version = "0.6", features = ["macro", "html", "web"] }
+dioxus = { version = "0.6", features = ["macro", "html", "web", "router", "fullstack"] }
+dioxus-router = "0.6"
 tokio = { version = "1.0", features = ["sync", "macros", "rt", "time"], default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 getrandom = { version = "0.2", features = ["js"] }
@@ -72,6 +74,10 @@ web-sys = { version = "0.3", features = [
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
 wee_alloc = "0.4"
+gloo-timers = { version = "0.3.0", features = ["futures"] }
+
+[package.metadata.dioxus]
+assets = ["public"]
 
 [dev-dependencies]
 tempfile = "3.10"

@@ -1,4 +1,4 @@
-// src/ui/mod.rs - Dioxus-based UI system with role-based layouts
+// src/ui/mod.rs - UI system coordinator
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,7 +11,25 @@ use uuid::Uuid;
 use crate::auth::{Permission, User, UserSession};
 use crate::error::Result;
 use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
-use crate::plugin::{MenuItem};
+use crate::plugin::MenuItem;
+
+// Re-export main app component
+pub use app::App;
+
+// Module declarations
+mod app;
+mod components;
+mod layout;
+mod pages;
+mod router;
+mod state;
+
+// Re-exports for convenience
+pub use components::*;
+pub use layout::*;
+pub use pages::*;
+pub use router::*;
+pub use state::*;
 
 /// UI layout configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -255,7 +273,7 @@ pub struct UILayoutManager {
     layouts: Arc<RwLock<HashMap<String, UILayout>>>,
     themes: Arc<RwLock<HashMap<String, Theme>>>,
     current_layout: Arc<RwLock<Option<UILayout>>>,
-    current_theme: Arc<RwLock<Option<Theme>>>
+    current_theme: Arc<RwLock<Option<Theme>>>,
 }
 
 impl std::fmt::Debug for UILayoutManager {
@@ -272,7 +290,7 @@ impl UILayoutManager {
             layouts: Arc::new(RwLock::new(HashMap::new())),
             themes: Arc::new(RwLock::new(HashMap::new())),
             current_layout: Arc::new(RwLock::new(None)),
-            current_theme: Arc::new(RwLock::new(None))
+            current_theme: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -594,32 +612,9 @@ impl Manager for UILayoutManager {
     }
 }
 
-/// Simple UI components for demo purposes
+/// Main app entry point - simple wrapper for the App component
 pub fn app() -> Element {
-    rsx! {
-        div {
-            class: "qorzen-app",
-            style: "min-height: 100vh; display: flex; flex-direction: column;",
-
-            header {
-                class: "app-header",
-                style: "padding: 1rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0;",
-                h1 { "Qorzen Application" }
-            }
-
-            main {
-                class: "app-main",
-                style: "flex: 1; padding: 2rem;",
-                p { "Welcome to Qorzen - your modular application platform." }
-            }
-
-            footer {
-                class: "app-footer",
-                style: "padding: 1rem; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;",
-                p { "© 2024 Qorzen" }
-            }
-        }
-    }
+    rsx! { App {} }
 }
 
 #[cfg(test)]

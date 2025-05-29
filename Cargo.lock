@@ -970,9 +970,11 @@ dependencies = [
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-logger",
+ "dioxus-router",
  "dioxus-signals",
  "dioxus-web",
  "manganis",
+ "serde",
  "warnings",
 ]
 
@@ -1271,6 +1273,34 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",
+]
+
+[[package]]
+name = "dioxus-router"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7266a76fc9e4a91f56499d1d1aecfff7168952b6627a6008b4e9748d6bf863e4"
+dependencies = [
+ "dioxus-cli-config",
+ "dioxus-history",
+ "dioxus-lib",
+ "dioxus-router-macro",
+ "rustversion",
+ "tracing",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "dioxus-router-macro"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2743ffb79e9a7d33d779c87d6deea2a6c047d0736012f95d63b909b83f0a6fd2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "slab",
+ "syn 2.0.101",
 ]
 
 [[package]]
@@ -2079,6 +2109,18 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3805,10 +3847,12 @@ dependencies = [
  "crossbeam",
  "dashmap",
  "dioxus",
+ "dioxus-router",
  "dirs 5.0.1",
  "flate2",
  "futures",
  "getrandom 0.2.12",
+ "gloo-timers",
  "hostname",
  "js-sys",
  "log",

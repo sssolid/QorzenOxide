@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>console.log("Index HTML loaded.");</script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Qorzen - A modular, cross-platform application framework">
+    <meta name="theme-color" content="#3b82f6">
+
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="/tailwind.css">
+
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a'
+                        }
+                    },
+                    fontFamily: {
+                        'sans': ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif']
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-in': 'slideIn 0.3s ease-out',
+                        'bounce-subtle': 'bounceSubtle 2s infinite'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideIn: {
+                            '0%': { transform: 'translateY(-10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        bounceSubtle: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-5px)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Custom CSS for additional styling -->
+    <style>
+        /* Custom scrollbar styles */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Firefox scrollbar */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 #f1f5f9;
+        }
+
+        /* Custom focus styles */
+        .focus-visible {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+
+        /* Smooth transitions for interactive elements */
+        .transition-all {
+            transition-property: all;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+        }
+
+        /* Custom backdrop blur for modals */
+        .backdrop-blur-sm {
+            backdrop-filter: blur(4px);
+        }
+
+        /* Loading skeleton animation */
+        @keyframes shimmer {
+            0% {
+                background-position: -200px 0;
+            }
+            100% {
+                background-position: calc(200px + 100%) 0;
+            }
+        }
+
+        .animate-shimmer {
+            animation: shimmer 2s linear infinite;
+            background: linear-gradient(110deg, #e2e8f0 8%, #f1f5f9 18%, #e2e8f0 33%);
+            background-size: 200px 100%;
+        }
+
+        /* Custom button hover effects */
+        .btn-hover-lift {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .btn-hover-lift:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Custom card hover effects */
+        .card-hover {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Status indicator animations */
+        .status-online {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .8;
+            }
+        }
+
+        /* Improved form field focus */
+        .form-input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Custom notification slide animations */
+        .notification-enter {
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        .notification-exit {
+            animation: slideOutRight 0.3s ease-in;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        /* Dark mode support (if needed later) */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-primary: #1f2937;
+                --bg-secondary: #374151;
+                --text-primary: #f9fafb;
+                --text-secondary: #d1d5db;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            .print-break-after {
+                page-break-after: always;
+            }
+
+            body {
+                font-size: 12pt;
+                line-height: 1.4;
+                color: #000;
+                background: #fff;
+            }
+        }
+
+        /* Reduced motion for accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            .btn {
+                border: 2px solid currentColor;
+            }
+
+            .card {
+                border: 1px solid currentColor;
+            }
+        }
+    </style>
+
+    <!-- Rust/WASM module -->
+    <link data-trunk rel="rust" />
+
+    <title>Qorzen Oxide</title>
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233b82f6'/><text y='70' font-size='70' font-family='Arial, sans-serif' fill='white' text-anchor='middle' x='50'>Q</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233b82f6'/><text y='70' font-size='70' font-family='Arial, sans-serif' fill='white' text-anchor='middle' x='50'>Q</text></svg>">
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Qorzen Oxide&quot;,&quot;short_name&quot;:&quot;Qorzen&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%233b82f6&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233b82f6'/><text y='70' font-size='70' font-family='Arial, sans-serif' fill='white' text-anchor='middle' x='50'>Q</text></svg>&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
+</head>
+<body class="antialiased bg-gray-50 text-gray-900">
+<!-- Loading screen -->
+<div id="loading-screen" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+    <div class="text-center">
+        <div class="mx-auto h-16 w-16 bg-blue-600 rounded-xl flex items-center justify-center mb-4 animate-bounce-subtle">
+            <span class="text-white font-bold text-2xl">Q</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">Qorzen</h1>
+        <p class="text-gray-600 mb-6">Loading your application...</p>
+        <div class="flex justify-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Main application container -->
+<div id="main" class="min-h-screen"></div>
+
+<!-- Error boundary fallback -->
+<div id="error-fallback" class="hidden fixed inset-0 bg-gray-50 z-40 flex items-center justify-center p-4">
+    <div class="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
+        <div class="text-6xl text-red-500 mb-4">⚠️</div>
+        <h2 class="text-xl font-bold text-gray-900 mb-2">Something went wrong</h2>
+        <p class="text-gray-600 mb-6">
+            The application encountered an unexpected error. Please refresh the page to try again.
+        </p>
+        <button
+                onclick="window.location.reload()"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+        >
+            <svg class="-ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh Page
+        </button>
+    </div>
+</div>
+
+<!-- JavaScript for loading screen and error handling -->
+<script>
+    // Hide loading screen once the app is loaded
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) {
+                loadingScreen.style.opacity = '0';
+                loadingScreen.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(function() {
+                    loadingScreen.style.display = 'none';
+                }, 500);
+            }
+        }, 1000); // Show loading for at least 1 second
+    });
+
+    // Global error handler
+    window.addEventListener('error', function(event) {
+        console.error('Global error:', event.error);
+        showErrorFallback();
+    });
+
+    window.addEventListener('unhandledrejection', function(event) {
+        console.error('Unhandled promise rejection:', event.reason);
+        showErrorFallback();
+    });
+
+    function showErrorFallback() {
+        const loadingScreen = document.getElementById('loading-screen');
+        const errorFallback = document.getElementById('error-fallback');
+
+        if (loadingScreen) {
+            loadingScreen.style.display = 'none';
+        }
+
+        if (errorFallback) {
+            errorFallback.classList.remove('hidden');
+        }
+    }
+
+    // Service worker registration (for PWA functionality)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            // Register service worker if available
+            // This would be implemented when adding PWA features
+        });
+    }
+
+    // Prevent zoom on iOS Safari
+    document.addEventListener('gesturestart', function (e) {
+        e.preventDefault();
+    });
+
+    // Handle viewport changes for mobile
+    function handleViewportChange() {
+        const viewport = document.querySelector('meta[name=viewport]');
+        if (viewport) {
+            viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+        }
+    }
+
+    // Add touch support indicators
+    if ('ontouchstart' in window) {
+        document.body.classList.add('touch-device');
+    }
+
+    // Performance monitoring
+    window.addEventListener('load', function() {
+        if (performance && performance.getEntriesByType) {
+            const navEntries = performance.getEntriesByType('navigation');
+            if (navEntries.length > 0) {
+                const loadTime = navEntries[0].loadEventEnd - navEntries[0].loadEventStart;
+                console.log('Page load time:', loadTime + 'ms');
+            }
+        }
+    });
+
+    // Dark mode detection and handling
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark-mode-preferred');
+    }
+
+    // Listen for dark mode changes
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            if (e.matches) {
+                document.body.classList.add('dark-mode-preferred');
+            } else {
+                document.body.classList.remove('dark-mode-preferred');
+            }
+        });
+    }
+</script>
+
+<!-- Analytics placeholder (replace with actual analytics if needed) -->
+<script>
+    // Google Analytics or other analytics would go here
+    // Example:
+    // gtag('config', 'GA_MEASUREMENT_ID');
+</script>
+</body>
+</html>

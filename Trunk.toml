@@ -1,5 +1,5 @@
 [build]
-target = "index.html"
+target = "public/index.html"
 dist = "dist"
 
 [watch]
@@ -10,3 +10,7 @@ ignore = ["dist", "target"]
 addresses = ["127.0.0.1"]
 port = 8080
 open = false
+
+[[copy]]
+source = "public/tailwind.css"
+dest = "tailwind.css"

@@ -14,7 +14,7 @@ use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements}
 
 pub type UserId = Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: UserId,
     pub username: String,
@@ -28,7 +28,7 @@ pub struct User {
     pub is_active: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Role {
     pub id: String,
     pub name: String,
@@ -52,7 +52,7 @@ pub enum PermissionScope {
     Global,             // All resources
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UserPreferences {
     pub theme: String,
     pub language: String,
@@ -73,7 +73,7 @@ impl Default for UserPreferences {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UserProfile {
     pub display_name: String,
     pub avatar_url: Option<String>,
@@ -83,7 +83,7 @@ pub struct UserProfile {
     pub contact_info: ContactInfo,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContactInfo {
     pub phone: Option<String>,
     pub address: Option<String>,
