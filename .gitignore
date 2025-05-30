@@ -2,3 +2,6 @@
 /plugins/*/target/
 /config.yaml
 /logs/
+/dist/
+/node_modules/
+.idea/

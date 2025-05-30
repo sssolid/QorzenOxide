@@ -84,10 +84,11 @@ pub fn Login() -> Element {
                 div {
                     class: "text-center",
                     div {
-                        class: "mx-auto h-16 w-16 bg-blue-600 rounded-xl flex items-center justify-center mb-4",
-                        span {
-                            class: "text-white font-bold text-2xl",
-                            "Q"
+                        class: "mx-auto h-32 w-32 flex items-center justify-center mb-4",
+                        img {
+                            class: "h-32 w-32", // adjust as needed
+                            src: "/static/qorzen.ico", // or wherever your image is
+                            alt: "Q Logo"
                         }
                     }
                     h2 {

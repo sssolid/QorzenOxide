@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#3b82f6">
 
     <!-- Local Tailwind CSS -->
-    <link data-trunk rel="copy-file" href="/public/tailwind.css">
-    <link rel="stylesheet" href="tailwind.css">
+    <link data-trunk rel="copy-dir" href="/public/static">
+    <link rel="stylesheet" href="/static/tailwind.css">
 
     <!-- Custom CSS for additional styling -->
     <style>
@@ -200,8 +200,8 @@
     <title>Qorzen Oxide</title>
 
     <!-- Favicons -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233b82f6'/><text y='70' font-size='70' font-family='Arial, sans-serif' fill='white' text-anchor='middle' x='50'>Q</text></svg>">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233b82f6'/><text y='70' font-size='70' font-family='Arial, sans-serif' fill='white' text-anchor='middle' x='50'>Q</text></svg>">
+    <link rel="icon" type="image/x-icon" href="/static/qorzen.ico">
+    <link rel="apple-touch-icon" href="/static/qorzen.ico">
 
     <!-- Web App Manifest -->
     <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Qorzen Oxide&quot;,&quot;short_name&quot;:&quot;Qorzen&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%233b82f6&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233b82f6'/><text y='70' font-size='70' font-family='Arial, sans-serif' fill='white' text-anchor='middle' x='50'>Q</text></svg>&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
@@ -210,8 +210,8 @@
 <!-- Loading screen -->
 <div id="loading-screen" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
     <div class="text-center">
-        <div class="mx-auto h-16 w-16 bg-blue-600 rounded-xl flex items-center justify-center mb-4 animate-bounce">
-            <span class="text-white font-bold text-2xl">Q</span>
+        <div class="mx-auto h-32 w-32 flex items-center justify-center mb-4 animate-bounce">
+            <img class="h-32 w-32" src="/static/qorzen.ico" alt="Q Logo" />
         </div>
         <h1 class="text-2xl font-bold text-gray-900 mb-2">Qorzen</h1>
         <p class="text-gray-600 mb-6">Loading your application...</p>

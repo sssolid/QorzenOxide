@@ -163,9 +163,11 @@ fn AppWithDesktopCSS() -> Element {
     use dioxus::prelude::*;
 
     rsx! {
-        document::Style {
-            // Include Tailwind CSS for desktop builds
-            {include_str!("../public/tailwind.css")}
+        head {
+            style {
+                // Include Tailwind CSS for desktop builds
+                dangerous_inner_html: include_str!("../public/static/tailwind.css")
+            }
         }
         App {}
     }
