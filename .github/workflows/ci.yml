@@ -438,18 +438,39 @@ jobs:
 #        env:
 #          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-#  deploy:
-#    name: Deploy to Production
-#    runs-on: ubuntu-latest
-#    needs: [docker]
-#    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-#    environment: production
-#    steps:
-#      - name: Deploy to production
-#        run: |
-#          echo "Deploying to production..."
-#          # Add your deployment steps here
-#          # This could include:
-#          # - Updating Kubernetes deployments
-#          # - Triggering CD pipelines
-#          # - Notifying deployment systems
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install Trunk and Dependencies
+        run: |
+          curl -fsSL https://trunkrs.dev/install.sh | bash
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          sudo apt update
+          sudo apt install -y libssl-dev pkg-config
+
+      - name: Build WASM App with Trunk
+        run: |
+          trunk build --release
+
+      - name: Upload to DigitalOcean Droplet via SCP
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          source: "dist/*"
+          target: "/var/www/qorzen"
+
+      - name: Restart Nginx (via SSH)
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            nginx -t && systemctl reload nginx
