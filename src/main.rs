@@ -106,21 +106,6 @@ fn main() {
     }
 }
 
-/// WASM entry point - Fixed to use web launcher
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    // Set up panic hook for better error reporting in browser
-    console_error_panic_hook::set_once();
-    
-    console_log::init_with_level(log::Level::Debug).expect("failed to init logger");
-
-    // Set up logging for WASM
-    tracing_wasm::set_as_global_default();
-
-    // Launch the Dioxus application for web
-    dioxus::launch(App);
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 fn setup_logging(cli: &Cli) {
     let level = if cli.debug {
