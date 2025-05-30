@@ -3,13 +3,14 @@
 use chrono::Datelike;
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use crate::utils::Time;
 
 use crate::ui::router::Route;
 
 /// Footer component
 #[component]
 pub fn Footer() -> Element {
-    let current_year = chrono::Utc::now().year();
+    let current_year = Time::now().year();
     let build = option_env!("BUILD_HASH").unwrap_or("dev");
 
     rsx! {
@@ -125,7 +126,7 @@ pub fn Footer() -> Element {
 fn SystemStatus() -> Element {
     // In a real app, this would check actual system health
     let status = use_signal(|| "healthy");
-    let last_check = use_signal(|| chrono::Utc::now());
+    let last_check = use_signal(|| Time::now());
 
     // Simulate periodic health checks
     use_effect({
@@ -143,7 +144,7 @@ fn SystemStatus() -> Element {
                     // Mock health check
                     let health_good = rand::random::<f32>() > 0.1; // 90% chance of good health
                     status.set(if health_good { "healthy" } else { "degraded" });
-                    last_check.set(chrono::Utc::now());
+                    last_check.set(Time::now());
                 }
             });
         }
@@ -175,7 +176,7 @@ fn SystemStatus() -> Element {
 /// Expandable footer variant with more information
 #[component]
 pub fn ExpandedFooter() -> Element {
-    let current_year = chrono::Utc::now().year();
+    let current_year = Time::now().year();
 
     rsx! {
         footer {

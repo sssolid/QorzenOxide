@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-
+use crate::utils::Time;
 use crate::ui::{
     pages::{PageWrapper, StatCard, StatTrend},
     router::Route,
@@ -579,7 +579,7 @@ fn get_dashboard_stats() -> Vec<DashboardStat> {
 }
 
 fn get_recent_activities() -> Vec<Activity> {
-    let now = chrono::Utc::now();
+    let now = Time::now();
     vec![
         Activity {
             id: "1".to_string(),
