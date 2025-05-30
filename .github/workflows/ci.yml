@@ -309,21 +309,22 @@ jobs:
             echo "Successfully updated processed-project branch"
           fi
 
-#  build:
-#    name: Build Release
-#    runs-on: ${{ matrix.os }}
+  build:
+    name: Build Release
+    runs-on: ${{ matrix.os }}
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 #    needs: [check, test, fmt, clippy]
-#    strategy:
-#      matrix:
-#        include:
+    strategy:
+      matrix:
+        include:
 #          - os: ubuntu-latest
 #            target: x86_64-unknown-linux-gnu
 #            artifact_name: qorzen
 #            asset_name: qorzen-linux-amd64
-#          - os: windows-latest
-#            target: x86_64-pc-windows-msvc
-#            artifact_name: qorzen.exe
-#            asset_name: qorzen-windows-amd64.exe
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: qorzen_desktop.exe
+            asset_name: qorzen-windows-amd64.exe
 #          - os: macOS-latest
 #            target: x86_64-apple-darwin
 #            artifact_name: qorzen
@@ -332,37 +333,37 @@ jobs:
 #            target: aarch64-apple-darwin
 #            artifact_name: qorzen
 #            asset_name: qorzen-macos-arm64
-#
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install stable toolchain
-#        uses: dtolnay/rust-toolchain@stable
-#        with:
-#          targets: ${{ matrix.target }}
-#
-#      - name: Cache cargo registry
-#        uses: actions/cache@v3
-#        with:
-#          path: |
-#            ~/.cargo/registry
-#            ~/.cargo/git
-#            target
-#          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-#
-#      - name: Build release binary
-#        run: cargo build --release --target ${{ matrix.target }} --bin qorzen
-#
-#      - name: Strip binary (Unix)
-#        if: matrix.os != 'windows-latest'
-#        run: strip target/${{ matrix.target }}/release/${{ artifact_name }}
-#
-#      - name: Upload binary artifacts
-#        uses: actions/upload-artifact@v3
-#        with:
-#          name: ${{ matrix.asset_name }}
-#          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }} --features desktop --bin qorzen_desktop
+
+      - name: Strip binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: strip target/${{ matrix.target }}/release/${{ artifact_name }}
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
 #  docker:
 #    name: Docker Build
