@@ -442,22 +442,35 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     environment: production
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Install Trunk and Dependencies
-        run: |
-          curl -fsSL https://trunkrs.dev/install.sh | bash
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          sudo apt update
-          sudo apt install -y libssl-dev pkg-config
+      - name: Set up Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
-      - name: Install Rust + Trunk
+      - name: Add WASM target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-trunk-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Trunk (if missing)
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
-          cargo install trunk
+          if ! command -v trunk > /dev/null; then
+            cargo install trunk
+          fi
         shell: bash
 
       - name: Build WASM App with Trunk
