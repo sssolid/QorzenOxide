@@ -453,9 +453,18 @@ jobs:
           sudo apt update
           sudo apt install -y libssl-dev pkg-config
 
+      - name: Install Rust + Trunk
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          cargo install trunk
+        shell: bash
+
       - name: Build WASM App with Trunk
         run: |
+          source $HOME/.cargo/env
           trunk build --release
+        shell: bash
 
       - name: Upload to DigitalOcean Droplet via SCP
         uses: appleboy/scp-action@v0.1.4
