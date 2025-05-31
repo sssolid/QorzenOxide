@@ -386,7 +386,7 @@ def main() -> int:
     try:
         config = StripperConfig(
             source_dir=Path("."),
-            output_dir=Path("ai_optimized_project"),
+            output_dir=Path("processed_project"),
             preserve_cargo_toml=True,
             preserve_readme=False,
             file_extensions={".rs", ".toml"},
@@ -394,7 +394,7 @@ def main() -> int:
                 "target/*",
                 "*.lock",
                 ".git/*",
-                "ai_optimized_project/*",
+                "processed_project/*",
                 ".github/*",
                 "docs/*"
             }
