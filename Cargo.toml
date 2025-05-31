@@ -1,6 +1,6 @@
 [package]
 name = "qorzen_oxide"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 build = "build.rs"
 description = "A high-performance, modular plugin-based system built in Rust with comprehensive async core managers and type-safe architecture."
