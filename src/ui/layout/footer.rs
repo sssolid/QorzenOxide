@@ -1,9 +1,10 @@
 // src/ui/layout/footer.rs - Application footer with links and information
 
+use crate::utils::Time;
 use chrono::Datelike;
 use dioxus::prelude::*;
+#[allow(unused_imports)]
 use dioxus_router::prelude::*;
-use crate::utils::Time;
 
 use crate::ui::router::Route;
 
@@ -126,12 +127,12 @@ pub fn Footer() -> Element {
 fn SystemStatus() -> Element {
     // In a real app, this would check actual system health
     let status = use_signal(|| "healthy");
-    let last_check = use_signal(|| Time::now());
+    let last_check = use_signal(Time::now);
 
     // Simulate periodic health checks
     use_effect({
-        let mut status = status.clone();
-        let mut last_check = last_check.clone();
+        let mut status = status;
+        let mut last_check = last_check;
 
         move || {
             spawn(async move {

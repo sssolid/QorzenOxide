@@ -1,6 +1,7 @@
 // src/ui/layout/header.rs - Top navigation header with branding, user menu, and notifications
 
 use dioxus::prelude::*;
+#[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
 use crate::ui::{
@@ -30,7 +31,7 @@ pub fn Header(props: HeaderProps) -> Element {
 
     // Count unread notifications
     let unread_count = notifications.iter().filter(|n| !n.read).count();
-    
+
     let left_side_mobile_button = rsx! {
         // Mobile menu button
         button {
@@ -57,7 +58,7 @@ pub fn Header(props: HeaderProps) -> Element {
             }
         }
     };
-    
+
     let left_side_desktop_sidebar_toggle = rsx! {
         // Desktop sidebar toggle
         button {
@@ -84,7 +85,7 @@ pub fn Header(props: HeaderProps) -> Element {
             }
         }
     };
-        
+
     let left_side_logo = rsx! {
         // Logo
         Link {
@@ -117,7 +118,7 @@ pub fn Header(props: HeaderProps) -> Element {
             {left_side_logo}
             }
     };
-    
+
     let right_side_search_bar = rsx! {
         // Search bar (desktop only)
         div {
@@ -146,7 +147,7 @@ pub fn Header(props: HeaderProps) -> Element {
             }
         }
     };
-    
+
     let right_side_notifications_dropdown_bell_icon = rsx! {
         // Bell icon
         svg {
@@ -163,7 +164,7 @@ pub fn Header(props: HeaderProps) -> Element {
             }
         }
     };
-    
+
     let right_side_notifications_dropdown_notification_badge = rsx! {
         // Notification badge
             if unread_count > 0 {
@@ -173,7 +174,7 @@ pub fn Header(props: HeaderProps) -> Element {
                 }
             }
     };
-    
+
     let right_side_notifications_dropdown_open_header = rsx! {
         // Header
         div {
@@ -199,7 +200,7 @@ pub fn Header(props: HeaderProps) -> Element {
     fn fmt_time(ts: chrono::DateTime<chrono::Utc>) -> String {
         ts.format("%H:%M").to_string()
     }
-    
+
     let right_side_notifications_dropdown_open_list = rsx! {
         // Notifications list
         div {
@@ -257,7 +258,7 @@ pub fn Header(props: HeaderProps) -> Element {
             }
         }
     };
-    
+
     let right_side_notifications_dropdown = rsx! {
         // Notifications dropdown
         div {
@@ -287,7 +288,7 @@ pub fn Header(props: HeaderProps) -> Element {
             }
         }
     };
-    
+
     let user_menu_dropdown = rsx! {
         // User menu dropdown
         div {
@@ -386,7 +387,7 @@ pub fn Header(props: HeaderProps) -> Element {
             }
         }
     };
-    
+
     let right_side = rsx! {
         // Right side - Search, notifications, user menu
         div {

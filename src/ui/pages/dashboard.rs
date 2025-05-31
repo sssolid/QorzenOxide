@@ -1,20 +1,21 @@
 // src/ui/pages/dashboard.rs - Main dashboard page with overview and stats
 
-use dioxus::prelude::*;
-use dioxus_router::prelude::*;
-use crate::utils::Time;
 use crate::ui::{
     pages::{PageWrapper, StatCard, StatTrend},
     router::Route,
     state::use_app_state,
 };
+use crate::utils::Time;
+use dioxus::prelude::*;
+#[allow(unused_imports)]
+use dioxus_router::prelude::*;
 
 /// Main dashboard component
 // Main dashboard component
 #[component]
 pub fn Dashboard() -> Element {
     let app_state = use_app_state();
-    let loading = use_signal(|| false);  // Remove mut since we're not modifying
+    let loading = use_signal(|| false); // Remove mut since we're not modifying
 
     // Clone user data to avoid borrowing issues
     let current_user = app_state.current_user.clone();

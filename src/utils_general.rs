@@ -198,10 +198,13 @@ pub mod retry {
                     );
 
                     #[cfg(target_arch = "wasm32")]
-                    web_sys::console::warn_1(&format!(
-                        "Attempt {} failed, retrying in {:?}: {}",
-                        attempt, delay, error
-                    ).into());
+                    web_sys::console::warn_1(
+                        &format!(
+                            "Attempt {} failed, retrying in {:?}: {}",
+                            attempt, delay, error
+                        )
+                        .into(),
+                    );
 
                     platform_sleep(delay).await;
 
@@ -411,7 +414,7 @@ pub mod validation {
     }
 
     pub fn is_valid_port(port: u16) -> bool {
-        port > 0 && port <= 65535
+        port > 0
     }
 
     pub fn is_safe_path(path: &str) -> bool {
@@ -492,11 +495,17 @@ pub mod compression {
     use super::*;
 
     pub fn compress_gzip(_data: &[u8]) -> Result<Vec<u8>> {
-        Err(Error::new(ErrorKind::Io, "Compression not available on web"))
+        Err(Error::new(
+            ErrorKind::Io,
+            "Compression not available on web",
+        ))
     }
 
     pub fn decompress_gzip(_data: &[u8]) -> Result<Vec<u8>> {
-        Err(Error::new(ErrorKind::Io, "Decompression not available on web"))
+        Err(Error::new(
+            ErrorKind::Io,
+            "Decompression not available on web",
+        ))
     }
 }
 
@@ -583,7 +592,7 @@ mod tests {
                 ..Default::default()
             },
         )
-            .await;
+        .await;
 
         assert_eq!(result.unwrap(), "Success");
         assert_eq!(attempts, 3);

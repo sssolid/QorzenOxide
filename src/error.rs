@@ -259,7 +259,7 @@ impl Error {
             },
             message,
         )
-            .severity(ErrorSeverity::High)
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates a manager operation error
@@ -275,7 +275,7 @@ impl Error {
             },
             message,
         )
-            .severity(ErrorSeverity::High)
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates a platform-specific error
@@ -292,7 +292,7 @@ impl Error {
             },
             message,
         )
-            .severity(ErrorSeverity::Medium)
+        .severity(ErrorSeverity::Medium)
     }
 
     /// Creates a permission error
@@ -304,7 +304,7 @@ impl Error {
             },
             message,
         )
-            .severity(ErrorSeverity::High)
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates a plugin error
@@ -317,7 +317,7 @@ impl Error {
             },
             message,
         )
-            .severity(ErrorSeverity::Medium)
+        .severity(ErrorSeverity::Medium)
     }
 
     /// Creates an authentication error
@@ -330,7 +330,7 @@ impl Error {
             },
             msg,
         )
-            .severity(ErrorSeverity::High)
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates an authorization error
@@ -347,7 +347,7 @@ impl Error {
             },
             message,
         )
-            .severity(ErrorSeverity::High)
+        .severity(ErrorSeverity::High)
     }
 
     /// Creates a file operation error
@@ -461,7 +461,7 @@ where
                 },
                 e.to_string(),
             )
-                .caused_by(e)
+            .caused_by(e)
         })
     }
 

@@ -7,332 +7,209 @@ on:
     branches: [ main, development ]
   pull_request:
     branches: [ main ]
-  release:
-    types: [ published ]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
-#  check:
-#    name: Check
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install stable toolchain
-#        uses: dtolnay/rust-toolchain@stable
-#
-#      - name: Cache cargo registry
-#        uses: actions/cache@v3
-#        with:
-#          path: |
-#            ~/.cargo/registry
-#            ~/.cargo/git
-#            target
-#          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-#          restore-keys: |
-#            ${{ runner.os }}-cargo-
-#
-#      - name: Run cargo check
-#        run: cargo check --all-features
-#
-#  test:
-#    name: Test Suite
-#    runs-on: ubuntu-latest
-#    strategy:
-#      matrix:
-#        rust: [stable, beta, nightly]
-#        os: [ubuntu-latest, windows-latest, macOS-latest]
-#        exclude:
-#          - rust: beta
-#            os: windows-latest
-#          - rust: beta
-#            os: macOS-latest
-#          - rust: nightly
-#            os: windows-latest
-#          - rust: nightly
-#            os: macOS-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install ${{ matrix.rust }} toolchain
-#        uses: dtolnay/rust-toolchain@master
-#        with:
-#          toolchain: ${{ matrix.rust }}
-#
-#      - name: Cache cargo registry
-#        uses: actions/cache@v3
-#        with:
-#          path: |
-#            ~/.cargo/registry
-#            ~/.cargo/git
-#            target
-#          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-#
-#      - name: Run cargo test
-#        run: cargo test --all-features --workspace
-#
-#      - name: Run integration tests
-#        run: cargo test --test integration --all-features
-#
-#  fmt:
-#    name: Rustfmt
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install stable toolchain
-#        uses: dtolnay/rust-toolchain@stable
-#        with:
-#          components: rustfmt
-#
-#      - name: Run cargo fmt
-#        run: cargo fmt --all -- --check
-#
-#  clippy:
-#    name: Clippy
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install stable toolchain
-#        uses: dtolnay/rust-toolchain@stable
-#        with:
-#          components: clippy
-#
-#      - name: Cache cargo registry
-#        uses: actions/cache@v3
-#        with:
-#          path: |
-#            ~/.cargo/registry
-#            ~/.cargo/git
-#            target
-#          key: ${{ runner.os }}-clippy-cargo-${{ hashFiles('**/Cargo.lock') }}
-#
-#      - name: Run cargo clippy
-#        run: cargo clippy --all-features --workspace -- -D warnings
-#
-#  docs:
-#    name: Documentation
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install stable toolchain
-#        uses: dtolnay/rust-toolchain@stable
-#
-#      - name: Cache cargo registry
-#        uses: actions/cache@v3
-#        with:
-#          path: |
-#            ~/.cargo/registry
-#            ~/.cargo/git
-#            target
-#          key: ${{ runner.os }}-docs-cargo-${{ hashFiles('**/Cargo.lock') }}
-#
-#      - name: Run cargo doc
-#        run: cargo doc --all-features --no-deps --workspace
-#
-#      - name: Deploy docs to GitHub Pages
-#        if: github.ref == 'refs/heads/main'
-#        uses: peaceiris/actions-gh-pages@v3
-#        with:
-#          github_token: ${{ secrets.GITHUB_TOKEN }}
-#          publish_dir: ./target/doc
-#
-#  security:
-#    name: Security Audit
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install stable toolchain
-#        uses: dtolnay/rust-toolchain@stable
-#
-#      - name: Install cargo-audit
-#        run: cargo install cargo-audit
-#
-#      - name: Run cargo audit
-#        run: cargo audit
-#
-#      - name: Install cargo-deny
-#        run: cargo install cargo-deny
-#
-#      - name: Run cargo deny
-#        run: cargo deny check
-#
-#  coverage:
-#    name: Code Coverage
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install stable toolchain
-#        uses: dtolnay/rust-toolchain@stable
-#
-#      - name: Install cargo-tarpaulin
-#        run: cargo install cargo-tarpaulin
-#
-#      - name: Cache cargo registry
-#        uses: actions/cache@v3
-#        with:
-#          path: |
-#            ~/.cargo/registry
-#            ~/.cargo/git
-#            target
-#          key: ${{ runner.os }}-coverage-cargo-${{ hashFiles('**/Cargo.lock') }}
-#
-#      - name: Run cargo tarpaulin
-#        run: cargo tarpaulin --all-features --workspace --timeout 120 --out xml
-#
-#      - name: Upload to codecov.io
-#        uses: codecov/codecov-action@v3
-#        with:
-#          file: cobertura.xml
-#          fail_ci_if_error: true
-
-#  benchmark:
-#    name: Benchmarks
-#    runs-on: ubuntu-latest
-#    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Install stable toolchain
-#        uses: dtolnay/rust-toolchain@stable
-#
-#      - name: Cache cargo registry
-#        uses: actions/cache@v3
-#        with:
-#          path: |
-#            ~/.cargo/registry
-#            ~/.cargo/git
-#            target
-#          key: ${{ runner.os }}-bench-cargo-${{ hashFiles('**/Cargo.lock') }}
-#
-#      - name: Run benchmarks
-#        run: cargo bench --all-features
-#
-#      - name: Store benchmark results
-#        uses: benchmark-action/github-action-benchmark@v1
-#        with:
-#          tool: 'cargo'
-#          output-file-path: target/criterion/report/index.html
-#          github-token: ${{ secrets.GITHUB_TOKEN }}
-#          auto-push: true
-
-  process_source:
-    name: Process Rust Source for AI
+  check:
+    name: Check
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
-    # needs: [check, fmt, clippy]  # Ensure code quality before processing
-
     steps:
-      - name: Checkout development Branch
+      - name: Checkout sources
         uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
         with:
-          ref: development  # Ensure we are on development
-          fetch-depth: 0  # Fetch full history for git operations
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-      - name: Set Up Python
-        uses: actions/setup-python@v4
+      - name: Run cargo check
+        run: cargo check --all-features
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, beta, nightly]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        exclude:
+          - rust: beta
+            os: windows-latest
+          - rust: beta
+            os: macOS-latest
+          - rust: nightly
+            os: windows-latest
+          - rust: nightly
+            os: macOS-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install ${{ matrix.rust }} toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          python-version: '3.12'
+          toolchain: ${{ matrix.rust }}
 
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Process Rust Source Code
-        run: |
-          rm -rf processed_project
-          mkdir -p processed_project
-          python scripts/strip_rust_source.py
-          
-          # Display processing results
-          echo "Processing complete. Directory structure:"
-          find processed_project -type f -name "*.rs" | head -10
-          
-          # Calculate size reduction
-          if [ -d "processed_project" ]; then
-            ORIGINAL_SIZE=$(du -sh . --exclude=processed_project --exclude=.git | cut -f1)
-            PROCESSED_SIZE=$(du -sh processed_project/ | cut -f1)
-            echo "Original project size: $ORIGINAL_SIZE"
-            echo "Processed project size: $PROCESSED_SIZE"
-          
-            RUST_FILES_ORIGINAL=$(find . -name "*.rs" -not -path "./processed_project/*" -not -path "./.git/*" | wc -l)
-            RUST_FILES_PROCESSED=$(find processed_project/ -name "*.rs" | wc -l)
-            echo "Rust files original: $RUST_FILES_ORIGINAL"
-            echo "Rust files processed: $RUST_FILES_PROCESSED"
-          fi
-
-      - name: Upload Processed Source as Artifact
-        uses: actions/upload-artifact@v4
+      - name: Cache cargo registry
+        uses: actions/cache@v3
         with:
-          name: processed-rust-source
-          path: processed_project/
-          retention-days: 30
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Commit and Push to processed-project Branch
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run cargo test
+        run: cargo test --all-features --workspace
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain with rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain with clippy
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-clippy-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run cargo clippy
+        run: cargo clippy --all-features --workspace -- -D warnings
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-docs-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run cargo doc
+        run: cargo doc --all-features --no-deps --workspace
+
+      - name: Deploy docs to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/doc
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit and cargo-deny
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          cargo install cargo-audit
+          cargo install cargo-deny
 
-          # Create and switch to processed-project branch from development
-          git checkout -B processed-project
+      - name: Run cargo audit
+        run: cargo audit
 
-          # Make sure everything is staged (including processed_project folder)
-          git add -f processed_project/
-          
-          # Check if there are changes to commit
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update processed Rust source [Automated - $(date '+%Y-%m-%d %H:%M:%S')]"
-          
-            # Push to processed-project branch (forcefully)
-            git push origin processed-project --force
-          
-            echo "Successfully updated processed-project branch"
-          fi
+      - name: Run cargo deny
+        run: cargo deny check
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-coverage-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # cargo-tarpaulin works only on Linux environments.
+      - name: Run cargo tarpaulin
+        run: cargo tarpaulin --all-features --workspace --timeout 120 --out Xml
+
+      - name: Ensure coverage file exists
+        run: test -f cobertura.xml
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          file: cobertura.xml
+          fail_ci_if_error: true
 
   build:
     name: Build Release
     runs-on: ${{ matrix.os }}
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-#    needs: [check, test, fmt, clippy]
+    needs: [ check, fmt, clippy, test ]
     strategy:
       matrix:
         include:
-#          - os: ubuntu-latest
-#            target: x86_64-unknown-linux-gnu
-#            artifact_name: qorzen
-#            asset_name: qorzen-linux-amd64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: qorzen_desktop.exe
             asset_name: qorzen-windows-amd64.exe
-#          - os: macOS-latest
-#            target: x86_64-apple-darwin
-#            artifact_name: qorzen
-#            asset_name: qorzen-macos-amd64
-#          - os: macOS-latest
-#            target: aarch64-apple-darwin
-#            artifact_name: qorzen
-#            asset_name: qorzen-macos-arm64
 
     steps:
       - name: Checkout sources
@@ -365,83 +242,32 @@ jobs:
           name: ${{ matrix.asset_name }}
           path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
-#  docker:
-#    name: Docker Build
-#    runs-on: ubuntu-latest
-#    needs: [check, test, fmt, clippy]
-#    if: github.event_name == 'push'
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#
-#      - name: Set up Docker Buildx
-#        uses: docker/setup-buildx-action@v3
-#
-#      - name: Login to Container Registry
-#        uses: docker/login-action@v3
-#        with:
-#          registry: ghcr.io
-#          username: ${{ github.actor }}
-#          password: ${{ secrets.GITHUB_TOKEN }}
-#
-#      - name: Extract metadata
-#        id: meta
-#        uses: docker/metadata-action@v5
-#        with:
-#          images: ghcr.io/${{ github.repository }}
-#          tags: |
-#            type=ref,event=branch
-#            type=ref,event=pr
-#            type=semver,pattern={{version}}
-#            type=semver,pattern={{major}}.{{minor}}
-#            type=raw,value=latest,enable={{is_default_branch}}
-#
-#      - name: Build and push Docker image
-#        uses: docker/build-push-action@v5
-#        with:
-#          context: .
-#          platforms: linux/amd64,linux/arm64
-#          push: true
-#          tags: ${{ steps.meta.outputs.tags }}
-#          labels: ${{ steps.meta.outputs.labels }}
-#          cache-from: type=gha
-#          cache-to: type=gha,mode=max
+      - name: Extract version from Cargo.toml
+        id: cargo-version
+        run: echo "version=v$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].version')" >> "$GITHUB_OUTPUT"
 
-#  release:
-#    name: Create Release
-#    runs-on: ubuntu-latest
-#    needs: [build]
-#    if: github.event_name == 'release'
-#    steps:
-#      - name: Download all artifacts
-#        uses: actions/download-artifact@v3
-#
-#      - name: Create release archives
-#        run: |
-#          for dir in qorzen-*; do
-#            if [ -d "$dir" ]; then
-#              cd "$dir"
-#              if [[ "$dir" == *"windows"* ]]; then
-#                zip "../${dir}.zip" *
-#              else
-#                tar -czf "../${dir}.tar.gz" *
-#              fi
-#              cd ..
-#            fi
-#          done
-#
-#      - name: Upload release assets
-#        uses: softprops/action-gh-release@v1
-#        with:
-#          files: |
-#            *.tar.gz
-#            *.zip
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.cargo-version.outputs.version }}
+          name: Qorzen Release ${{ steps.cargo-version.outputs.version }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Binary to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          tag_name: ${{ steps.cargo-version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
+    needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
 
@@ -449,11 +275,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set up Rust Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Add WASM target
         run: rustup target add wasm32-unknown-unknown

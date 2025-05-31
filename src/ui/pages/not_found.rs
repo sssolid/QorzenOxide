@@ -1,6 +1,7 @@
 // src/ui/pages/not_found.rs - 404 Not Found page
 
 use dioxus::prelude::*;
+#[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
 use crate::ui::router::Route;

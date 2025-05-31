@@ -2,10 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::ui::{
-    pages::PageWrapper,
-    state::{use_app_state, use_app_dispatch, AppAction},
-};
+use crate::ui::pages::PageWrapper;
 
 /// Main settings page component
 #[component]
@@ -207,7 +204,6 @@ fn GeneralSettings() -> Element {
                         class: "mt-5 md:mt-0 md:col-span-2",
                         form {
                             class: "space-y-6",
-                            prevent_default: "onsubmit",
                             onsubmit: handle_save,
 
                             // Language selection
@@ -821,7 +817,7 @@ fn SecuritySettings() -> Element {
 #[component]
 fn SystemSettings() -> Element {
     let build = option_env!("BUILD_HASH").unwrap_or("dev");
-    
+
     rsx! {
         div {
             class: "space-y-6",

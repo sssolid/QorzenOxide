@@ -1,0 +1,90 @@
+# .github/workflows/process_source.yml
+
+name: Process Source
+
+on:
+  push:
+    branches: [ development ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  process_source:
+    name: Process Rust Source for AI
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+    # needs: [check, fmt, clippy]  # Ensure code quality before processing
+
+    steps:
+      - name: Checkout development Branch
+        uses: actions/checkout@v4
+        with:
+          ref: development  # Ensure we are on development
+          fetch-depth: 0  # Fetch full history for git operations
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Process Rust Source Code
+        run: |
+          rm -rf processed_project
+          mkdir -p processed_project
+          python scripts/strip_rust_source.py
+          
+          # Display processing results
+          echo "Processing complete. Directory structure:"
+          find processed_project -type f -name "*.rs" | head -10
+          
+          # Calculate size reduction
+          if [ -d "processed_project" ]; then
+            ORIGINAL_SIZE=$(du -sh . --exclude=processed_project --exclude=.git | cut -f1)
+            PROCESSED_SIZE=$(du -sh processed_project/ | cut -f1)
+            echo "Original project size: $ORIGINAL_SIZE"
+            echo "Processed project size: $PROCESSED_SIZE"
+          
+            RUST_FILES_ORIGINAL=$(find . -name "*.rs" -not -path "./processed_project/*" -not -path "./.git/*" | wc -l)
+            RUST_FILES_PROCESSED=$(find processed_project/ -name "*.rs" | wc -l)
+            echo "Rust files original: $RUST_FILES_ORIGINAL"
+            echo "Rust files processed: $RUST_FILES_PROCESSED"
+          fi
+
+      - name: Upload Processed Source as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: processed-rust-source
+          path: processed_project/
+          retention-days: 30
+
+      - name: Commit and Push to processed-project Branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # Create and switch to processed-project branch from development
+          git checkout -B processed-project
+
+          # Make sure everything is staged (including processed_project folder)
+          git add -f processed_project/
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update processed Rust source [Automated - $(date '+%Y-%m-%d %H:%M:%S')]"
+          
+            # Push to processed-project branch (forcefully)
+            git push origin processed-project --force
+          
+            echo "Successfully updated processed-project branch"
+          fi

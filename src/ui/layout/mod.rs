@@ -3,16 +3,16 @@
 use dioxus::prelude::*;
 
 // Module declarations
-mod header;
-mod sidebar;
 mod footer;
+mod header;
 mod main_layout;
+mod sidebar;
 
 // Re-exports
-pub use header::Header;
-pub use sidebar::Sidebar;
 pub use footer::Footer;
+pub use header::Header;
 pub use main_layout::Layout;
+pub use sidebar::Sidebar;
 
 /// Layout configuration props
 #[derive(Props, Clone, PartialEq)]
@@ -37,10 +37,10 @@ pub struct LayoutProps {
 pub struct Breakpoints;
 
 impl Breakpoints {
-    pub const SM: &'static str = "640px";   // Tailwind sm
-    pub const MD: &'static str = "768px";   // Tailwind md
-    pub const LG: &'static str = "1024px";  // Tailwind lg
-    pub const XL: &'static str = "1280px";  // Tailwind xl
+    pub const SM: &'static str = "640px"; // Tailwind sm
+    pub const MD: &'static str = "768px"; // Tailwind md
+    pub const LG: &'static str = "1024px"; // Tailwind lg
+    pub const XL: &'static str = "1280px"; // Tailwind xl
     pub const XXL: &'static str = "1536px"; // Tailwind 2xl
 }
 
@@ -66,7 +66,7 @@ pub mod utils {
     }
 
     /// Get responsive classes based on viewport
-    pub fn responsive_classes(mobile: &str, tablet: &str, desktop: &str) -> String {
+    pub fn responsive_classes(_mobile: &str, _tablet: &str, desktop: &str) -> String {
         // In a real app, this would return the appropriate class based on viewport
         // For now, return desktop classes
         desktop.to_string()

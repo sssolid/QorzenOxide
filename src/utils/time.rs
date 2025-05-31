@@ -1,6 +1,6 @@
 // src/utils/time.rs - Cross-platform time utilities
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 
 /// Cross-platform time utilities that work on both native and WASM
 pub struct Time;
@@ -19,7 +19,9 @@ impl Time {
             match DateTime::from_timestamp_millis(millis) {
                 Some(dt) => dt,
                 None => {
-                    web_sys::console::error_1(&"Failed to create DateTime from JS timestamp".into());
+                    web_sys::console::error_1(
+                        &"Failed to create DateTime from JS timestamp".into(),
+                    );
                     // Fallback to a fixed date
                     DateTime::from_timestamp(1640995200, 0).unwrap()
                 }

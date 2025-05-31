@@ -27,8 +27,8 @@ pub mod state;
 // Re-exports for convenience
 pub use components::*;
 pub use layout::*;
-pub use pages::*;
-pub use router::*;
+pub use pages::{Admin, Dashboard, Login, NotFound, Plugins, Profile, Settings};
+pub use router::Route;
 pub use state::*;
 
 /// UI layout configuration
@@ -279,6 +279,12 @@ pub struct UILayoutManager {
 impl std::fmt::Debug for UILayoutManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UILayoutManager").finish()
+    }
+}
+
+impl Default for UILayoutManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

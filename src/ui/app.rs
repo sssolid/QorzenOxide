@@ -1,14 +1,14 @@
 // src/ui/app.rs - Main application component with routing
 
 use dioxus::prelude::*;
+#[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
-use crate::auth::User;
 use crate::ui::{
+    layout::Layout,
+    pages::{Dashboard, Login, NotFound, Profile},
     router::Route,
     state::AppStateProvider,
-    layout::Layout,
-    pages::{Dashboard, Login, Profile, NotFound},
 };
 
 /// Main application component that sets up routing and global state

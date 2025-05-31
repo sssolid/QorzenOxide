@@ -4,25 +4,25 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::utils::Time;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crate::utils::Time;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
-use crate::manager::{Manager, ManagedState, ManagerStatus, PlatformRequirements};
+use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
 
 /// Configuration tiers in order of precedence (lowest to highest)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ConfigurationTier {
-    System,     // System defaults (built-in)
-    Global,     // Organization-wide (from server)
-    User,       // User preferences (synced)
-    Local,      // Device-specific overrides
-    Runtime,    // Temporary runtime changes
+    System,  // System defaults (built-in)
+    Global,  // Organization-wide (from server)
+    User,    // User preferences (synced)
+    Local,   // Device-specific overrides
+    Runtime, // Temporary runtime changes
 }
 
 impl ConfigurationTier {
@@ -83,7 +83,9 @@ impl ConfigWatcher {
     }
 
     pub async fn recv(&mut self) -> Result<ConfigChangeEvent> {
-        self.receiver.recv().await
+        self.receiver
+            .recv()
+            .await
             .map_err(|_| Error::config("Config watch channel closed"))
     }
 }
@@ -103,6 +105,43 @@ pub struct ConfigChangeEvent {
 /// Configuration merger handles merging values from multiple tiers
 pub struct ConfigMerger {
     // Strategies for merging different value types
+}
+
+impl Default for ConfigMerger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn merge_values(base: Value, override_value: Value) -> Value {
+    match (base, override_value) {
+        // If override is null, keep base
+        (base, Value::Null) => base,
+
+        // If base is null, use override
+        (Value::Null, override_val) => override_val,
+
+        // Merge objects recursively
+        (Value::Object(mut base_obj), Value::Object(override_obj)) => {
+            for (key, value) in override_obj {
+                match base_obj.get(&key) {
+                    Some(base_value) => {
+                        base_obj.insert(key, merge_values(base_value.clone(), value));
+                    }
+                    None => {
+                        base_obj.insert(key, value);
+                    }
+                }
+            }
+            Value::Object(base_obj)
+        }
+
+        // For arrays, override completely (could be made configurable)
+        (_, Value::Array(override_arr)) => Value::Array(override_arr),
+
+        // For primitive values, override completely
+        (_, override_val) => override_val,
+    }
 }
 
 impl ConfigMerger {
@@ -125,41 +164,10 @@ impl ConfigMerger {
 
         // Merge higher precedence values
         for (_, value) in sorted_values.into_iter().skip(1) {
-            result = self.merge_values(result, value);
+            result = merge_values(result, value);
         }
 
         result
-    }
-
-    fn merge_values(&self, base: Value, override_value: Value) -> Value {
-        match (base, override_value) {
-            // If override is null, keep base
-            (base, Value::Null) => base,
-
-            // If base is null, use override
-            (Value::Null, override_val) => override_val,
-
-            // Merge objects recursively
-            (Value::Object(mut base_obj), Value::Object(override_obj)) => {
-                for (key, value) in override_obj {
-                    match base_obj.get(&key) {
-                        Some(base_value) => {
-                            base_obj.insert(key, self.merge_values(base_value.clone(), value));
-                        }
-                        None => {
-                            base_obj.insert(key, value);
-                        }
-                    }
-                }
-                Value::Object(base_obj)
-            }
-
-            // For arrays, override completely (could be made configurable)
-            (_, Value::Array(override_arr)) => Value::Array(override_arr),
-
-            // For primitive values, override completely
-            (_, override_val) => override_val,
-        }
     }
 }
 
@@ -167,6 +175,12 @@ impl ConfigMerger {
 pub struct ConfigChangeDetector {
     previous_values: HashMap<String, Value>,
     change_sender: broadcast::Sender<ConfigChangeEvent>,
+}
+
+impl Default for ConfigChangeDetector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ConfigChangeDetector {
@@ -182,7 +196,13 @@ impl ConfigChangeDetector {
         self.change_sender.subscribe()
     }
 
-    pub fn detect_change(&mut self, key: &str, new_value: &Value, tier: ConfigurationTier, source: &str) {
+    pub fn detect_change(
+        &mut self,
+        key: &str,
+        new_value: &Value,
+        tier: ConfigurationTier,
+        source: &str,
+    ) {
         let old_value = self.previous_values.get(key).cloned();
 
         if old_value.as_ref() != Some(new_value) {
@@ -197,13 +217,15 @@ impl ConfigChangeDetector {
             };
 
             let _ = self.change_sender.send(change_event);
-            self.previous_values.insert(key.to_string(), new_value.clone());
+            self.previous_values
+                .insert(key.to_string(), new_value.clone());
         }
     }
 }
 
 /// Configuration synchronization manager
 pub struct ConfigSyncManager {
+    #[allow(dead_code)]
     sync_interval: Duration,
     last_sync: RwLock<DateTime<Utc>>,
     sync_enabled: bool,
@@ -264,6 +286,18 @@ pub enum ValidationSeverity {
     Info,
 }
 
+impl Default for ValidationRuleType {
+    fn default() -> Self {
+        Self::Required
+    }
+}
+
+impl Default for ValidationRuleSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ValidationRuleSet {
     pub fn new() -> Self {
         Self {
@@ -272,7 +306,7 @@ impl ValidationRuleSet {
     }
 
     pub fn add_rule(&mut self, key: String, rule: ValidationRule) {
-        self.rules.entry(key).or_insert_with(Vec::new).push(rule);
+        self.rules.entry(key).or_default().push(rule);
     }
 
     pub fn validate(&self, key: &str, value: &Value) -> Vec<ValidationError> {
@@ -289,7 +323,12 @@ impl ValidationRuleSet {
         errors
     }
 
-    fn validate_rule(&self, key: &str, value: &Value, rule: &ValidationRule) -> Option<ValidationError> {
+    fn validate_rule(
+        &self,
+        key: &str,
+        value: &Value,
+        rule: &ValidationRule,
+    ) -> Option<ValidationError> {
         let is_valid = match &rule.rule_type {
             ValidationRuleType::Required => !value.is_null(),
             ValidationRuleType::Type(expected_type) => self.check_type(value, expected_type),
@@ -389,6 +428,12 @@ impl std::fmt::Debug for TieredConfigManager {
     }
 }
 
+impl Default for TieredConfigManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TieredConfigManager {
     /// Creates a new tiered configuration manager
     pub fn new() -> Self {
@@ -416,10 +461,9 @@ impl TieredConfigManager {
     {
         // Check cache first
         if let Some(cached_value) = self.cache.read().await.get(key) {
-            return Ok(Some(
-                serde_json::from_value(cached_value.clone())
-                    .map_err(|e| Error::config(&format!("Deserialization failed: {e}")))?
-            ));
+            return Ok(Some(serde_json::from_value(cached_value.clone()).map_err(
+                |e| Error::config(format!("Deserialization failed: {e}")),
+            )?));
         }
 
         // Collect values from all tiers
@@ -441,7 +485,10 @@ impl TieredConfigManager {
         let merged_value = self.merger.merge(tier_values);
 
         // Cache the result
-        self.cache.write().await.insert(key.to_string(), merged_value.clone());
+        self.cache
+            .write()
+            .await
+            .insert(key.to_string(), merged_value.clone());
 
         // Deserialize and return
         let result: T = serde_json::from_value(merged_value)
@@ -453,12 +500,20 @@ impl TieredConfigManager {
     pub async fn set(&mut self, key: &str, value: Value, tier: ConfigurationTier) -> Result<()> {
         // Validate the value
         let validation_errors = self.validation_rules.validate(key, &value);
-        if validation_errors.iter().any(|e| matches!(e.severity, ValidationSeverity::Error)) {
-            return Err(Error::config(format!("Validation failed for key '{}': {:?}", key, validation_errors)));
+        if validation_errors
+            .iter()
+            .any(|e| matches!(e.severity, ValidationSeverity::Error))
+        {
+            return Err(Error::config(format!(
+                "Validation failed for key '{}': {:?}",
+                key, validation_errors
+            )));
         }
 
         // Get the store for this tier
-        let store = self.stores.get(&tier)
+        let store = self
+            .stores
+            .get(&tier)
             .ok_or_else(|| Error::config(format!("No store configured for tier {:?}", tier)))?;
 
         // Set the value
@@ -468,14 +523,17 @@ impl TieredConfigManager {
         self.cache.write().await.remove(key);
 
         // Detect and broadcast change
-        self.change_detector.detect_change(key, &value, tier, "tiered_config_manager");
+        self.change_detector
+            .detect_change(key, &value, tier, "tiered_config_manager");
 
         Ok(())
     }
 
     /// Deletes a configuration value from a specific tier
     pub async fn delete(&self, key: &str, tier: ConfigurationTier) -> Result<()> {
-        let store = self.stores.get(&tier)
+        let store = self
+            .stores
+            .get(&tier)
             .ok_or_else(|| Error::config(format!("No store configured for tier {:?}", tier)))?;
 
         store.delete(key).await?;
@@ -554,15 +612,23 @@ impl Manager for TieredConfigManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
         let _ = self.sync().await;
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
@@ -572,7 +638,10 @@ impl Manager for TieredConfigManager {
         status.add_metadata("cache_size", Value::from(self.cache.read().await.len()));
         status.add_metadata("cache_ttl_seconds", Value::from(self.cache_ttl.as_secs()));
         if let Some(sync_manager) = &self.sync_manager {
-            status.add_metadata("last_sync", Value::String(sync_manager.last_sync_time().await.to_rfc3339()));
+            status.add_metadata(
+                "last_sync",
+                Value::String(sync_manager.last_sync_time().await.to_rfc3339()),
+            );
         }
         status
     }
@@ -613,15 +682,23 @@ impl Manager for TieredConfigManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
         let _ = self.sync().await;
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
@@ -631,7 +708,10 @@ impl Manager for TieredConfigManager {
         status.add_metadata("cache_size", Value::from(self.cache.read().await.len()));
         status.add_metadata("cache_ttl_seconds", Value::from(self.cache_ttl.as_secs()));
         if let Some(sync_manager) = &self.sync_manager {
-            status.add_metadata("last_sync", Value::String(sync_manager.last_sync_time().await.to_rfc3339()));
+            status.add_metadata(
+                "last_sync",
+                Value::String(sync_manager.last_sync_time().await.to_rfc3339()),
+            );
         }
         status
     }
@@ -687,7 +767,11 @@ impl ConfigStore for MemoryConfigStore {
     }
 
     async fn set(&self, key: &str, value: Value) -> Result<()> {
-        let old_value = self.data.write().await.insert(key.to_string(), value.clone());
+        let old_value = self
+            .data
+            .write()
+            .await
+            .insert(key.to_string(), value.clone());
 
         let change_event = ConfigChangeEvent {
             key: key.to_string(),
@@ -710,7 +794,8 @@ impl ConfigStore for MemoryConfigStore {
 
     async fn list_keys(&self, prefix: &str) -> Result<Vec<String>> {
         let data = self.data.read().await;
-        let keys: Vec<String> = data.keys()
+        let keys: Vec<String> = data
+            .keys()
             .filter(|k| k.starts_with(prefix))
             .cloned()
             .collect();
@@ -734,7 +819,11 @@ impl ConfigStore for MemoryConfigStore {
     }
 
     async fn set(&self, key: &str, value: Value) -> Result<()> {
-        let old_value = self.data.write().await.insert(key.to_string(), value.clone());
+        let old_value = self
+            .data
+            .write()
+            .await
+            .insert(key.to_string(), value.clone());
 
         let change_event = ConfigChangeEvent {
             key: key.to_string(),
@@ -757,7 +846,8 @@ impl ConfigStore for MemoryConfigStore {
 
     async fn list_keys(&self, prefix: &str) -> Result<Vec<String>> {
         let data = self.data.read().await;
-        let keys: Vec<String> = data.keys()
+        let keys: Vec<String> = data
+            .keys()
             .filter(|k| k.starts_with(prefix))
             .cloned()
             .collect();
@@ -818,12 +908,32 @@ mod tests {
         let mut manager = TieredConfigManager::new();
 
         // Add memory stores for testing
-        manager.add_store(ConfigurationTier::System, Box::new(MemoryConfigStore::new(ConfigurationTier::System)));
-        manager.add_store(ConfigurationTier::User, Box::new(MemoryConfigStore::new(ConfigurationTier::User)));
+        manager.add_store(
+            ConfigurationTier::System,
+            Box::new(MemoryConfigStore::new(ConfigurationTier::System)),
+        );
+        manager.add_store(
+            ConfigurationTier::User,
+            Box::new(MemoryConfigStore::new(ConfigurationTier::User)),
+        );
 
         // Set values in different tiers
-        manager.set("app.name", Value::String("System App".to_string()), ConfigurationTier::System).await.unwrap();
-        manager.set("app.name", Value::String("User App".to_string()), ConfigurationTier::User).await.unwrap();
+        manager
+            .set(
+                "app.name",
+                Value::String("System App".to_string()),
+                ConfigurationTier::System,
+            )
+            .await
+            .unwrap();
+        manager
+            .set(
+                "app.name",
+                Value::String("User App".to_string()),
+                ConfigurationTier::User,
+            )
+            .await
+            .unwrap();
 
         // Get merged value (user tier should override system)
         let app_name: Option<String> = manager.get("app.name").await.unwrap();
@@ -834,18 +944,26 @@ mod tests {
     fn test_validation_rules() {
         let mut rule_set = ValidationRuleSet::new();
 
-        rule_set.add_rule("app.port".to_string(), ValidationRule {
-            rule_type: ValidationRuleType::Range { min: 1.0, max: 65535.0 },
-            message: "Port must be between 1 and 65535".to_string(),
-            severity: ValidationSeverity::Error,
-        });
+        rule_set.add_rule(
+            "app.port".to_string(),
+            ValidationRule {
+                rule_type: ValidationRuleType::Range {
+                    min: 1.0,
+                    max: 65535.0,
+                },
+                message: "Port must be between 1 and 65535".to_string(),
+                severity: ValidationSeverity::Error,
+            },
+        );
 
         // Valid value
-        let valid_errors = rule_set.validate("app.port", &Value::Number(serde_json::Number::from(8080)));
+        let valid_errors =
+            rule_set.validate("app.port", &Value::Number(serde_json::Number::from(8080)));
         assert!(valid_errors.is_empty());
 
         // Invalid value
-        let invalid_errors = rule_set.validate("app.port", &Value::Number(serde_json::Number::from(70000)));
+        let invalid_errors =
+            rule_set.validate("app.port", &Value::Number(serde_json::Number::from(70000)));
         assert!(!invalid_errors.is_empty());
     }
 }

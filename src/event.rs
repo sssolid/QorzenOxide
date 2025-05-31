@@ -18,9 +18,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::utils::Time;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crate::utils::Time;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
@@ -185,10 +185,10 @@ impl EventFilter {
     /// Check if an event matches this filter
     pub fn matches(&self, event: &dyn Event) -> bool {
         // Check event type
-        if !self.event_types.is_empty() {
-            if !self.event_types.contains(&event.event_type().to_string()) {
-                return false;
-            }
+        if !self.event_types.is_empty()
+            && !self.event_types.contains(&event.event_type().to_string())
+        {
+            return false;
         }
 
         // Check source patterns
@@ -329,10 +329,13 @@ struct EventEnvelope {
     /// The actual event
     event: Arc<dyn Event>,
     /// When event was received
+    #[allow(dead_code)]
     received_at: Instant,
     /// Retry count
+    #[allow(dead_code)]
     retry_count: u32,
     /// Maximum retries
+    #[allow(dead_code)]
     max_retries: u32,
 }
 
@@ -472,17 +475,17 @@ impl EventBusManager {
                     Ok(()) => {
                         let processing_time = start_time.elapsed();
                         tracing::trace!(
-                        "Handler '{}' processed event in {:?}",
-                        handler_name,
-                        processing_time
-                    );
+                            "Handler '{}' processed event in {:?}",
+                            handler_name,
+                            processing_time
+                        );
                     }
                     Err(e) => {
                         tracing::error!(
-                        "Handler '{}' failed to process event: {}",
-                        handler_name,
-                        e
-                    );
+                            "Handler '{}' failed to process event: {}",
+                            handler_name,
+                            e
+                        );
                     }
                 }
             }
@@ -512,18 +515,19 @@ impl EventBusManager {
                 match handler.handle(event.as_ref()).await {
                     Ok(()) => {
                         let processing_time = start_time.elapsed();
-                        web_sys::console::log_1(&format!(
-                            "Handler '{}' processed event in {:?}",
-                            handler_name,
-                            processing_time
-                        ).into());
+                        web_sys::console::log_1(
+                            &format!(
+                                "Handler '{}' processed event in {:?}",
+                                handler_name, processing_time
+                            )
+                            .into(),
+                        );
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!(
-                            "Handler '{}' failed to process event: {}",
-                            handler_name,
-                            e
-                        ).into());
+                        web_sys::console::error_1(
+                            &format!("Handler '{}' failed to process event: {}", handler_name, e)
+                                .into(),
+                        );
                     }
                 }
             }

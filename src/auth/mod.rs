@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::utils::Time;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crate::utils::Time;
-use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
@@ -42,7 +42,7 @@ pub struct Role {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Permission {
     pub resource: String, // "user.profile", "plugin.inventory", "system.config"
-    pub action: String, // "read", "write", "delete", "execute"
+    pub action: String,   // "read", "write", "delete", "execute"
     pub scope: PermissionScope,
 }
 
@@ -688,11 +688,22 @@ pub struct MemorySessionStore {
     sessions: Arc<RwLock<HashMap<Uuid, UserSession>>>,
 }
 
+impl Default for MemorySessionStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MemorySessionStore {
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    #[allow(dead_code)]
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -764,6 +775,12 @@ impl SessionStore for MemorySessionStore {
 
 pub struct MemoryUserStore {
     users: Arc<RwLock<HashMap<UserId, User>>>,
+}
+
+impl Default for MemoryUserStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemoryUserStore {

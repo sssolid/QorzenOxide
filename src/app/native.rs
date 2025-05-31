@@ -17,7 +17,8 @@ use crate::auth::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 use crate::concurrency::ConcurrencyManager;
-use crate::error::{Error, ErrorKind, Result};  // Removed unused imports
+use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
+use crate::error::{Error, ErrorKind, Result}; // Removed unused imports
 use crate::event::EventBusManager;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::file::FileManager;
@@ -26,7 +27,6 @@ use crate::logging::LoggingManager;
 use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState, ManagerStatus};
 use crate::platform::PlatformManager;
 use crate::plugin::PluginManager;
-use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::task::TaskManager;
 use crate::ui::UILayoutManager;
@@ -169,10 +169,11 @@ impl ApplicationCore {
     }
 
     /// Creates application with custom config file
-    pub fn with_config_file(config_path: impl AsRef<Path>) -> Self {
-        let mut app = Self::new();
+    pub fn with_config_file(_config_path: impl AsRef<Path>) -> Self {
+        // let app = Self::new();
         // Config file handling would be implemented here
-        app
+        // app
+        Self::new()
     }
 
     /// Enhanced initialization with complete system setup
@@ -253,7 +254,7 @@ impl ApplicationCore {
                 .get("logging")
                 .await
                 .unwrap_or(None)
-                .unwrap_or_else(|| crate::config::LoggingConfig::default())
+                .unwrap_or_else(crate::config::LoggingConfig::default)
         } else {
             crate::config::LoggingConfig::default()
         };
@@ -272,7 +273,7 @@ impl ApplicationCore {
                 .get("concurrency")
                 .await
                 .unwrap_or(None)
-                .unwrap_or_else(|| crate::config::ConcurrencyConfig::default())
+                .unwrap_or_else(crate::config::ConcurrencyConfig::default)
         } else {
             crate::config::ConcurrencyConfig::default()
         };
@@ -291,7 +292,7 @@ impl ApplicationCore {
                 .get("event_bus")
                 .await
                 .unwrap_or(None)
-                .unwrap_or_else(|| crate::config::EventBusConfig::default())
+                .unwrap_or_default()
         } else {
             crate::config::EventBusConfig::default()
         };
@@ -320,7 +321,7 @@ impl ApplicationCore {
                 .get("files")
                 .await
                 .unwrap_or(None)
-                .unwrap_or_else(|| crate::config::FileConfig::default())
+                .unwrap_or_else(crate::config::FileConfig::default)
         } else {
             crate::config::FileConfig::default()
         };
@@ -345,7 +346,7 @@ impl ApplicationCore {
                 .get("tasks")
                 .await
                 .unwrap_or(None)
-                .unwrap_or_else(|| crate::config::TaskConfig::default())
+                .unwrap_or_default()
         } else {
             crate::config::TaskConfig::default()
         };
@@ -370,7 +371,7 @@ impl ApplicationCore {
                 .get("security")
                 .await
                 .unwrap_or(None)
-                .unwrap_or_else(|| SecurityPolicy::default())
+                .unwrap_or_else(SecurityPolicy::default)
         } else {
             SecurityPolicy::default()
         };
@@ -416,7 +417,7 @@ impl ApplicationCore {
                 loop {
                     interval.tick().await;
                     let result = {
-                        let mut manager = config_manager.lock().await;
+                        let manager = config_manager.lock().await;
                         manager.sync().await
                     };
 
@@ -541,7 +542,7 @@ impl ApplicationCore {
             let _ = timeout(Duration::from_secs(5), logging_manager.shutdown()).await;
         }
 
-        if let Some(mut config_manager) = self.config_manager.take() {
+        if let Some(config_manager) = self.config_manager.take() {
             let mut manager = config_manager.lock().await;
             let _ = timeout(Duration::from_secs(2), manager.shutdown()).await;
         }

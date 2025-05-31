@@ -3,8 +3,8 @@
 use dioxus::prelude::*;
 
 use crate::ui::{
-    layout::{Header, Sidebar, Footer},
-    state::{use_app_state, ui::use_sidebar, ui::use_mobile_menu},
+    layout::{Footer, Header, Sidebar},
+    state::{ui::use_mobile_menu, ui::use_sidebar, use_app_state},
 };
 
 /// Main layout component that provides the overall page structure
@@ -138,7 +138,7 @@ pub fn ResponsiveLayout(
     #[props(default = "".to_string())] mobile_class: String,
     #[props(default = "".to_string())] tablet_class: String,
     #[props(default = "".to_string())] desktop_class: String,
-    children: Element
+    children: Element,
 ) -> Element {
     rsx! {
         div {
@@ -158,7 +158,7 @@ pub fn ResponsiveLayout(
 #[component]
 pub fn ContentWrapper(
     #[props(default = "".to_string())] class: String,
-    children: Element
+    children: Element,
 ) -> Element {
     rsx! {
         div {
@@ -176,7 +176,7 @@ pub fn ContentWrapper(
 pub fn PageHeader(
     title: String,
     #[props(default = None)] subtitle: Option<String>,
-    #[props(default = None)] actions: Option<Element>
+    #[props(default = None)] actions: Option<Element>,
 ) -> Element {
     rsx! {
         div {
@@ -212,7 +212,7 @@ pub fn PageHeader(
 pub fn Card(
     #[props(default = "".to_string())] class: String,
     #[props(default = None)] title: Option<String>,
-    children: Element
+    children: Element,
 ) -> Element {
     rsx! {
         div {
@@ -246,7 +246,7 @@ pub fn Grid(
     #[props(default = 4)] lg_cols: u32,
     #[props(default = "gap-6".to_string())] gap: String,
     #[props(default = "".to_string())] class: String,
-    children: Element
+    children: Element,
 ) -> Element {
     rsx! {
         div {

@@ -4,25 +4,25 @@ use dioxus::prelude::*;
 
 use crate::ui::{
     pages::PageWrapper,
-    state::{use_app_state, use_app_dispatch, AppAction},
+    state::{use_app_dispatch, use_app_state},
 };
 
 /// Profile page component
 #[component]
 pub fn Profile() -> Element {
     let app_state = use_app_state();
-    let dispatch = use_app_dispatch();
+    let _dispatch = use_app_dispatch();
 
     // Clone user data to avoid borrowing issues
     let current_user = app_state.current_user.clone();
 
     // Form state
-    let mut display_name = use_signal(|| String::new());
-    let mut email = use_signal(|| String::new());
-    let mut bio = use_signal(|| String::new());
-    let mut department = use_signal(|| String::new());
-    let mut title = use_signal(|| String::new());
-    let mut phone = use_signal(|| String::new());
+    let mut display_name = use_signal(String::new);
+    let mut email = use_signal(String::new);
+    let mut bio = use_signal(String::new);
+    let mut department = use_signal(String::new);
+    let mut title = use_signal(String::new);
+    let mut phone = use_signal(String::new);
     let mut saving = use_signal(|| false);
     let mut save_message = use_signal(|| None::<String>);
 
@@ -42,14 +42,14 @@ pub fn Profile() -> Element {
     });
 
     let handle_save = {
-        let dispatch = dispatch.clone();
+        // let dispatch = dispatch.clone();
         move |_| {
             save_message.set(None);
             saving.set(true);
 
             // Simulate save operation
             spawn({
-                let dispatch = dispatch.clone();
+                // let dispatch = dispatch.clone();
                 async move {
                     #[cfg(not(target_arch = "wasm32"))]
                     tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
@@ -186,7 +186,7 @@ fn EditProfileForm(
     phone: Signal<String>,
     saving: Signal<bool>,
     save_message: Signal<Option<String>>,
-    on_save: Callback<Event<FormData>>
+    on_save: Callback<Event<FormData>>,
 ) -> Element {
     let success_message = if let Some(message) = save_message() {
         rsx! {
@@ -388,7 +388,6 @@ fn EditProfileForm(
 
             form {
                 class: "px-4 py-5 sm:p-6",
-                prevent_default: "onsubmit",
                 onsubmit: on_save,
 
                 {success_message}
@@ -540,7 +539,7 @@ fn SecuritySection() -> Element {
 fn PreferencesSection() -> Element {
     let mut theme = use_signal(|| "light".to_string());
     let mut language = use_signal(|| "en".to_string());
-    let mut notifications = use_signal(|| true);
+    let notifications = use_signal(|| true);
 
     let preferences_items = rsx! {
         div {

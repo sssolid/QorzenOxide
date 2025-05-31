@@ -18,14 +18,14 @@ pub mod network;
 pub mod storage;
 
 // Re-export types
-pub use database::{DatabaseProvider, Migration, QueryResult, Row, Transaction};
-pub use filesystem::{FileInfo, FileMetadata, FileSystemProvider};
-pub use network::{NetworkProvider, NetworkRequest, NetworkResponse};
-pub use storage::StorageProvider;
 use crate::platform::database::DatabaseArc;
 use crate::platform::filesystem::FileSystemArc;
 use crate::platform::network::NetworkArc;
 use crate::platform::storage::StorageArc;
+pub use database::{DatabaseProvider, Migration, QueryResult, Row, Transaction};
+pub use filesystem::{FileInfo, FileMetadata, FileSystemProvider};
+pub use network::{NetworkProvider, NetworkRequest, NetworkResponse};
+pub use storage::StorageProvider;
 
 /// Platform capabilities detection
 #[derive(Debug, Clone, Serialize, Deserialize)]

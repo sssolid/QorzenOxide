@@ -3,17 +3,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use dioxus::prelude::*;
 use crate::auth::{Permission, User};
+use crate::config::SettingsSchema;
 use crate::error::{Error, Result};
 use crate::event::{Event, EventBusManager};
 use crate::manager::{ManagedState, Manager, ManagerStatus, PlatformRequirements};
-use crate::config::SettingsSchema;
 use crate::platform::database::DatabaseArc;
 use crate::platform::filesystem::FileSystemArc;
+use async_trait::async_trait;
+use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
@@ -194,6 +194,7 @@ pub struct PluginContext {
 
 #[derive(Debug, Clone)]
 pub struct PluginApiClient {
+    #[allow(dead_code)]
     plugin_id: String,
     // Internal API endpoints
 }
@@ -241,11 +242,7 @@ pub struct DatabasePermissions {
 }
 
 impl PluginDatabase {
-    pub fn new(
-        plugin_id: String,
-        provider: DatabaseArc,
-        permissions: DatabasePermissions,
-    ) -> Self {
+    pub fn new(plugin_id: String, provider: DatabaseArc, permissions: DatabasePermissions) -> Self {
         Self {
             plugin_id,
             provider,
@@ -287,6 +284,7 @@ impl PluginDatabase {
 
 #[derive(Clone)]
 pub struct PluginFileSystem {
+    #[allow(dead_code)]
     plugin_id: String,
     provider: FileSystemArc,
     base_path: String,
@@ -343,6 +341,7 @@ impl Default for ResourceLimits {
 }
 
 pub struct PluginSandbox {
+    #[allow(dead_code)]
     resource_limits: ResourceLimits,
     allowed_permissions: Vec<Permission>,
 }
@@ -437,6 +436,12 @@ pub struct PluginRegistry {
     plugins: HashMap<String, Box<dyn Plugin>>,
     dependencies: HashMap<String, Vec<String>>,
     load_order: Vec<String>,
+}
+
+impl Default for PluginRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PluginRegistry {
@@ -536,6 +541,12 @@ pub struct DependencyResolver {
     // Implementation for resolving plugin dependencies
 }
 
+impl Default for DependencyResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DependencyResolver {
     pub fn new() -> Self {
         Self {}
@@ -569,6 +580,7 @@ pub struct PluginManager {
     state: ManagedState,
     registry: PluginRegistry,
     loader: Box<dyn PluginLoader + Send + Sync>,
+    #[allow(dead_code)]
     sandbox: PluginSandbox,
     api_provider: PluginApiProvider,
     dependency_resolver: DependencyResolver,
@@ -594,6 +606,12 @@ impl PluginApiProvider {
 
     pub fn create_client(&self, plugin_id: String) -> PluginApiClient {
         PluginApiClient::new(plugin_id)
+    }
+}
+
+impl Default for PluginApiProvider {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -721,14 +739,9 @@ impl PluginManager {
                 validation_rules: Vec::new(),
             },
             api_client: self.api_provider.create_client(plugin_id.to_string()),
-            event_bus: Arc::new(EventBusManager::new(
-                crate::event::EventBusConfig::default(),
-            )),
+            event_bus: Arc::new(EventBusManager::new(crate::event::EventBusConfig::default())),
             database: None,
-            file_system: PluginFileSystem::new(
-                plugin_id.to_string(),
-                filesystem_provider,
-            ),
+            file_system: PluginFileSystem::new(plugin_id.to_string(), filesystem_provider),
         })
     }
 
@@ -748,14 +761,9 @@ impl PluginManager {
                 validation_rules: Vec::new(),
             },
             api_client: self.api_provider.create_client(plugin_id.to_string()),
-            event_bus: Arc::new(EventBusManager::new(
-                crate::event::EventBusConfig::default(),
-            )),
+            event_bus: Arc::new(EventBusManager::new(crate::event::EventBusConfig::default())),
             database: None,
-            file_system: PluginFileSystem::new(
-                plugin_id.to_string(),
-                filesystem_provider,
-            ),
+            file_system: PluginFileSystem::new(plugin_id.to_string(), filesystem_provider),
         })
     }
 }
@@ -804,7 +812,9 @@ impl Manager for PluginManager {
 
                 #[cfg(target_arch = "wasm32")]
                 {
-                    web_sys::console::error_1(&format!("Failed to unload plugin {}: {}", plugin_id, e).into());
+                    web_sys::console::error_1(
+                        &format!("Failed to unload plugin {}: {}", plugin_id, e).into(),
+                    );
                 }
             }
         }

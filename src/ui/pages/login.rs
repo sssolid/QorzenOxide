@@ -1,13 +1,14 @@
 // src/ui/pages/login.rs - Authentication login page
 
 use dioxus::prelude::*;
+#[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
 use crate::{
     auth::Credentials,
     ui::{
         router::Route,
-        state::{use_app_state, auth::use_login},
+        state::{auth::use_login, use_app_state},
     },
 };
 
@@ -19,14 +20,13 @@ pub fn Login() -> Element {
     let navigator = use_navigator();
 
     // Form state
-    let mut username = use_signal(|| String::new());
-    let mut password = use_signal(|| String::new());
+    let mut username = use_signal(String::new);
+    let mut password = use_signal(String::new);
     let mut remember_me = use_signal(|| false);
     let mut login_error = use_signal(|| None::<String>);
 
     // Redirect if already authenticated
     use_effect({
-        let navigator = navigator.clone();
         move || {
             if app_state.current_user.is_some() {
                 navigator.push(Route::Dashboard {});
@@ -35,8 +35,6 @@ pub fn Login() -> Element {
     });
 
     let handle_submit = {
-        let login = login.clone();
-        let navigator = navigator.clone();
         move |_| {
             let credentials = Credentials::Password {
                 username: username(),
@@ -58,7 +56,7 @@ pub fn Login() -> Element {
 
             // Attempt login
             spawn({
-                let navigator = navigator.clone();
+                let navigator = navigator;
                 async move {
                     login.call(credentials);
 
@@ -104,7 +102,6 @@ pub fn Login() -> Element {
                 // Login form
                 form {
                     class: "mt-8 space-y-6",
-                    prevent_default: "onsubmit",
                     onsubmit: handle_submit,
 
                     // Error message

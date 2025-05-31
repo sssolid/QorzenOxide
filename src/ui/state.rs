@@ -3,11 +3,10 @@
 use dioxus::prelude::*;
 
 pub(crate) use crate::auth::{User, UserSession};
-use crate::ui::{UILayout, Theme, Notification};
+use crate::ui::{Notification, Theme, UILayout};
 use crate::utils::Time;
-use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AppStateContext {
     pub current_user: Option<User>,
     pub current_session: Option<UserSession>,
@@ -18,22 +17,6 @@ pub struct AppStateContext {
     pub notifications: Vec<Notification>,
     pub sidebar_collapsed: bool,
     pub mobile_menu_open: bool,
-}
-
-impl Default for AppStateContext {
-    fn default() -> Self {
-        Self {
-            current_user: None,
-            current_session: None,
-            current_layout: UILayout::default(),
-            current_theme: Theme::default(),
-            is_loading: false,
-            error_message: None,
-            notifications: Vec::new(),
-            sidebar_collapsed: false,
-            mobile_menu_open: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -110,7 +93,7 @@ pub fn app_state_reducer(state: &AppStateContext, action: AppAction) -> AppState
 #[component]
 pub fn AppStateProvider(children: Element) -> Element {
     // Use a single signal for the entire state
-    let mut app_state = use_signal(|| AppStateContext::default());
+    let mut app_state = use_signal(AppStateContext::default);
 
     // Create dispatch function that updates the state
     let dispatch = use_callback(move |action: AppAction| {
@@ -178,14 +161,14 @@ pub fn use_app_state_with_dispatch() -> (AppStateContext, Callback<AppAction>) {
 
 pub mod auth {
     use super::*;
-    use crate::auth::{User, UserSession, Credentials};
+    use crate::auth::{Credentials, User, UserSession};
 
     /// Hook for login functionality
     pub fn use_login() -> Callback<Credentials, ()> {
         let dispatch = use_app_dispatch();
 
         use_callback(move |_credentials: Credentials| {
-            let dispatch = dispatch.clone();
+            let dispatch = dispatch;
 
             spawn({
                 async move {
@@ -259,7 +242,7 @@ pub mod auth {
         let dispatch = use_app_dispatch();
 
         use_callback(move |_| {
-            let dispatch = dispatch.clone();
+            let dispatch = dispatch;
 
             spawn({
                 async move {
@@ -303,15 +286,15 @@ pub mod auth {
                 Some(user) => {
                     // Check direct permissions
                     let direct = user.permissions.iter().any(|perm| {
-                        (perm.resource == resource || perm.resource == "*") &&
-                            (perm.action == action || perm.action == "*")
+                        (perm.resource == resource || perm.resource == "*")
+                            && (perm.action == action || perm.action == "*")
                     });
 
                     // Check role permissions
                     let role_based = user.roles.iter().any(|role| {
                         role.permissions.iter().any(|perm| {
-                            (perm.resource == resource || perm.resource == "*") &&
-                                (perm.action == action || perm.action == "*")
+                            (perm.resource == resource || perm.resource == "*")
+                                && (perm.action == action || perm.action == "*")
                         })
                     });
 
@@ -331,10 +314,7 @@ pub mod ui {
         let state = use_app_state();
         let dispatch = use_app_dispatch();
 
-        let toggle = use_callback({
-            let dispatch = dispatch.clone();
-            move |_| dispatch(AppAction::ToggleSidebar)
-        });
+        let toggle = use_callback(move |_| dispatch(AppAction::ToggleSidebar));
 
         let set_collapsed = use_callback({
             move |collapsed: bool| dispatch(AppAction::SetSidebarCollapsed(collapsed))
@@ -348,36 +328,30 @@ pub mod ui {
         let state = use_app_state();
         let dispatch = use_app_dispatch();
 
-        let toggle = use_callback({
-            let dispatch = dispatch.clone();
-            move |_| dispatch(AppAction::ToggleMobileMenu)
-        });
+        let toggle = use_callback(move |_| dispatch(AppAction::ToggleMobileMenu));
 
-        let set_open = use_callback({
-            move |open: bool| dispatch(AppAction::SetMobileMenuOpen(open))
-        });
+        let set_open = use_callback(move |open: bool| dispatch(AppAction::SetMobileMenuOpen(open)));
 
         (state.mobile_menu_open, toggle, set_open)
     }
 
     /// Hook for notifications management
-    pub fn use_notifications() -> (Vec<Notification>, Callback<uuid::Uuid, ()>, Callback<uuid::Uuid, ()>, Callback<(), ()>) {
+    pub fn use_notifications() -> (
+        Vec<Notification>,
+        Callback<uuid::Uuid, ()>,
+        Callback<uuid::Uuid, ()>,
+        Callback<(), ()>,
+    ) {
         let state = use_app_state();
         let dispatch = use_app_dispatch();
 
-        let remove = use_callback({
-            let dispatch = dispatch.clone();
-            move |id: uuid::Uuid| dispatch(AppAction::RemoveNotification(id))
-        });
+        let remove =
+            use_callback(move |id: uuid::Uuid| dispatch(AppAction::RemoveNotification(id)));
 
-        let mark_read = use_callback({
-            let dispatch = dispatch.clone();
-            move |id: uuid::Uuid| dispatch(AppAction::MarkNotificationRead(id))
-        });
+        let mark_read =
+            use_callback(move |id: uuid::Uuid| dispatch(AppAction::MarkNotificationRead(id)));
 
-        let clear_all = use_callback({
-            move |_| dispatch(AppAction::ClearNotifications)
-        });
+        let clear_all = use_callback(move |_| dispatch(AppAction::ClearNotifications));
 
         (state.notifications, remove, mark_read, clear_all)
     }
@@ -413,7 +387,8 @@ mod tests {
 
         // Test setting error
         let error_msg = "Test error".to_string();
-        let new_state = app_state_reducer(&initial_state, AppAction::SetError(Some(error_msg.clone())));
+        let new_state =
+            app_state_reducer(&initial_state, AppAction::SetError(Some(error_msg.clone())));
         assert_eq!(new_state.error_message, Some(error_msg));
     }
 }

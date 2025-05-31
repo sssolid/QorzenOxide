@@ -2,10 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::ui::{
-    pages::{PageWrapper, StatCard, StatTrend, EmptyState},
-    state::use_app_state,
-};
+use crate::ui::pages::{EmptyState, PageWrapper, StatCard, StatTrend};
 
 /// Main admin page component
 #[component]
@@ -155,7 +152,7 @@ pub fn Admin() -> Element {
         "system" => rsx! { SystemTab {} },
         "plugins" => rsx! { PluginsTab {} },
         "logs" => rsx! { LogsTab {} },
-        _ => rsx! { div { "Unknown tab" } }
+        _ => rsx! { div { "Unknown tab" } },
     };
 
     rsx! {
@@ -242,24 +239,31 @@ fn OverviewTab() -> Element {
 /// Users management tab
 #[component]
 fn UsersTab() -> Element {
-    let mut search_query = use_signal(|| String::new());
+    let mut search_query = use_signal(String::new);
     let users = get_mock_users();
 
-    let filtered_users: Vec<_> = users.into_iter()
+    let filtered_users: Vec<_> = users
+        .into_iter()
         .filter(|user| {
             if search_query().is_empty() {
                 true
             } else {
                 let query = search_query().to_lowercase();
-                user.name.to_lowercase().contains(&query) ||
-                    user.email.to_lowercase().contains(&query) ||
-                    user.role.to_lowercase().contains(&query)
+                user.name.to_lowercase().contains(&query)
+                    || user.email.to_lowercase().contains(&query)
+                    || user.role.to_lowercase().contains(&query)
             }
         })
         .collect();
 
-    let active_users = filtered_users.iter().filter(|u| u.status == "Active").count();
-    let inactive_users = filtered_users.iter().filter(|u| u.status == "Inactive").count();
+    let active_users = filtered_users
+        .iter()
+        .filter(|u| u.status == "Active")
+        .count();
+    let inactive_users = filtered_users
+        .iter()
+        .filter(|u| u.status == "Inactive")
+        .count();
 
     let search_bar = rsx! {
         div {
@@ -350,7 +354,7 @@ fn UserListItem(user: MockUser) -> Element {
     let status_class = match user.status.as_str() {
         "Active" => "bg-green-100 text-green-800",
         "Inactive" => "bg-gray-100 text-gray-800",
-        _ => "bg-red-100 text-red-800"
+        _ => "bg-red-100 text-red-800",
     };
 
     rsx! {
@@ -645,7 +649,7 @@ fn LogEntry(log: SystemLog) -> Element {
         "ERROR" => "bg-red-50 text-red-800 border-l-4 border-red-400",
         "WARN" => "bg-yellow-50 text-yellow-800 border-l-4 border-yellow-400",
         "INFO" => "bg-blue-50 text-blue-800 border-l-4 border-blue-400",
-        _ => "bg-gray-50 text-gray-800 border-l-4 border-gray-400"
+        _ => "bg-gray-50 text-gray-800 border-l-4 border-gray-400",
     };
 
     let log_details = if !log.details.is_empty() {
@@ -753,13 +757,13 @@ fn SystemAlertItem(alert: SystemAlert) -> Element {
     let alert_class = match alert.severity.as_str() {
         "critical" => "bg-red-50 border border-red-200",
         "warning" => "bg-yellow-50 border border-yellow-200",
-        _ => "bg-blue-50 border border-blue-200"
+        _ => "bg-blue-50 border border-blue-200",
     };
 
     let text_color = match alert.severity.as_str() {
         "critical" => ("text-red-800", "text-red-700"),
         "warning" => ("text-yellow-800", "text-yellow-700"),
-        _ => ("text-blue-800", "text-blue-700")
+        _ => ("text-blue-800", "text-blue-700"),
     };
 
     rsx! {
@@ -851,13 +855,21 @@ fn SystemServicesList() -> Element {
 
 #[component]
 fn SystemServiceItem(service: SystemService) -> Element {
-    let status_dot_class = if service.running { "bg-green-400" } else { "bg-red-400" };
+    let status_dot_class = if service.running {
+        "bg-green-400"
+    } else {
+        "bg-red-400"
+    };
     let status_badge_class = if service.running {
         "bg-green-100 text-green-800"
     } else {
         "bg-red-100 text-red-800"
     };
-    let status_text = if service.running { "Running" } else { "Stopped" };
+    let status_text = if service.running {
+        "Running"
+    } else {
+        "Stopped"
+    };
 
     let action_button = if service.running {
         rsx! {
@@ -1069,15 +1081,13 @@ fn get_recent_admin_activities() -> Vec<AdminActivity> {
 }
 
 fn get_system_alerts() -> Vec<SystemAlert> {
-    vec![
-        SystemAlert {
-            id: "1".to_string(),
-            title: "High Memory Usage".to_string(),
-            message: "System memory usage is above 75%".to_string(),
-            severity: "warning".to_string(),
-            icon: "⚠️".to_string(),
-        },
-    ]
+    vec![SystemAlert {
+        id: "1".to_string(),
+        title: "High Memory Usage".to_string(),
+        message: "System memory usage is above 75%".to_string(),
+        severity: "warning".to_string(),
+        icon: "⚠️".to_string(),
+    }]
 }
 
 fn get_admin_plugins() -> Vec<AdminPlugin> {

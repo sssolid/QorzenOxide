@@ -8,10 +8,10 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::*;
 
 use crate::error::{Error, Result};
-use crate::platform::*;
 use crate::platform::database::DatabaseBounds;
 use crate::platform::network::NetworkBounds;
 use crate::platform::storage::StorageBounds;
+use crate::platform::*;
 
 #[cfg(target_arch = "wasm32")]
 #[global_allocator]
@@ -35,7 +35,7 @@ pub fn detect_capabilities() -> PlatformCapabilities {
         has_background_tasks: false,
         has_push_notifications: false, // Simplified for now
         has_biometric_auth: false,
-        has_camera: false, // Simplified for now
+        has_camera: false,   // Simplified for now
         has_location: false, // Simplified for now
         max_file_size: Some(50 * 1024 * 1024),
         supported_formats: vec![
@@ -226,7 +226,11 @@ impl NetworkProvider for FetchNetwork {
             }
 
             let req = Request::new_with_str_and_init(&request.url, &opts).map_err(|e| {
-                Error::platform("web", "network", format!("Failed to create request: {:?}", e))
+                Error::platform(
+                    "web",
+                    "network",
+                    format!("Failed to create request: {:?}", e),
+                )
             })?;
 
             window.fetch_with_request(&req) // <- return immediately

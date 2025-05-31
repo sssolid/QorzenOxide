@@ -1,6 +1,10 @@
 // src/main.rs - Fixed application entry point with proper WASM handling
 
-#![cfg_attr(all(target_os = "windows", not(target_arch = "wasm32")), windows_subsystem = "windows")]
+#![allow(clippy::result_large_err)]
+#![cfg_attr(
+    all(target_os = "windows", not(target_arch = "wasm32")),
+    windows_subsystem = "windows"
+)]
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
@@ -10,8 +14,8 @@ use std::process;
 #[cfg(not(target_arch = "wasm32"))]
 use clap::{Parser, Subcommand};
 use dioxus::prelude::Element;
-use qorzen_oxide::ui::App;
 use qorzen_oxide::error::Result;
+use qorzen_oxide::ui::App;
 
 #[cfg(not(target_arch = "wasm32"))]
 use qorzen_oxide::app::ApplicationCore;
@@ -42,7 +46,7 @@ struct Cli {
 enum Commands {
     Run {
         #[arg(long)]
-        headless: bool
+        headless: bool,
     },
 
     Status,
@@ -51,7 +55,7 @@ enum Commands {
 
     ValidateConfig {
         #[arg(short, long)]
-        config: Option<PathBuf>
+        config: Option<PathBuf>,
     },
 
     #[cfg(debug_assertions)]
@@ -151,7 +155,10 @@ fn print_system_info() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn run_ui_application(_cli: &Cli) {
-    tracing::info!("Starting Qorzen Oxide v{} (Desktop UI)", qorzen_oxide::VERSION);
+    tracing::info!(
+        "Starting Qorzen Oxide v{} (Desktop UI)",
+        qorzen_oxide::VERSION
+    );
 
     // For Dioxus desktop, we use the launch function with custom CSS injected via the App component
     dioxus::launch(AppWithDesktopCSS);
@@ -159,6 +166,7 @@ fn run_ui_application(_cli: &Cli) {
 
 // Wrapper component for desktop that includes CSS
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(non_snake_case)]
 fn AppWithDesktopCSS() -> Element {
     use dioxus::prelude::*;
 
@@ -202,7 +210,10 @@ where
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn run_application_async(cli: &Cli, headless: bool) -> Result<()> {
-    tracing::info!("Starting Qorzen Oxide v{} (Headless)", qorzen_oxide::VERSION);
+    tracing::info!(
+        "Starting Qorzen Oxide v{} (Headless)",
+        qorzen_oxide::VERSION
+    );
 
     let mut app = if let Some(config_path) = &cli.config {
         ApplicationCore::with_config_file(config_path)
@@ -292,7 +303,10 @@ fn validate_config(config_path: Option<PathBuf>) -> Result<()> {
 
     let _app = if let Some(path) = config_path {
         if !path.exists() {
-            eprintln!("Error: Configuration file does not exist: {}", path.display());
+            eprintln!(
+                "Error: Configuration file does not exist: {}",
+                path.display()
+            );
             process::exit(1);
         }
 

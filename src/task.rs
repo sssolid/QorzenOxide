@@ -6,23 +6,23 @@ use std::collections::HashMap;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::utils::Time;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crate::utils::Time;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock, Semaphore};
 use tokio::time::{timeout, Instant};
 use uuid::Uuid;
 
+use crate::config::TaskConfig;
 use crate::error::{Error, Result};
 use crate::event::{Event, EventBusManager};
 use crate::manager::{ManagedState, Manager, ManagerStatus};
-use crate::config::TaskConfig;
 use crate::types::{CorrelationId, Metadata};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,23 +167,12 @@ pub struct TaskResult {
     pub metadata: Metadata,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ResourceUsage {
     pub peak_memory_bytes: u64,
     pub cpu_time_ms: u64,
     pub file_operations: u32,
     pub network_bytes: u64,
-}
-
-impl Default for ResourceUsage {
-    fn default() -> Self {
-        Self {
-            peak_memory_bytes: 0,
-            cpu_time_ms: 0,
-            file_operations: 0,
-            network_bytes: 0,
-        }
-    }
 }
 
 pub trait ProgressReporter: Send + Sync + fmt::Debug {
@@ -205,6 +194,12 @@ pub struct CancellationToken {
     cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
+impl Default for CancellationToken {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CancellationToken {
     pub fn new() -> Self {
         Self {
@@ -213,6 +208,11 @@ impl CancellationToken {
             #[cfg(target_arch = "wasm32")]
             cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    #[allow(dead_code)]
+    fn default() -> Self {
+        Self::new()
     }
 
     pub fn cancel(&self) {
@@ -278,8 +278,8 @@ impl TaskContext {
 
 pub type TaskFunction = Arc<
     dyn Fn(TaskContext) -> Pin<Box<dyn Future<Output = Result<serde_json::Value>> + Send>>
-    + Send
-    + Sync,
+        + Send
+        + Sync,
 >;
 
 pub struct TaskDefinition {
@@ -515,9 +515,11 @@ impl ProgressReporter for TaskProgressReporter {
 #[derive(Debug)]
 pub struct TaskManager {
     state: ManagedState,
+    #[allow(dead_code)]
     config: TaskConfig,
     tasks: Arc<DashMap<Uuid, TaskExecution>>,
     stats: Arc<RwLock<TaskManagerStats>>,
+    #[allow(dead_code)]
     task_counter: Arc<AtomicU64>,
     concurrency_semaphore: Arc<Semaphore>,
     event_bus: Option<Arc<EventBusManager>>,
@@ -669,7 +671,7 @@ impl TaskManager {
                 TaskStatus::Running,
                 TaskStatus::Cancelled,
             )
-                .await;
+            .await;
 
             Ok(true)
         } else {
@@ -817,7 +819,11 @@ impl TaskManager {
             }
         }
 
-        Err(Error::task(Some(task_id), None,"Task completion wait failed"))
+        Err(Error::task(
+            Some(task_id),
+            None,
+            "Task completion wait failed",
+        ))
     }
 
     pub async fn get_stats(&self) -> TaskManagerStats {

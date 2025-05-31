@@ -1,10 +1,12 @@
 // src/ui/pages/plugins.rs - Plugin management and marketplace
 
 use dioxus::prelude::*;
+#[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
+#[allow(unused_imports)]
 use crate::ui::{
-    pages::{PageWrapper, EmptyState},
+    pages::{EmptyState, PageWrapper},
     router::Route,
     state::use_app_state,
 };
@@ -13,7 +15,7 @@ use crate::ui::{
 #[component]
 pub fn Plugins() -> Element {
     let mut active_tab = use_signal(|| "installed".to_string());
-    let mut search_query = use_signal(|| String::new());
+    let mut search_query = use_signal(String::new);
     let mut loading = use_signal(|| false);
 
     // Mock plugin data
@@ -200,13 +202,16 @@ pub fn Plugins() -> Element {
 /// Installed plugins tab
 #[component]
 fn InstalledPluginsTab(plugins: Vec<PluginInfo>, search_query: String) -> Element {
-    let filtered_plugins: Vec<PluginInfo> = plugins.into_iter()
+    let filtered_plugins: Vec<PluginInfo> = plugins
+        .into_iter()
         .filter(|p| {
             if search_query.is_empty() {
                 true
             } else {
-                p.name.to_lowercase().contains(&search_query.to_lowercase()) ||
-                    p.description.to_lowercase().contains(&search_query.to_lowercase())
+                p.name.to_lowercase().contains(&search_query.to_lowercase())
+                    || p.description
+                        .to_lowercase()
+                        .contains(&search_query.to_lowercase())
             }
         })
         .collect();
@@ -244,13 +249,16 @@ fn InstalledPluginsTab(plugins: Vec<PluginInfo>, search_query: String) -> Elemen
 /// Available plugins tab
 #[component]
 fn AvailablePluginsTab(plugins: Vec<PluginInfo>, search_query: String) -> Element {
-    let filtered_plugins: Vec<PluginInfo> = plugins.into_iter()
+    let filtered_plugins: Vec<PluginInfo> = plugins
+        .into_iter()
         .filter(|p| {
             if search_query.is_empty() {
                 true
             } else {
-                p.name.to_lowercase().contains(&search_query.to_lowercase()) ||
-                    p.description.to_lowercase().contains(&search_query.to_lowercase())
+                p.name.to_lowercase().contains(&search_query.to_lowercase())
+                    || p.description
+                        .to_lowercase()
+                        .contains(&search_query.to_lowercase())
             }
         })
         .collect();
@@ -631,7 +639,8 @@ fn get_installed_plugins() -> Vec<PluginInfo> {
             name: "Inventory Management".to_string(),
             version: "2.1.0".to_string(),
             author: "QorzenTech".to_string(),
-            description: "Complete inventory tracking and management system with barcode support".to_string(),
+            description: "Complete inventory tracking and management system with barcode support"
+                .to_string(),
             icon: "📦".to_string(),
             rating: 4.8,
             downloads: "12.5k".to_string(),
@@ -642,7 +651,8 @@ fn get_installed_plugins() -> Vec<PluginInfo> {
             name: "Analytics Dashboard".to_string(),
             version: "1.5.2".to_string(),
             author: "DataViz Inc".to_string(),
-            description: "Advanced analytics and reporting with beautiful visualizations".to_string(),
+            description: "Advanced analytics and reporting with beautiful visualizations"
+                .to_string(),
             icon: "📊".to_string(),
             rating: 4.6,
             downloads: "8.2k".to_string(),
@@ -653,7 +663,8 @@ fn get_installed_plugins() -> Vec<PluginInfo> {
             name: "Backup & Sync".to_string(),
             version: "3.0.1".to_string(),
             author: "SecureData".to_string(),
-            description: "Automated backup and synchronization across multiple cloud providers".to_string(),
+            description: "Automated backup and synchronization across multiple cloud providers"
+                .to_string(),
             icon: "☁️".to_string(),
             rating: 4.9,
             downloads: "15.1k".to_string(),
@@ -691,7 +702,8 @@ fn get_available_plugins() -> Vec<PluginInfo> {
             name: "Smart Notifications".to_string(),
             version: "1.0.5".to_string(),
             author: "NotifyMe".to_string(),
-            description: "Advanced notification system with email, SMS, and push support".to_string(),
+            description: "Advanced notification system with email, SMS, and push support"
+                .to_string(),
             icon: "🔔".to_string(),
             rating: 4.2,
             downloads: "3.1k".to_string(),

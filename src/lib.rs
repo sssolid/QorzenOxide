@@ -7,6 +7,9 @@
 #![cfg_attr(test, allow(unsafe_code))]
 #![warn(clippy::all)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::result_large_err)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::large_enum_variant)]
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -39,10 +42,10 @@ pub fn main() {
 // Core modules (always available)
 pub mod app;
 pub mod auth;
+pub mod config;
 pub mod error;
 pub mod event;
 pub mod manager;
-pub mod config;
 pub mod platform;
 pub mod plugin;
 pub mod types;

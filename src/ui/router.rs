@@ -1,17 +1,14 @@
 // src/ui/router.rs - Routing configuration with authentication guards
 
 use dioxus::prelude::*;
+#[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
 use crate::ui::{
     layout::Layout,
     pages::{
-        Dashboard as DashboardPage,
-        Login as LoginPage,
-        Profile as ProfilePage,
-        NotFound as NotFoundPage,
-        Settings as SettingPage,
-        Plugins as PluginsPage,
+        Dashboard as DashboardPage, Login as LoginPage, NotFound as NotFoundPage,
+        Plugins as PluginsPage, Profile as ProfilePage, Settings as SettingPage,
     },
     state::use_app_state,
 };
@@ -129,9 +126,13 @@ fn AdminPageWithPermissionCheck() -> Element {
 
     match &app_state.current_user {
         Some(user) => {
-            let has_admin_permission = user.roles.iter()
-                .any(|role| role.id == "admin" || role.permissions.iter()
-                    .any(|perm| perm.resource == "admin" && perm.action == "*"));
+            let has_admin_permission = user.roles.iter().any(|role| {
+                role.id == "admin"
+                    || role
+                        .permissions
+                        .iter()
+                        .any(|perm| perm.resource == "admin" && perm.action == "*")
+            });
 
             if has_admin_permission {
                 rsx! {
@@ -253,7 +254,7 @@ pub fn PermissionGuard(
     resource: String,
     action: String,
     fallback: Option<Element>,
-    children: Element
+    children: Element,
 ) -> Element {
     let app_state = use_app_state();
 
@@ -261,15 +262,15 @@ pub fn PermissionGuard(
         Some(user) => {
             // Check direct permissions
             let direct_permission = user.permissions.iter().any(|perm| {
-                (perm.resource == resource || perm.resource == "*") &&
-                    (perm.action == action || perm.action == "*")
+                (perm.resource == resource || perm.resource == "*")
+                    && (perm.action == action || perm.action == "*")
             });
 
             // Check role permissions
             let role_permission = user.roles.iter().any(|role| {
                 role.permissions.iter().any(|perm| {
-                    (perm.resource == resource || perm.resource == "*") &&
-                        (perm.action == action || perm.action == "*")
+                    (perm.resource == resource || perm.resource == "*")
+                        && (perm.action == action || perm.action == "*")
                 })
             });
 
@@ -295,7 +296,7 @@ pub fn PermissionGuard(
                         "Insufficient permissions"
                     }
                 }
-            }
+            },
         }
     }
 }
