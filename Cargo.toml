@@ -5,6 +5,9 @@ edition = "2021"
 build = "build.rs"
 description = "A high-performance, modular plugin-based system built in Rust with comprehensive async core managers and type-safe architecture."
 license = "LICENSE"
+documentation = "README.md"
+homepage = "https://www.qorzen.com"
+repository = "https://github.com/sssolid/QorzenOxide"
 
 [features]
 default = []
