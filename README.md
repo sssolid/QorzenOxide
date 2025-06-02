@@ -13,7 +13,7 @@
 [![Crates.io](https://img.shields.io/crates/v/qorzen_oxide.svg)](https://crates.io/crates/qorzen_oxide)
 [![Downloads](https://img.shields.io/crates/d/qorzen_oxide.svg)](https://crates.io/crates/qorzen_oxide)
 
-[🌐 Website](https://www.qorzen.com) • [📚 Documentation](https://docs.qorzen.com) • [💬 Discord](https://discord.gg/qorzenhq) • [🐦 Twitter](https://twitter.com/qorzenhq)
+[🌐 Website](https://www.qorzen.com) • [📚 Documentation](https://docs.qorzen.com) • [💬 Discord](https://discord.gg/qorzenhq) • [🐦 Twitter](https://twitter.com/qorzenhq) • [📄 GitHub Pages (mirror)](https://sssolid.github.io/QorzenOxide/)
 
 </div>
 

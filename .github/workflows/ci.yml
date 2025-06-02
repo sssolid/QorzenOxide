@@ -91,9 +91,6 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
-    env:
-      SYS_DEPS: "libglib2.0-dev libgirepository1.0-dev pkg-config libgtk-3-dev libpango1.0-dev libcairo2-dev libatk1.0-dev libgdk-pixbuf2.0-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libwebkit2gtk-4.1-dev"
-
     steps:
       - uses: actions/checkout@v4
 
@@ -113,14 +110,39 @@ jobs:
       - name: Build documentation
         run: cargo doc --all-features --no-deps --workspace
 
-      - name: Upload docs to DigitalOcean via SCP
+      - name: Flatten and prepare docs output
+        run: |
+          mkdir -p docs_flat
+          cp -r target/doc/qorzen_oxide/* docs_flat/
+          cp target/doc/{*.css,*.js,*.html,*.woff*} docs_flat/ 2>/dev/null || true
+
+      - name: Clear existing docs on server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            rm -rf /var/www/qorzen_docs/*
+            mkdir -p /var/www/qorzen_docs
+
+      - name: Upload docs to DigitalOcean
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.DO_HOST }}
           username: root
           key: ${{ secrets.DO_SSH_KEY }}
-          source: "target/doc/*"
+          source: "docs_flat/*"
           target: "/var/www/qorzen_docs"
+
+      - name: Fix file ownership
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            chown -R www-data:www-data /var/www/qorzen_docs
 
       - name: Reload Nginx
         uses: appleboy/ssh-action@v0.1.10
@@ -130,6 +152,36 @@ jobs:
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
             nginx -t && systemctl reload nginx
+
+  gh-pages:
+    runs-on: ubuntu-22.04
+    needs: [ docs ]  # Optional: only if you want to run this after DO docs
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y $SYS_DEPS
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-ghpages-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-ghpages-cargo-
+
+      - name: Build documentation
+        run: cargo doc --all-features --no-deps --workspace
+
+      - name: Publish to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/doc
+          keep_files: false
 
   security:
     runs-on: ubuntu-22.04
@@ -192,21 +244,6 @@ jobs:
     needs: [ build ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
-
-    env:
-      SYS_DEPS: |
-        libglib2.0-dev
-        libgirepository1.0-dev
-        pkg-config
-        libgtk-3-dev
-        libpango1.0-dev
-        libcairo2-dev
-        libatk1.0-dev
-        libgdk-pixbuf2.0-dev
-        libsoup-3.0-dev
-        libjavascriptcoregtk-4.1-dev
-        libwebkit2gtk-4.1-dev
-
     steps:
       - uses: actions/checkout@v4
 
