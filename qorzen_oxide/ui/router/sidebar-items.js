@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Route"],"fn":["Admin","AuthenticatedLayout","Dashboard","Home","Login","NotFound","PermissionGuard","Plugin","PluginPage","Plugins","Profile","Settings"],"mod":["nav"],"struct":["AuthenticatedLayoutProps","NotFoundProps","PermissionGuardProps","PluginPageProps","PluginProps"]};

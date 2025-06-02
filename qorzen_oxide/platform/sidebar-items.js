@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["database","filesystem","native","network","storage"],"struct":["MockFileSystem","PlatformCapabilities","PlatformManager","PlatformProviders"]};

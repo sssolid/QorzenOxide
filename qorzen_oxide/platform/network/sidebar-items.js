@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["NetworkRequest","NetworkResponse"],"trait":["NetworkBounds","NetworkProvider"],"type":["DynNetwork","NetworkArc"]};

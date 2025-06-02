@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FileInfo","FileMetadata"],"trait":["FileSystemBounds","FileSystemProvider"],"type":["DynFileSystem","FileSystemArc"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["HealthStatus","ManagerState"],"struct":["ManagedState","ManagerMetrics","ManagerStatus","PlatformRequirements"],"trait":["Manager","PlatformSync"]};

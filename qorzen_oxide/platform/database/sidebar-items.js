@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Migration","QueryResult","Row","Transaction"],"trait":["DatabaseBounds","DatabaseProvider"],"type":["DatabaseArc","DynDatabase"]};

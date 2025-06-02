@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cleanup","create_providers","detect_capabilities","initialize"],"struct":["NativeFileSystem","NativeNetwork","NativeStorage","SqliteDatabase"]};

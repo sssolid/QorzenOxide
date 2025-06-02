@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_desktop","is_mobile","is_tablet","responsive_classes"]};

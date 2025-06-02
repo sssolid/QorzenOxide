@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TaskCategory","TaskPriority","TaskStatus"],"struct":["CancellationToken","ResourceUsage","TaskBuilder","TaskContext","TaskCreatedEvent","TaskDefinition","TaskInfo","TaskManager","TaskManagerStats","TaskProgress","TaskProgressEvent","TaskResult","TaskStatusChangedEvent"],"trait":["ProgressReporter"],"type":["TaskFunction"]};

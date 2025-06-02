@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConcurrencyOperation","ConfigOperation","ErrorKind","ErrorSeverity","EventOperation","FileOperation","ManagerOperation"],"struct":["Error"],"trait":["ResultExt"],"type":["Result"]};

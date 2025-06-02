@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AuthProviderType","Credentials","PermissionScope"],"struct":["AccountManager","AuthResult","Claims","ContactInfo","MemorySessionStore","MemoryUserStore","Permission","PermissionCache","Role","SecurityPolicy","TokenPair","User","UserPreferences","UserProfile","UserSession"],"trait":["AuthProvider","SessionStore","UserStore"],"type":["UserId"]};

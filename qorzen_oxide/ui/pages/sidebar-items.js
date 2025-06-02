@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StatTrend"],"fn":["Admin","Dashboard","EmptyState","Login","NotFound","PageError","PageSkeleton","PageWrapper","PluginView","Plugins","Profile","Settings","StatCard"],"struct":["EmptyStateProps","PageErrorProps","PageWrapperProps","StatCardProps"]};

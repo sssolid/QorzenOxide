@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["Footer","Header","Layout","Sidebar"],"mod":["utils"],"struct":["Breakpoints","LayoutProps"]};

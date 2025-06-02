@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["use_current_user","use_has_permission","use_is_authenticated","use_login","use_logout"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["VERSION"],"macro":["api_route","define_event","export_plugin","log_debug","log_error","log_info","log_trace","log_warn","menu_item","plugin","search_provider","ui_component"],"mod":["app","auth","concurrency","config","error","event","file","logging","manager","platform","plugin","task","types","ui","utils","utils_general"]};

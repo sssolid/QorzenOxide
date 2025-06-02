@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_active_route","route_icon","route_title"]};

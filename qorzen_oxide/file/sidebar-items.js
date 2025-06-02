@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FileChangeType","FileOperationStatus","FileType"],"fn":["calculate_file_hash","get_file_extension","safe_path_join","sanitize_filename"],"struct":["FileChangeEvent","FileManager","FileMetadata","FileOperationOptions","FileOperationProgress","FileWatcher"]};
