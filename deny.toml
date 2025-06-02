@@ -1,14 +1,21 @@
 [licenses]
-allow-osi-fsf-free = "both"
-default = "deny"
-copyleft = "warn"
-unlicensed = "warn"
-
 allow = [
     "MIT",
     "Apache-2.0",
-    "Unicode-3.0"
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "ISC"
 ]
+unlicensed = "warn"
+copyleft = "warn"
+
+[advisories]
+ignore = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "warn"
 
 # [licenses.exceptions]
 # Example: allow a specific crate with a nonstandard license

@@ -90,11 +90,18 @@ jobs:
   docs:
     runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    env:
+      SYS_DEPS: "libglib2.0-dev libgirepository1.0-dev pkg-config libgtk-3-dev libpango1.0-dev libcairo2-dev libatk1.0-dev libgdk-pixbuf2.0-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libwebkit2gtk-4.1-dev"
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y $SYS_DEPS
+
       - uses: dtolnay/rust-toolchain@stable
+
       - uses: actions/cache@v3
         with:
           path: |
@@ -102,11 +109,27 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-docs-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-docs-cargo-
-      - run: cargo doc --all-features --no-deps --workspace
-      - uses: peaceiris/actions-gh-pages@v3
+
+      - name: Build documentation
+        run: cargo doc --all-features --no-deps --workspace
+
+      - name: Upload docs to DigitalOcean via SCP
+        uses: appleboy/scp-action@v0.1.4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/doc
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          source: "target/doc/*"
+          target: "/var/www/qorzen_docs"
+
+      - name: Reload Nginx
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            nginx -t && systemctl reload nginx
 
   security:
     runs-on: ubuntu-22.04
