@@ -4,7 +4,7 @@ dist = "dist"
 
 [watch]
 watch = ["src", "public", "index.html"]
-ignore = ["dist", "target"]
+ignore = ["dist", "C:/RustTarget"]
 
 [serve]
 addresses = ["127.0.0.1"]

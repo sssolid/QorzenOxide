@@ -13,7 +13,7 @@ env:
 jobs:
   setup:
     name: Common Setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       cache-key: ${{ steps.cache-key-generator.outputs.key }}
     steps:
@@ -26,7 +26,7 @@ jobs:
 
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: setup
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
 
   fmt:
     name: Rustfmt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -94,7 +94,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: setup
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
 
   docs:
     name: Documentation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
@@ -141,7 +141,7 @@ jobs:
 
   security:
     name: Security Audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -156,7 +156,7 @@ jobs:
 
   coverage:
     name: Code Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: setup
     steps:
       - uses: actions/checkout@v4
@@ -242,7 +242,7 @@ jobs:
 
   deploy:
     name: Deploy to Production
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production

@@ -61,6 +61,7 @@ pub async fn cleanup() -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug)]
 pub struct WebFileSystem;
 
 impl WebFileSystem {
@@ -165,6 +166,7 @@ impl WebFileSystem {
     }
 }
 
+#[derive(Debug)]
 pub struct IndexedDbDatabase {
     database_name: String,
 }
