@@ -18,7 +18,7 @@ jobs:
       cache-key: ${{ steps.cache-key-generator.outputs.key }}
     steps:
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev libgirepository1.0-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev libgirepository1.0-dev pkg-config libgtk-3-dev
 
       - name: Generate Cache Key
         id: cache-key-generator
