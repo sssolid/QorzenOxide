@@ -112,7 +112,7 @@ jobs:
 
       - name: Flatten and prepare docs output
         run: |
-          mkdir -p docs_flat
+          rm -rf docs_flat && mkdir -p docs_flat
           cp -r target/doc/qorzen_oxide/* docs_flat/
           cp target/doc/{*.css,*.js,*.html,*.woff*} docs_flat/ 2>/dev/null || true
 
@@ -155,7 +155,7 @@ jobs:
 
   gh-pages:
     runs-on: ubuntu-22.04
-    needs: [ docs ]  # Optional: only if you want to run this after DO docs
+    needs: [ docs ]  # optional
 
     steps:
       - uses: actions/checkout@v4
@@ -176,11 +176,17 @@ jobs:
       - name: Build documentation
         run: cargo doc --all-features --no-deps --workspace
 
+      - name: Flatten and prepare GitHub Pages docs
+        run: |
+          rm -rf docs_flat && mkdir -p docs_flat
+          cp -r target/doc/qorzen_oxide/* docs_flat/
+          cp target/doc/{*.css,*.js,*.html,*.woff*} docs_flat/ 2>/dev/null || true
+
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/doc
+          publish_dir: docs_flat
           keep_files: false
 
   security:
