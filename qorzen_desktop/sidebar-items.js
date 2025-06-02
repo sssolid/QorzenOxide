@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Commands"],"fn":["AppWithDesktopCSS","check_health","main","print_system_info","run_application_async","run_dev_server","run_headless_application","run_headless_command","run_ui_application","setup_logging","show_status","validate_config"],"struct":["Cli"]};
