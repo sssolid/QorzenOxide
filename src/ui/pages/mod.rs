@@ -3,22 +3,22 @@
 use dioxus::prelude::*;
 
 // Module declarations
+mod admin;
 mod dashboard;
 mod login;
-mod profile;
-mod plugins;
-mod settings;
-mod admin;
 mod not_found;
+mod plugins;
+mod profile;
+mod settings;
 
 // Re-exports
+pub use admin::Admin;
 pub use dashboard::Dashboard;
 pub use login::Login;
-pub use profile::Profile;
-pub use plugins::{Plugins, PluginView};
-pub use settings::Settings;
-pub use admin::Admin;
 pub use not_found::NotFound;
+pub use plugins::{PluginView, Plugins};
+pub use profile::Profile;
+pub use settings::Settings;
 
 /// Common page wrapper component
 #[component]

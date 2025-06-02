@@ -25,9 +25,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot, Semaphore};
 use uuid::Uuid;
 
+use crate::config::ConcurrencyConfig;
 use crate::error::{ConcurrencyOperation, Error, ErrorKind, Result, ResultExt};
 use crate::manager::{ManagedState, Manager, ManagerStatus};
-use crate::config::ConcurrencyConfig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThreadPoolType {
@@ -106,8 +106,10 @@ pub struct ThreadPoolStats {
 struct ThreadWorker {
     id: usize,
     thread_handle: Option<thread::JoinHandle<()>>,
+    #[allow(dead_code)]
     work_queue: Arc<SegQueue<WorkItem>>,
     stats: Arc<ThreadWorkerStats>,
+    #[allow(dead_code)]
     shutdown_signal: Arc<parking_lot::Mutex<bool>>,
 }
 
@@ -134,6 +136,7 @@ impl ThreadWorkerStats {
         *self.last_activity.lock() = Instant::now();
     }
 
+    #[allow(dead_code)]
     fn get_average_execution_time(&self) -> f64 {
         let total_tasks = self.tasks_executed.load(Ordering::Relaxed);
         if total_tasks == 0 {
@@ -151,6 +154,7 @@ impl ThreadWorkerStats {
 
 #[derive(Debug)]
 pub struct ThreadPool {
+    #[allow(dead_code)]
     pool_type: ThreadPoolType,
     config: ThreadPoolConfig,
     workers: Vec<ThreadWorker>,
@@ -576,6 +580,7 @@ impl AsyncWorkCoordinator {
 #[derive(Debug)]
 pub struct ConcurrencyManager {
     state: ManagedState,
+    #[allow(dead_code)]
     config: ConcurrencyConfig,
     thread_pools: HashMap<ThreadPoolType, ThreadPool>,
     async_coordinator: AsyncWorkCoordinator,
@@ -898,7 +903,11 @@ pub mod utils {
     }
 
     pub async fn synchronize_at_barrier(
-        tasks: Vec<Box <dyn FnOnce(Arc<Barrier>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send, >, >,
+        tasks: Vec<
+            Box<
+                dyn FnOnce(Arc<Barrier>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send,
+            >,
+        >,
     ) -> Result<()> {
         let barrier = Arc::new(Barrier::new(tasks.len()));
         let handles: Vec<_> = tasks

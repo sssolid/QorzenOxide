@@ -26,10 +26,10 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
+use crate::config::FileConfig;
 use crate::error::{Error, FileOperation, Result, ResultExt};
 use crate::event::{Event, EventBusManager};
 use crate::manager::{ManagedState, Manager, ManagerStatus};
-use crate::config::FileConfig;
 use crate::types::Metadata;
 
 /// File type enumeration based on content and extension
@@ -1021,7 +1021,8 @@ impl FileManager {
         destination: impl AsRef<Path>,
     ) -> Result<()> {
         let compressed_data = self.read_file(source).await?;
-        let decompressed_data = crate::utils_general::compression::decompress_gzip(&compressed_data)?;
+        let decompressed_data =
+            crate::utils_general::compression::decompress_gzip(&compressed_data)?;
         self.write_file(destination, &decompressed_data, None)
             .await?;
 
@@ -1197,30 +1198,29 @@ pub fn get_file_extension(path: &Path) -> Option<String> {
         .map(|s| s.to_lowercase())
 }
 
+fn canonicalization_error(path: &Path, op: FileOperation, source: &std::io::Error) -> Error {
+    Error::new(
+        crate::error::ErrorKind::File {
+            path: Some(path.display().to_string()),
+            operation: op,
+        },
+        format!("Failed to canonicalize {}: {}", path.display(), source),
+    )
+}
+
 /// Join paths safely, preventing directory traversal
 pub fn safe_path_join(base: &Path, relative: &Path) -> Result<PathBuf> {
     let joined = base.join(relative);
-    let canonical_base = base.canonicalize().map_err(|e| {
-        Error::new(
-            crate::error::ErrorKind::File {
-                path: Some(base.display().to_string()),
-                operation: FileOperation::Read,
-            },
-            format!("Failed to canonicalize base path: {}", e),
-        )
-    })?;
 
-    let canonical_joined = joined.canonicalize().map_err(|e| {
-        Error::new(
-            crate::error::ErrorKind::File {
-                path: Some(joined.display().to_string()),
-                operation: FileOperation::Read,
-            },
-            format!("Failed to canonicalize joined path: {}", e),
-        )
-    })?;
+    let canonical_base = base
+        .canonicalize()
+        .map_err(|e| canonicalization_error(base, FileOperation::Read, &e))?;
 
-    if !canonical_joined.starts_with(canonical_base) {
+    let canonical_joined = joined
+        .canonicalize()
+        .map_err(|e| canonicalization_error(&joined, FileOperation::Read, &e))?;
+
+    if !canonical_joined.starts_with(&canonical_base) {
         return Err(Error::new(
             crate::error::ErrorKind::File {
                 path: Some(joined.display().to_string()),

@@ -17,11 +17,19 @@ pub fn Button(
     let base_classes = "inline-flex items-center border font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors";
 
     let variant_classes = match variant.as_str() {
-        "primary" => "border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
-        "secondary" => "border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500",
+        "primary" => {
+            "border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+        }
+        "secondary" => {
+            "border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500"
+        }
         "danger" => "border-transparent text-white bg-red-600 hover:bg-red-700 focus:ring-red-500",
-        "success" => "border-transparent text-white bg-green-600 hover:bg-green-700 focus:ring-green-500",
-        "warning" => "border-transparent text-white bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500",
+        "success" => {
+            "border-transparent text-white bg-green-600 hover:bg-green-700 focus:ring-green-500"
+        }
+        "warning" => {
+            "border-transparent text-white bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500"
+        }
         "ghost" => "border-transparent text-gray-700 hover:bg-gray-100 focus:ring-blue-500",
         _ => "border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500",
     };
@@ -94,7 +102,11 @@ pub fn Input(
     #[props(default = None)] onchange: Option<Callback<FormEvent>>,
 ) -> Element {
     let base_classes = "block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
-    let disabled_classes = if disabled { "bg-gray-50 text-gray-500" } else { "" };
+    let disabled_classes = if disabled {
+        "bg-gray-50 text-gray-500"
+    } else {
+        ""
+    };
 
     rsx! {
         input {
@@ -284,11 +296,41 @@ pub fn Alert(
     children: Element,
 ) -> Element {
     let (bg_color, border_color, text_color, title_color, icon) = match variant.as_str() {
-        "success" => ("bg-green-50", "border-green-200", "text-green-700", "text-green-800", "✅"),
-        "warning" => ("bg-yellow-50", "border-yellow-200", "text-yellow-700", "text-yellow-800", "⚠️"),
-        "error" => ("bg-red-50", "border-red-200", "text-red-700", "text-red-800", "❌"),
-        "info" => ("bg-blue-50", "border-blue-200", "text-blue-700", "text-blue-800", "ℹ️"),
-        _ => ("bg-gray-50", "border-gray-200", "text-gray-700", "text-gray-800", "📌"),
+        "success" => (
+            "bg-green-50",
+            "border-green-200",
+            "text-green-700",
+            "text-green-800",
+            "✅",
+        ),
+        "warning" => (
+            "bg-yellow-50",
+            "border-yellow-200",
+            "text-yellow-700",
+            "text-yellow-800",
+            "⚠️",
+        ),
+        "error" => (
+            "bg-red-50",
+            "border-red-200",
+            "text-red-700",
+            "text-red-800",
+            "❌",
+        ),
+        "info" => (
+            "bg-blue-50",
+            "border-blue-200",
+            "text-blue-700",
+            "text-blue-800",
+            "ℹ️",
+        ),
+        _ => (
+            "bg-gray-50",
+            "border-gray-200",
+            "text-gray-700",
+            "text-gray-800",
+            "📌",
+        ),
     };
 
     rsx! {
@@ -537,7 +579,7 @@ pub fn Tabs(
                         ),
                         onclick: {
                             let tab_id = tab.id.clone();
-                            let handler = on_tab_change.clone();
+                            let handler = on_tab_change;
                             move |_| {
                                 if let Some(ref handler) = handler {
                                     handler.call(tab_id.clone());

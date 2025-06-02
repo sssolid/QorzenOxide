@@ -8,13 +8,15 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::auth::{AccountManager, MemorySessionStore, MemoryUserStore, SecurityPolicy, User, UserSession};
+use crate::auth::{
+    AccountManager, MemorySessionStore, MemoryUserStore, SecurityPolicy, User, UserSession,
+};
+use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
 use crate::error::{Error, Result};
 use crate::event::EventBusManager;
 use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState};
 use crate::platform::PlatformManager;
 use crate::plugin::PluginManager;
-use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
 use crate::ui::UILayoutManager;
 use crate::utils::Time;
 
@@ -328,7 +330,7 @@ impl ApplicationCore {
             started_at: self.started_at,
             uptime: uptime,
             state: ApplicationState::Running, // Simplified
-            manager_count: 6, // Approximate count
+            manager_count: 6,                 // Approximate count
             initialized_managers: 6,
             failed_managers: 0,
             memory_usage_bytes: 0, // Not available in web

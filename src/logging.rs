@@ -13,9 +13,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::utils::Time;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crate::utils::Time;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{Event, Subscriber};
@@ -26,9 +26,9 @@ use tracing_subscriber::{
 };
 use uuid::Uuid;
 
+use crate::config::{LogFormat, LoggingConfig};
 use crate::error::{Error, ErrorKind, Result, ResultExt};
 use crate::manager::{ManagedState, Manager, ManagerStatus};
-use crate::config::{LogFormat, LoggingConfig};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {

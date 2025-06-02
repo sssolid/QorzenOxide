@@ -5,3 +5,4 @@
 /dist/
 /node_modules/
 .idea/
+.cargo/config.toml

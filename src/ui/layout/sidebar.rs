@@ -1,11 +1,12 @@
 // src/ui/layout/sidebar.rs - Navigation sidebar with menu items and plugin integration
 
 use dioxus::prelude::*;
+#[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
 use crate::ui::{
-    router::{Route, nav},
-    state::{use_app_state, auth::use_has_permission},
+    router::{nav, Route},
+    state::auth::use_has_permission,
 };
 
 /// Sidebar component props
@@ -35,7 +36,7 @@ pub struct NavItem {
 /// Main sidebar component
 #[component]
 pub fn Sidebar(props: SidebarProps) -> Element {
-    let app_state = use_app_state();
+    // let app_state = use_app_state();
     let current_route = use_route::<Route>();
     let has_permission = use_has_permission();
 
@@ -43,7 +44,8 @@ pub fn Sidebar(props: SidebarProps) -> Element {
     let nav_items = get_navigation_items();
 
     // Filter navigation items based on user permissions
-    let filtered_nav_items = nav_items.into_iter()
+    let filtered_nav_items = nav_items
+        .into_iter()
         .filter(|item| {
             if let Some((resource, action)) = &item.required_permission {
                 has_permission(resource, action)
@@ -136,7 +138,7 @@ pub fn Sidebar(props: SidebarProps) -> Element {
                                     item: item.clone(),
                                     collapsed: false,
                                     current_route: current_route.clone(),
-                                    on_click: Some(props.on_close.clone())
+                                    on_click: Some(props.on_close)
                                 }
                             }
                         }
@@ -149,7 +151,7 @@ pub fn Sidebar(props: SidebarProps) -> Element {
                                 "Plugins"
                             }
                             PluginNavigation {
-                                on_click: Some(props.on_close.clone())
+                                on_click: Some(props.on_close)
                             }
                         }
                     }
@@ -167,7 +169,9 @@ fn NavigationItem(
     current_route: Route,
     #[props(default = None)] on_click: Option<Callback<Event<MouseData>>>,
 ) -> Element {
-    let is_active = item.route.as_ref()
+    let is_active = item
+        .route
+        .as_ref()
         .map(|route| nav::is_active_route(&current_route, route))
         .unwrap_or(false);
 
@@ -230,7 +234,7 @@ fn NavigationItem(
                                 item: child.clone(),
                                 collapsed: false,
                                 current_route: current_route.clone(),
-                                on_click: on_click.clone()
+                                on_click: on_click
                             }
                         }
                     }
@@ -321,7 +325,9 @@ fn NavigationItem(
 
 /// Plugin navigation section
 #[component]
-fn PluginNavigation(#[props(default = None)] on_click: Option<Callback<Event<MouseData>>>) -> Element {
+fn PluginNavigation(
+    #[props(default = None)] on_click: Option<Callback<Event<MouseData>>>,
+) -> Element {
     // Mock plugin data - in real app this would come from plugin manager
     let plugins = vec![
         ("inventory", "📦", "Inventory"),

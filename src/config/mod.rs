@@ -15,13 +15,13 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::utils::Time;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crate::utils::Time;
-use tokio::sync::broadcast;
-use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
+use tokio::sync::broadcast;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
@@ -30,7 +30,7 @@ use crate::manager::{ManagedState, Manager, ManagerStatus};
 use crate::types::Metadata;
 
 pub mod tiered;
-pub use tiered::{ConfigurationTier, TieredConfigManager, MemoryConfigStore};
+pub use tiered::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigChangeEvent {
@@ -116,7 +116,7 @@ pub struct ConfigLayer {
     pub hot_reload: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppConfig {
     pub app: AppSettings,
     pub logging: LoggingConfig,
@@ -128,23 +128,6 @@ pub struct AppConfig {
     pub database: DatabaseConfig,
     pub network: NetworkConfig,
     pub security: SecurityConfig,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            app: AppSettings::default(),
-            logging: LoggingConfig::default(),
-            event_bus: EventBusConfig::default(),
-            files: FileConfig::default(),
-            tasks: TaskConfig::default(),
-            concurrency: ConcurrencyConfig::default(),
-            plugins: PluginConfig::default(),
-            database: DatabaseConfig::default(),
-            network: NetworkConfig::default(),
-            security: SecurityConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -483,6 +466,56 @@ impl fmt::Debug for ConfigManager {
     }
 }
 
+fn set_nested_env_value(config: &mut Map<String, Value>, keys: &[&str], value: String) {
+    if keys.is_empty() {
+        return;
+    }
+
+    if keys.len() == 1 {
+        // Try to parse as different types
+        let parsed_value = if let Ok(bool_val) = value.parse::<bool>() {
+            Value::Bool(bool_val)
+        } else if let Ok(int_val) = value.parse::<i64>() {
+            Value::Number(Number::from(int_val))
+        } else if let Ok(float_val) = value.parse::<f64>() {
+            Value::Number(Number::from_f64(float_val).unwrap())
+        } else {
+            Value::String(value)
+        };
+
+        config.insert(keys[0].to_string(), parsed_value);
+    } else {
+        let first_key = keys[0];
+        if !config.contains_key(first_key) {
+            config.insert(first_key.to_string(), Value::Object(Map::new()));
+        }
+
+        if let Some(Value::Object(nested_map)) = config.get_mut(first_key) {
+            set_nested_env_value(nested_map, &keys[1..], value);
+        }
+    }
+}
+
+fn merge_values(target: &mut Value, source: Value) {
+    match (target, source) {
+        (Value::Object(target_map), Value::Object(source_map)) => {
+            for (key, source_value) in source_map {
+                match target_map.get_mut(&key) {
+                    Some(target_value) => {
+                        merge_values(target_value, source_value);
+                    }
+                    None => {
+                        target_map.insert(key, source_value);
+                    }
+                }
+            }
+        }
+        (target, source) => {
+            *target = source;
+        }
+    }
+}
+
 impl ConfigManager {
     pub fn new() -> Self {
         let (change_notifier, _) = broadcast::channel(100);
@@ -682,7 +715,7 @@ impl ConfigManager {
         // Process layers in priority order (lowest to highest)
         for layer in &self.layers {
             let layer_config = self.load_layer_config(layer).await?;
-            self.merge_values(&mut merged, layer_config);
+            merge_values(&mut merged, layer_config);
         }
 
         *self.merged_config.write().await = merged;
@@ -693,25 +726,23 @@ impl ConfigManager {
         match &layer.source {
             #[cfg(not(target_arch = "wasm32"))]
             ConfigSource::File { path, format } => {
-                {
-                    let content = std::fs::read_to_string(path)
-                        .map_err(|e| Error::config(format!("Failed to read config file: {}", e)))?;
+                let content = std::fs::read_to_string(path)
+                    .map_err(|e| Error::config(format!("Failed to read config file: {}", e)))?;
 
-                    match format {
-                        ConfigFormat::Json => serde_json::from_str(&content)
-                            .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e))),
-                        ConfigFormat::Yaml => serde_yaml::from_str(&content)
-                            .map_err(|e| Error::config(format!("Failed to parse YAML config: {}", e))),
-                        ConfigFormat::Toml => toml::from_str(&content)
-                            .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e))),
-                    }
+                match format {
+                    ConfigFormat::Json => serde_json::from_str(&content)
+                        .map_err(|e| Error::config(format!("Failed to parse JSON config: {}", e))),
+                    ConfigFormat::Yaml => serde_yaml::from_str(&content)
+                        .map_err(|e| Error::config(format!("Failed to parse YAML config: {}", e))),
+                    ConfigFormat::Toml => toml::from_str(&content)
+                        .map_err(|e| Error::config(format!("Failed to parse TOML config: {}", e))),
                 }
-            },
-            
+            }
+
             #[cfg(target_arch = "wasm32")]
             ConfigSource::File { .. } => {
                 Err(Error::config("File loading not supported in web platform"))
-            },
+            }
 
             #[cfg(not(target_arch = "wasm32"))]
             ConfigSource::Environment { prefix } => {
@@ -725,39 +756,17 @@ impl ConfigManager {
                             .trim_start_matches('_')
                             .to_lowercase();
                         let nested_keys: Vec<&str> = config_key.split('_').collect();
-                        self.set_nested_env_value(&mut env_config, &nested_keys, value);
+                        set_nested_env_value(&mut env_config, &nested_keys, value);
                     }
                 }
 
                 Ok(Value::Object(env_config))
-            },
+            }
 
             #[cfg(target_arch = "wasm32")]
-            ConfigSource::Environment { .. } => {
-                Ok(Value::Object(serde_json::Map::new()))
-            },
-            
-            ConfigSource::Memory { data } => Ok(data.clone()),
-        }
-    }
+            ConfigSource::Environment { .. } => Ok(Value::Object(serde_json::Map::new())),
 
-    fn merge_values(&self, target: &mut Value, source: Value) {
-        match (target, source) {
-            (Value::Object(target_map), Value::Object(source_map)) => {
-                for (key, source_value) in source_map {
-                    match target_map.get_mut(&key) {
-                        Some(target_value) => {
-                            self.merge_values(target_value, source_value);
-                        }
-                        None => {
-                            target_map.insert(key, source_value);
-                        }
-                    }
-                }
-            }
-            (target, source) => {
-                *target = source;
-            }
+            ConfigSource::Memory { data } => Ok(data.clone()),
         }
     }
 
@@ -795,36 +804,6 @@ impl ConfigManager {
                 }
 
                 current = map.get_mut(*k).unwrap();
-            }
-        }
-    }
-
-    fn set_nested_env_value(&self, config: &mut Map<String, Value>, keys: &[&str], value: String) {
-        if keys.is_empty() {
-            return;
-        }
-
-        if keys.len() == 1 {
-            // Try to parse as different types
-            let parsed_value = if let Ok(bool_val) = value.parse::<bool>() {
-                Value::Bool(bool_val)
-            } else if let Ok(int_val) = value.parse::<i64>() {
-                Value::Number(Number::from(int_val))
-            } else if let Ok(float_val) = value.parse::<f64>() {
-                Value::Number(Number::from_f64(float_val).unwrap())
-            } else {
-                Value::String(value)
-            };
-
-            config.insert(keys[0].to_string(), parsed_value);
-        } else {
-            let first_key = keys[0];
-            if !config.contains_key(first_key) {
-                config.insert(first_key.to_string(), Value::Object(Map::new()));
-            }
-
-            if let Some(Value::Object(nested_map)) = config.get_mut(first_key) {
-                self.set_nested_env_value(nested_map, &keys[1..], value);
             }
         }
     }

@@ -5,10 +5,10 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
 use crate::utils::Time;
-use tokio::sync::RwLock;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::{Error, ManagerOperation, Result};
@@ -60,25 +60,13 @@ impl fmt::Display for HealthStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PlatformRequirements {
     pub requires_filesystem: bool,
     pub requires_network: bool,
     pub requires_database: bool,
     pub requires_native_apis: bool,
     pub minimum_permissions: Vec<String>,
-}
-
-impl Default for PlatformRequirements {
-    fn default() -> Self {
-        Self {
-            requires_filesystem: false,
-            requires_network: false,
-            requires_database: false,
-            requires_native_apis: false,
-            minimum_permissions: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

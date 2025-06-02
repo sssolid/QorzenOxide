@@ -1,9 +1,9 @@
 // src/platform/network.rs
 
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::error::Result;
 
 /// Network request
 #[derive(Debug, Clone, Serialize, Deserialize)]

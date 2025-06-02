@@ -7,10 +7,10 @@ use tokio::fs;
 
 use crate::error::Error;
 use crate::error::Result;
-use crate::platform::*;
 use crate::platform::database::DatabaseBounds;
 use crate::platform::network::NetworkBounds;
 use crate::platform::storage::StorageBounds;
+use crate::platform::*;
 
 /// Creates native platform providers
 pub fn create_providers() -> Result<PlatformProviders> {
@@ -186,7 +186,7 @@ impl FileSystemProvider for NativeFileSystem {
                 is_directory: metadata.is_dir(),
                 modified: metadata
                     .modified()
-                    .map(|t| chrono::DateTime::from(t))
+                    .map(chrono::DateTime::from)
                     .unwrap_or_else(|_| chrono::Utc::now()),
             };
             files.push(file_info);
@@ -225,12 +225,12 @@ impl FileSystemProvider for NativeFileSystem {
             size: metadata.len(),
             is_directory: metadata.is_dir(),
             is_readonly: metadata.permissions().readonly(),
-            created: metadata.created().map(|t| chrono::DateTime::from(t)).ok(),
+            created: metadata.created().map(chrono::DateTime::from).ok(),
             modified: metadata
                 .modified()
-                .map(|t| chrono::DateTime::from(t))
+                .map(chrono::DateTime::from)
                 .unwrap_or_else(|_| chrono::Utc::now()),
-            accessed: metadata.accessed().map(|t| chrono::DateTime::from(t)).ok(),
+            accessed: metadata.accessed().map(chrono::DateTime::from).ok(),
         })
     }
 }
