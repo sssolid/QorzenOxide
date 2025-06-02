@@ -32,8 +32,8 @@ jobs:
   test:
     strategy:
       matrix:
-        rust: [stable, beta, nightly]
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        rust: [ stable, beta, nightly ]
+        os: [ ubuntu-latest, windows-latest, macOS-latest ]
         exclude:
           - rust: beta
             os: windows-latest
@@ -166,13 +166,33 @@ jobs:
 
   deploy:
     runs-on: ubuntu-22.04
-    needs: [build]
+    needs: [ build ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
+
+    env:
+      SYS_DEPS: |
+        libglib2.0-dev
+        libgirepository1.0-dev
+        pkg-config
+        libgtk-3-dev
+        libpango1.0-dev
+        libcairo2-dev
+        libatk1.0-dev
+        libgdk-pixbuf2.0-dev
+        libsoup-3.0-dev
+        libjavascriptcoregtk-4.1-dev
+        libwebkit2gtk-4.1-dev
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
       - run: rustup target add wasm32-unknown-unknown
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y $SYS_DEPS
+
       - uses: actions/cache@v3
         with:
           path: |
@@ -181,18 +201,17 @@ jobs:
             ~/.cargo/bin
           key: ${{ runner.os }}-cargo-trunk-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-trunk-
-      - name: Install Trunk
+
+      - name: Install Trunk from source
         run: |
-          source $HOME/.cargo/env
-          if ! command -v trunk > /dev/null; then
-            cargo install trunk
-          fi
+          cargo install trunk --locked
         shell: bash
+
       - name: Build WASM App
         run: |
-          source $HOME/.cargo/env
           trunk build --release
         shell: bash
+
       - uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.DO_HOST }}
@@ -200,6 +219,7 @@ jobs:
           key: ${{ secrets.DO_SSH_KEY }}
           source: "dist/*"
           target: "/var/www/qorzen"
+
       - uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.DO_HOST }}

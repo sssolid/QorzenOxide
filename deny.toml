@@ -1,3 +1,15 @@
 [licenses]
-allow-osi-approved = true
-allow-fsf-free = true
+allow-osi-fsf-free = "both"
+default = "deny"
+copyleft = "warn"
+unlicensed = "warn"
+
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0"
+]
+
+[licenses.exceptions]
+# Example: allow a specific crate with a nonstandard license
+# "crate-name@version" = { allow = ["Custom-License"] }
