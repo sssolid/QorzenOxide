@@ -169,11 +169,25 @@ jobs:
       - name: Build documentation
         run: cargo doc --all-features --no-deps --workspace
 
-      - name: Publish to GitHub Pages (crate root)
+      - name: Inject redirect index.html
+        run: |
+          cat <<EOF > target/doc/index.html
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="0; url=qorzen_oxide/">
+            </head>
+            <body>
+              <p>Redirecting to <a href="qorzen_oxide/">qorzen_oxide/</a>…</p>
+            </body>
+          </html>
+          EOF
+
+      - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: target/doc/qorzen_oxide
+          publish_dir: target/doc
           keep_files: false
 
   security:
