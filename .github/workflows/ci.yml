@@ -110,12 +110,6 @@ jobs:
       - name: Build documentation
         run: cargo doc --all-features --no-deps --workspace
 
-      - name: Flatten and prepare docs output
-        run: |
-          rm -rf docs_flat && mkdir -p docs_flat
-          cp -r target/doc/qorzen_oxide/* docs_flat/
-          cp target/doc/{*.css,*.js,*.html,*.woff*} docs_flat/ 2>/dev/null || true
-
       - name: Clear existing docs on server
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -124,18 +118,17 @@ jobs:
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
             rm -rf /var/www/qorzen_docs/*
-            mkdir -p /var/www/qorzen_docs
 
-      - name: Upload docs to DigitalOcean
+      - name: Upload full docs to DigitalOcean
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.DO_HOST }}
           username: root
           key: ${{ secrets.DO_SSH_KEY }}
-          source: "docs_flat/*"
+          source: "target/doc/*"
           target: "/var/www/qorzen_docs"
 
-      - name: Fix file ownership
+      - name: Fix permissions
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.DO_HOST }}
@@ -176,17 +169,11 @@ jobs:
       - name: Build documentation
         run: cargo doc --all-features --no-deps --workspace
 
-      - name: Flatten and prepare GitHub Pages docs
-        run: |
-          rm -rf docs_flat && mkdir -p docs_flat
-          cp -r target/doc/qorzen_oxide/* docs_flat/
-          cp target/doc/{*.css,*.js,*.html,*.woff*} docs_flat/ 2>/dev/null || true
-
-      - name: Publish to GitHub Pages
+      - name: Publish to GitHub Pages (crate root)
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs_flat
+          publish_dir: target/doc/qorzen_oxide
           keep_files: false
 
   security:

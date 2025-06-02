@@ -7,8 +7,6 @@ allow = [
     "Unicode-3.0",
     "ISC"
 ]
-unlicensed = "warn"
-copyleft = "warn"
 
 [advisories]
 ignore = []
