@@ -10,18 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  SYS_DEPS: |
-    libglib2.0-dev \
-    libgirepository1.0-dev \
-    pkg-config \
-    libgtk-3-dev \
-    libpango1.0-dev \
-    libcairo2-dev \
-    libatk1.0-dev \
-    libgdk-pixbuf2.0-dev \
-    libsoup-3.0-dev \
-    libjavascriptcoregtk-4.1-dev \
-    libwebkit2gtk-4.1-dev
+  SYS_DEPS: "libglib2.0-dev libgirepository1.0-dev pkg-config libgtk-3-dev libpango1.0-dev libcairo2-dev libatk1.0-dev libgdk-pixbuf2.0-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libwebkit2gtk-4.1-dev"
 
 jobs:
   check:
