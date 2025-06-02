@@ -10,6 +10,6 @@ allow = [
     "Unicode-3.0"
 ]
 
-[licenses.exceptions]
+# [licenses.exceptions]
 # Example: allow a specific crate with a nonstandard license
 # "crate-name@version" = { allow = ["Custom-License"] }

@@ -204,7 +204,7 @@ jobs:
 
       - name: Install Trunk from source
         run: |
-          cargo install trunk --locked
+          cargo install trunk --locked --force
         shell: bash
 
       - name: Build WASM App
