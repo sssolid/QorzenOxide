@@ -43,14 +43,14 @@ pub type DatabaseArc = Arc<DynDatabase>;
 /// Database operations - made dyn compatible by removing generic transaction method
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait DatabaseProvider: DatabaseBounds {
+pub trait DatabaseProvider: DatabaseBounds + std::fmt::Debug {
     async fn execute(&self, query: &str, params: &[serde_json::Value]) -> Result<QueryResult>;
     async fn query(&self, query: &str, params: &[serde_json::Value]) -> Result<Vec<Row>>;
     async fn migrate(&self, migrations: &[Migration]) -> Result<()>;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub trait DatabaseBounds: Send + Sync {}
+pub trait DatabaseBounds: Send + Sync + std::fmt::Debug {}
 
 #[cfg(target_arch = "wasm32")]
 pub trait DatabaseBounds: Sync {}

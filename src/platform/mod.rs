@@ -2,6 +2,9 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::Result;
@@ -22,6 +25,7 @@ use crate::platform::database::DatabaseArc;
 use crate::platform::filesystem::FileSystemArc;
 use crate::platform::network::NetworkArc;
 use crate::platform::storage::StorageArc;
+use crate::Error;
 pub use database::{DatabaseProvider, Migration, QueryResult, Row, Transaction};
 pub use filesystem::{FileInfo, FileMetadata, FileSystemProvider};
 pub use network::{NetworkProvider, NetworkRequest, NetworkResponse};
@@ -118,10 +122,16 @@ impl PlatformManager {
     pub fn filesystem(&self) -> &dyn FileSystemProvider {
         self.filesystem.as_ref()
     }
+    pub fn filesystem_arc(&self) -> FileSystemArc {
+        Arc::clone(&self.filesystem)
+    }
 
     /// Returns database provider
     pub fn database(&self) -> &dyn DatabaseProvider {
         self.database.as_ref()
+    }
+    pub fn database_arc(&self) -> DatabaseArc {
+        Arc::clone(&self.database)
     }
 
     /// Returns network provider
@@ -283,4 +293,69 @@ pub struct PlatformProviders {
     pub database: DatabaseArc,
     pub network: NetworkArc,
     pub storage: StorageArc,
+}
+
+/// Mock filesystem implementation for testing
+#[derive(Debug, Default)]
+pub struct MockFileSystem {
+    files: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+}
+
+impl MockFileSystem {
+    pub fn new() -> Self {
+        Self {
+            files: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+}
+
+impl filesystem::FileSystemBounds for MockFileSystem {}
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl FileSystemProvider for MockFileSystem {
+    async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
+        self.files
+            .read()
+            .await
+            .get(path)
+            .cloned()
+            .ok_or_else(|| Error::platform("mock", "filesystem", "File not found"))
+    }
+
+    async fn write_file(&self, path: &str, data: &[u8]) -> Result<()> {
+        self.files
+            .write()
+            .await
+            .insert(path.to_string(), data.to_vec());
+        Ok(())
+    }
+
+    async fn delete_file(&self, path: &str) -> Result<()> {
+        self.files.write().await.remove(path);
+        Ok(())
+    }
+
+    async fn list_directory(&self, _path: &str) -> Result<Vec<FileInfo>> {
+        Ok(Vec::new())
+    }
+
+    async fn create_directory(&self, _path: &str) -> Result<()> {
+        Ok(())
+    }
+
+    async fn file_exists(&self, path: &str) -> bool {
+        self.files.read().await.contains_key(path)
+    }
+
+    async fn get_metadata(&self, _path: &str) -> Result<FileMetadata> {
+        Ok(FileMetadata {
+            size: 0,
+            is_directory: false,
+            is_readonly: false,
+            created: None,
+            modified: chrono::Utc::now(),
+            accessed: None,
+        })
+    }
 }

@@ -45,7 +45,7 @@ if ($LASTEXITCODE -ne 0) {
 # }
 
 # Run release (bumps version, tags, pushes)
-cargo release $bump --execute
+cargo release $bump --execute --no-publish
 if ($LASTEXITCODE -ne 0) {
     Write-Error "❌ cargo-release failed."
     exit 1

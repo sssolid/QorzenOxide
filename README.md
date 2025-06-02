@@ -8,8 +8,7 @@
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![CI/CD](https://github.com/sssolid/QorzenOxide/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/sssolid/QorzenOxide/actions)
-[![Security Audit](https://github.com/sssolid/QorzenOxide/workflows/Security%20Audit/badge.svg)](https://github.com/sssolid/QorzenOxide/actions)
+[![CI/CD](https://github.com/sssolid/QorzenOxide/workflows/ci.yml/badge.svg)](https://github.com/sssolid/QorzenOxide/actions/workflows/ci.yml)
 [![Documentation](https://docs.rs/qorzen_oxide/badge.svg)](https://docs.rs/qorzen_oxide)
 [![Crates.io](https://img.shields.io/crates/v/qorzen_oxide.svg)](https://crates.io/crates/qorzen_oxide)
 [![Downloads](https://img.shields.io/crates/d/qorzen_oxide.svg)](https://crates.io/crates/qorzen_oxide)

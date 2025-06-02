@@ -37,7 +37,7 @@ pub type FileSystemArc = Arc<DynFileSystem>;
 /// File system operations
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait FileSystemProvider: FileSystemBounds {
+pub trait FileSystemProvider: FileSystemBounds + std::fmt::Debug {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>>;
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<()>;
     async fn delete_file(&self, path: &str) -> Result<()>;
@@ -48,7 +48,7 @@ pub trait FileSystemProvider: FileSystemBounds {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub trait FileSystemBounds: Send + Sync {}
+pub trait FileSystemBounds: Send + Sync + std::fmt::Debug {}
 
 #[cfg(target_arch = "wasm32")]
 pub trait FileSystemBounds: Sync {}

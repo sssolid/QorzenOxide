@@ -81,6 +81,7 @@ pub async fn cleanup() -> Result<()> {
 }
 
 /// Native filesystem implementation
+#[derive(Debug)]
 pub struct NativeFileSystem {
     base_path: std::path::PathBuf,
 }
@@ -236,6 +237,7 @@ impl FileSystemProvider for NativeFileSystem {
 }
 
 /// SQLite database implementation
+#[derive(Debug)]
 pub struct SqliteDatabase {
     // Database connection would be here
     _db_path: std::path::PathBuf,

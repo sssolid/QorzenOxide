@@ -1,5 +1,11 @@
 // src/plugin/mod.rs - Plugin system with hot-reloading and sandboxing
 
+mod loader;
+mod manager;
+mod manifest;
+mod sdk;
+mod search;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -15,6 +21,7 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Plugin information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
     pub id: String,
@@ -29,7 +36,8 @@ pub struct PluginInfo {
     pub supported_platforms: Vec<Platform>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Supported platforms for plugins
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Platform {
     Windows,
     MacOS,
@@ -40,6 +48,7 @@ pub enum Platform {
     All,
 }
 
+/// Plugin dependency specification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginDependency {
     pub plugin_id: String,
@@ -47,6 +56,7 @@ pub struct PluginDependency {
     pub optional: bool,
 }
 
+/// Plugin configuration schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginConfig {
     pub plugin_id: String,
@@ -57,6 +67,7 @@ pub struct PluginConfig {
     pub validation_rules: Vec<ValidationRule>,
 }
 
+/// Configuration validation rule
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationRule {
     pub field: String,
@@ -64,6 +75,7 @@ pub struct ValidationRule {
     pub message: String,
 }
 
+/// Validation rule types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ValidationType {
     Required,
@@ -74,6 +86,7 @@ pub enum ValidationType {
     Custom(String),
 }
 
+/// UI component provided by a plugin
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UIComponent {
     pub id: String,
@@ -83,6 +96,7 @@ pub struct UIComponent {
     pub required_permissions: Vec<Permission>,
 }
 
+/// Types of UI components
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ComponentType {
     Page,
@@ -95,6 +109,7 @@ pub enum ComponentType {
     Form,
 }
 
+/// Menu item for navigation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MenuItem {
     pub id: String,
@@ -107,6 +122,7 @@ pub struct MenuItem {
     pub children: Vec<MenuItem>,
 }
 
+/// API route definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRoute {
     pub path: String,
@@ -117,6 +133,7 @@ pub struct ApiRoute {
     pub documentation: ApiDocumentation,
 }
 
+/// HTTP methods
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HttpMethod {
     GET,
@@ -128,12 +145,14 @@ pub enum HttpMethod {
     OPTIONS,
 }
 
+/// Rate limiting configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimit {
     pub requests_per_minute: u32,
     pub burst_limit: u32,
 }
 
+/// API documentation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiDocumentation {
     pub summary: String,
@@ -143,6 +162,7 @@ pub struct ApiDocumentation {
     pub examples: Vec<ApiExample>,
 }
 
+/// API parameter definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiParameter {
     pub name: String,
@@ -152,6 +172,7 @@ pub struct ApiParameter {
     pub example: Option<serde_json::Value>,
 }
 
+/// Parameter types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ParameterType {
     Query,
@@ -160,6 +181,7 @@ pub enum ParameterType {
     Body,
 }
 
+/// API example
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiExample {
     pub name: String,
@@ -168,6 +190,7 @@ pub struct ApiExample {
     pub response: serde_json::Value,
 }
 
+/// API response definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiResponse {
     pub status_code: u16,
@@ -175,6 +198,7 @@ pub struct ApiResponse {
     pub schema: Option<serde_json::Value>,
 }
 
+/// Event handler registration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventHandler {
     pub event_type: String,
@@ -182,7 +206,8 @@ pub struct EventHandler {
     pub priority: i32,
 }
 
-#[derive(Clone)]
+/// Plugin execution context
+#[derive(Clone, Debug)]
 pub struct PluginContext {
     pub plugin_id: String,
     pub config: PluginConfig,
@@ -192,46 +217,53 @@ pub struct PluginContext {
     pub file_system: PluginFileSystem,
 }
 
+/// API client for plugin to core communication
 #[derive(Debug, Clone)]
 pub struct PluginApiClient {
     #[allow(dead_code)]
     plugin_id: String,
-    // Internal API endpoints
 }
 
 impl PluginApiClient {
+    /// Create a new API client for a plugin
     pub fn new(plugin_id: String) -> Self {
         Self { plugin_id }
     }
 
+    /// Get a configuration value
     pub async fn get_config(&self, _key: &str) -> Result<Option<serde_json::Value>> {
         // Implementation would call core config system
         Ok(None)
     }
 
+    /// Set a configuration value
     pub async fn set_config(&self, _key: &str, _value: serde_json::Value) -> Result<()> {
         // Implementation would call core config system
         Ok(())
     }
 
+    /// Get the current user
     pub async fn get_current_user(&self) -> Result<Option<User>> {
         // Implementation would call account manager
         Ok(None)
     }
 
+    /// Check if current user has permission
     pub async fn check_permission(&self, _resource: &str, _action: &str) -> Result<bool> {
         // Implementation would call account manager
         Ok(false)
     }
 }
 
-#[derive(Clone)]
+/// Database access for plugins with sandboxing
+#[derive(Clone, Debug)]
 pub struct PluginDatabase {
     plugin_id: String,
     provider: DatabaseArc,
     permissions: DatabasePermissions,
 }
 
+/// Database permissions for plugins
 #[derive(Debug, Clone)]
 pub struct DatabasePermissions {
     pub can_create_tables: bool,
@@ -242,6 +274,7 @@ pub struct DatabasePermissions {
 }
 
 impl PluginDatabase {
+    /// Create a new database access wrapper for a plugin
     pub fn new(plugin_id: String, provider: DatabaseArc, permissions: DatabasePermissions) -> Self {
         Self {
             plugin_id,
@@ -250,11 +283,12 @@ impl PluginDatabase {
         }
     }
 
+    /// Execute a database query with permission checks
     pub async fn execute(
         &self,
         query: &str,
         params: &[serde_json::Value],
-    ) -> Result<crate::platform::QueryResult> {
+    ) -> Result<crate::platform::database::QueryResult> {
         // Check permissions before executing
         if query.to_uppercase().contains("CREATE TABLE") && !self.permissions.can_create_tables {
             return Err(Error::permission(
@@ -276,13 +310,24 @@ impl PluginDatabase {
         self.provider.execute(&prefixed_query, params).await
     }
 
+    /// Query the database with permission checks
+    pub async fn query(
+        &self,
+        query: &str,
+        params: &[serde_json::Value],
+    ) -> Result<Vec<crate::platform::database::Row>> {
+        let prefixed_query = self.add_table_prefix(query);
+        self.provider.query(&prefixed_query, params).await
+    }
+
     fn add_table_prefix(&self, query: &str) -> String {
         // Simple implementation - in practice would need proper SQL parsing
         query.replace("TABLE ", &format!("TABLE plugin_{}_ ", self.plugin_id))
     }
 }
 
-#[derive(Clone)]
+/// File system access for plugins with sandboxing
+#[derive(Clone, Debug)]
 pub struct PluginFileSystem {
     #[allow(dead_code)]
     plugin_id: String,
@@ -291,6 +336,7 @@ pub struct PluginFileSystem {
 }
 
 impl PluginFileSystem {
+    /// Create a new file system access wrapper for a plugin
     pub fn new(plugin_id: String, provider: FileSystemArc) -> Self {
         Self {
             plugin_id: plugin_id.clone(),
@@ -299,11 +345,13 @@ impl PluginFileSystem {
         }
     }
 
+    /// Read a file with sandboxing
     pub async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
         let safe_path = self.make_safe_path(path)?;
         self.provider.read_file(&safe_path).await
     }
 
+    /// Write a file with sandboxing
     pub async fn write_file(&self, path: &str, data: &[u8]) -> Result<()> {
         let safe_path = self.make_safe_path(path)?;
         self.provider.write_file(&safe_path, data).await
@@ -319,6 +367,7 @@ impl PluginFileSystem {
     }
 }
 
+/// Resource limits for plugin sandboxing
 #[derive(Debug, Clone)]
 pub struct ResourceLimits {
     pub max_memory_mb: u64,
@@ -340,6 +389,7 @@ impl Default for ResourceLimits {
     }
 }
 
+/// Plugin sandbox for security
 pub struct PluginSandbox {
     #[allow(dead_code)]
     resource_limits: ResourceLimits,
@@ -347,6 +397,7 @@ pub struct PluginSandbox {
 }
 
 impl PluginSandbox {
+    /// Create a new plugin sandbox
     pub fn new(resource_limits: ResourceLimits, allowed_permissions: Vec<Permission>) -> Self {
         Self {
             resource_limits,
@@ -354,6 +405,7 @@ impl PluginSandbox {
         }
     }
 
+    /// Check if an operation is allowed
     pub fn check_operation(&self, operation: &str, resource: &str) -> bool {
         self.allowed_permissions.iter().any(|p| {
             (p.resource == resource || p.resource == "*")
@@ -362,58 +414,65 @@ impl PluginSandbox {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-#[async_trait]
+/// Main plugin trait that all plugins must implement
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait Plugin: Send + Sync + std::fmt::Debug {
+    /// Get plugin information
     fn info(&self) -> PluginInfo;
+
+    /// Get required dependencies
     fn required_dependencies(&self) -> Vec<PluginDependency>;
+
+    /// Get required permissions
     fn required_permissions(&self) -> Vec<Permission>;
+
+    /// Initialize the plugin
     async fn initialize(&mut self, context: PluginContext) -> Result<()>;
+
+    /// Shutdown the plugin
     async fn shutdown(&mut self) -> Result<()>;
+
+    /// Get UI components provided by this plugin
     fn ui_components(&self) -> Vec<UIComponent>;
+
+    /// Get menu items provided by this plugin
     fn menu_items(&self) -> Vec<MenuItem>;
+
+    /// Get settings schema for configuration
     fn settings_schema(&self) -> Option<SettingsSchema>;
+
+    /// Get API routes provided by this plugin
     fn api_routes(&self) -> Vec<ApiRoute>;
+
+    /// Get event handlers provided by this plugin
     fn event_handlers(&self) -> Vec<EventHandler>;
+
+    /// Render a UI component
     fn render_component(&self, component_id: &str, props: serde_json::Value) -> Result<VNode>;
+
+    /// Handle an API request
     async fn handle_api_request(&self, route_id: &str, request: ApiRequest) -> Result<ApiResponse>;
+
+    /// Handle an event
     async fn handle_event(&self, handler_id: &str, event: &dyn Event) -> Result<()>;
 }
 
-#[cfg(target_arch = "wasm32")]
-#[async_trait(?Send)]
-pub trait Plugin: Sync + std::fmt::Debug {
-    fn info(&self) -> PluginInfo;
-    fn required_dependencies(&self) -> Vec<PluginDependency>;
-    fn required_permissions(&self) -> Vec<Permission>;
-    async fn initialize(&mut self, context: PluginContext) -> Result<()>;
-    async fn shutdown(&mut self) -> Result<()>;
-    fn ui_components(&self) -> Vec<UIComponent>;
-    fn menu_items(&self) -> Vec<MenuItem>;
-    fn settings_schema(&self) -> Option<SettingsSchema>;
-    fn api_routes(&self) -> Vec<ApiRoute>;
-    fn event_handlers(&self) -> Vec<EventHandler>;
-    fn render_component(&self, component_id: &str, props: serde_json::Value) -> Result<VNode>;
-    async fn handle_api_request(&self, route_id: &str, request: ApiRequest) -> Result<ApiResponse>;
-    async fn handle_event(&self, handler_id: &str, event: &dyn Event) -> Result<()>;
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[async_trait]
+/// Plugin loader trait for different loading mechanisms
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait PluginLoader: Send + Sync {
+    /// Load a plugin from the given path
     async fn load_plugin(&self, path: &str) -> Result<Box<dyn Plugin>>;
+
+    /// Validate a plugin before loading
     async fn validate_plugin(&self, plugin: &dyn Plugin) -> Result<ValidationResult>;
+
+    /// Unload a plugin
     async fn unload_plugin(&self, plugin_id: &str) -> Result<()>;
 }
 
-#[cfg(target_arch = "wasm32")]
-#[async_trait(?Send)]
-pub trait PluginLoader: Sync {
-    async fn load_plugin(&self, path: &str) -> Result<Box<dyn Plugin>>;
-    async fn validate_plugin(&self, plugin: &dyn Plugin) -> Result<ValidationResult>;
-    async fn unload_plugin(&self, plugin_id: &str) -> Result<()>;
-}
-
+/// Plugin validation result
 #[derive(Debug, Clone)]
 pub struct ValidationResult {
     pub is_valid: bool,
@@ -421,6 +480,7 @@ pub struct ValidationResult {
     pub warnings: Vec<String>,
 }
 
+/// API request structure
 #[derive(Debug, Clone)]
 pub struct ApiRequest {
     pub method: String,
@@ -431,6 +491,7 @@ pub struct ApiRequest {
     pub user: Option<User>,
 }
 
+/// Plugin registry for managing loaded plugins
 #[derive(Debug)]
 pub struct PluginRegistry {
     plugins: HashMap<String, Box<dyn Plugin>>,
@@ -445,6 +506,7 @@ impl Default for PluginRegistry {
 }
 
 impl PluginRegistry {
+    /// Create a new plugin registry
     pub fn new() -> Self {
         Self {
             plugins: HashMap::new(),
@@ -453,6 +515,7 @@ impl PluginRegistry {
         }
     }
 
+    /// Register a plugin
     pub fn register(&mut self, plugin: Box<dyn Plugin>) -> Result<()> {
         let info = plugin.info();
         let deps = plugin
@@ -473,12 +536,19 @@ impl PluginRegistry {
         Ok(())
     }
 
+    /// Get a plugin by ID
     pub fn get(&self, plugin_id: &str) -> Option<&dyn Plugin> {
         self.plugins.get(plugin_id).map(|p| p.as_ref())
     }
 
+    /// List all plugin IDs
     pub fn list(&self) -> Vec<&str> {
         self.plugins.keys().map(|s| s.as_str()).collect()
+    }
+
+    /// Get the load order for plugins
+    pub fn load_order(&self) -> &[String] {
+        &self.load_order
     }
 
     fn calculate_load_order(&mut self) -> Result<()> {
@@ -531,15 +601,10 @@ impl PluginRegistry {
 
         Ok(())
     }
-
-    pub fn load_order(&self) -> &[String] {
-        &self.load_order
-    }
 }
 
-pub struct DependencyResolver {
-    // Implementation for resolving plugin dependencies
-}
+/// Dependency resolver for plugins
+pub struct DependencyResolver;
 
 impl Default for DependencyResolver {
     fn default() -> Self {
@@ -548,10 +613,12 @@ impl Default for DependencyResolver {
 }
 
 impl DependencyResolver {
+    /// Create a new dependency resolver
     pub fn new() -> Self {
-        Self {}
+        Self
     }
 
+    /// Resolve dependencies for a plugin
     pub fn resolve(&self, plugin: &dyn Plugin, registry: &PluginRegistry) -> Result<Vec<String>> {
         let deps = plugin.required_dependencies();
         let mut resolved = Vec::new();
@@ -570,16 +637,18 @@ impl DependencyResolver {
         Ok(resolved)
     }
 
+    /// Check version compatibility
     pub fn check_version_compatibility(&self, required: &str, available: &str) -> bool {
         // Simple version check - in practice would use semver
         required == available || required == "*"
     }
 }
 
+/// Main plugin manager
 pub struct PluginManager {
     state: ManagedState,
     registry: PluginRegistry,
-    loader: Box<dyn PluginLoader + Send + Sync>,
+    loader: Box<dyn PluginLoader>,
     #[allow(dead_code)]
     sandbox: PluginSandbox,
     api_provider: PluginApiProvider,
@@ -595,15 +664,16 @@ impl std::fmt::Debug for PluginManager {
     }
 }
 
-pub struct PluginApiProvider {
-    // Provides API access to plugins
-}
+/// API provider for plugins
+pub struct PluginApiProvider;
 
 impl PluginApiProvider {
+    /// Create a new API provider
     pub fn new() -> Self {
-        Self {}
+        Self
     }
 
+    /// Create an API client for a plugin
     pub fn create_client(&self, plugin_id: String) -> PluginApiClient {
         PluginApiClient::new(plugin_id)
     }
@@ -616,7 +686,8 @@ impl Default for PluginApiProvider {
 }
 
 impl PluginManager {
-    pub fn new(loader: Box<dyn PluginLoader + Send + Sync>) -> Self {
+    /// Create a new plugin manager
+    pub fn new(loader: Box<dyn PluginLoader>) -> Self {
         Self {
             state: ManagedState::new(Uuid::new_v4(), "plugin_manager"),
             registry: PluginRegistry::new(),
@@ -628,6 +699,7 @@ impl PluginManager {
         }
     }
 
+    /// Load a plugin from a path
     pub async fn load_plugin(&mut self, path: &str) -> Result<()> {
         let plugin = self.loader.load_plugin(path).await?;
 
@@ -656,6 +728,7 @@ impl PluginManager {
         Ok(())
     }
 
+    /// Unload a plugin
     pub async fn unload_plugin(&mut self, plugin_id: &str) -> Result<()> {
         if let Some(plugin) = self.registry.plugins.get_mut(plugin_id) {
             plugin.shutdown().await?;
@@ -668,6 +741,7 @@ impl PluginManager {
         Ok(())
     }
 
+    /// Initialize all plugins
     pub async fn initialize_plugins(&mut self) -> Result<()> {
         let load_order = self.registry.load_order().to_vec();
 
@@ -685,6 +759,7 @@ impl PluginManager {
         Ok(())
     }
 
+    /// Get UI components from all plugins
     pub fn get_ui_components(&self) -> Vec<(String, UIComponent)> {
         let mut components = Vec::new();
 
@@ -697,6 +772,7 @@ impl PluginManager {
         components
     }
 
+    /// Get menu items from all plugins
     pub fn get_menu_items(&self) -> Vec<(String, MenuItem)> {
         let mut items = Vec::new();
 
@@ -709,6 +785,7 @@ impl PluginManager {
         items
     }
 
+    /// Render a component from a plugin
     pub fn render_component(
         &self,
         plugin_id: &str,
@@ -723,11 +800,9 @@ impl PluginManager {
         plugin.render_component(component_id, props)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     async fn create_plugin_context(&self, plugin_id: &str) -> Result<PluginContext> {
-        let filesystem_provider: FileSystemArc =
-            Arc::new(crate::platform::native::NativeFileSystem::new()?);
-
+        // This is a simplified implementation
+        // In a real system, this would create proper filesystem and database access
         Ok(PluginContext {
             plugin_id: plugin_id.to_string(),
             config: PluginConfig {
@@ -741,29 +816,11 @@ impl PluginManager {
             api_client: self.api_provider.create_client(plugin_id.to_string()),
             event_bus: Arc::new(EventBusManager::new(crate::event::EventBusConfig::default())),
             database: None,
-            file_system: PluginFileSystem::new(plugin_id.to_string(), filesystem_provider),
-        })
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    async fn create_plugin_context(&self, plugin_id: &str) -> Result<PluginContext> {
-        let filesystem_provider: FileSystemArc =
-            Arc::new(crate::platform::web::WebFileSystem::new()?);
-
-        Ok(PluginContext {
-            plugin_id: plugin_id.to_string(),
-            config: PluginConfig {
+            file_system: PluginFileSystem {
                 plugin_id: plugin_id.to_string(),
-                version: "1.0.0".to_string(),
-                config_schema: serde_json::json!({}),
-                default_values: serde_json::json!({}),
-                user_overrides: serde_json::json!({}),
-                validation_rules: Vec::new(),
+                provider: Arc::new(crate::platform::MockFileSystem::new()),
+                base_path: format!("plugins/{}/", plugin_id),
             },
-            api_client: self.api_provider.create_client(plugin_id.to_string()),
-            event_bus: Arc::new(EventBusManager::new(crate::event::EventBusConfig::default())),
-            database: None,
-            file_system: PluginFileSystem::new(plugin_id.to_string(), filesystem_provider),
         })
     }
 }
@@ -784,7 +841,6 @@ impl Manager for PluginManager {
             .set_state(crate::manager::ManagerState::Initializing)
             .await;
 
-        // Load plugins from plugin directory
         // Initialize all loaded plugins
         self.initialize_plugins().await?;
 
@@ -805,17 +861,7 @@ impl Manager for PluginManager {
 
         for plugin_id in load_order {
             if let Err(e) = self.unload_plugin(&plugin_id).await {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    log::error!("Failed to unload plugin {}: {}", plugin_id, e);
-                }
-
-                #[cfg(target_arch = "wasm32")]
-                {
-                    web_sys::console::error_1(
-                        &format!("Failed to unload plugin {}: {}", plugin_id, e).into(),
-                    );
-                }
+                tracing::error!("Failed to unload plugin {}: {}", plugin_id, e);
             }
         }
 
