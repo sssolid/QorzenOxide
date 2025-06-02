@@ -1,40 +1,135 @@
 # Qorzen Oxide
 
-A high-performance, modular plugin-based system built in Rust with comprehensive async core managers and type-safe architecture.
+<div align="center">
 
-## Features
+![Qorzen Logo](public/static/qorzen.png)
 
-### Core System Managers
+**A high-performance, modular plugin-based application framework built in Rust**
 
-- **Configuration Management**: Type-safe configuration with hot-reloading, environment variable overrides, and validation
-- **Event System**: High-performance pub/sub event bus with filtering, backpressure handling, and async event handlers
-- **Logging**: Structured logging with multiple outputs, log rotation, and performance monitoring
-- **Task Management**: Async task execution with progress tracking, priorities, cancellation, and resource management
-- **File Management**: Safe concurrent file operations with locking, integrity checking, and backup capabilities
-- **Concurrency Management**: Advanced thread pool management with work stealing and async coordination
-- **Error Handling**: Comprehensive error management with context, severity levels, and recovery strategies
+[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI/CD](https://github.com/sssolid/QorzenOxide/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/sssolid/QorzenOxide/actions)
+[![Security Audit](https://github.com/sssolid/QorzenOxide/workflows/Security%20Audit/badge.svg)](https://github.com/sssolid/QorzenOxide/actions)
+[![Documentation](https://docs.rs/qorzen_oxide/badge.svg)](https://docs.rs/qorzen_oxide)
+[![Crates.io](https://img.shields.io/crates/v/qorzen_oxide.svg)](https://crates.io/crates/qorzen_oxide)
+[![Downloads](https://img.shields.io/crates/d/qorzen_oxide.svg)](https://crates.io/crates/qorzen_oxide)
 
-### Architecture Highlights
+[🌐 Website](https://www.qorzen.com) • [📚 Documentation](https://docs.qorzen.com) • [💬 Discord](https://discord.gg/qorzenhq) • [🐦 Twitter](https://twitter.com/qorzenhq)
 
-- **Type Safety**: Extensive use of Rust's type system to prevent runtime errors
-- **Async-First**: Built from the ground up for async/await with proper error handling
-- **Plugin System**: Modular architecture supporting hot-pluggable components
-- **Resource Management**: Automatic cleanup and proper resource lifecycle management
-- **Monitoring**: Built-in health checks, metrics, and observability
-- **Production Ready**: Comprehensive testing, error handling, and documentation
+</div>
 
-## License
+## ✨ Overview
 
-This project is licensed under:
+Qorzen Oxide is a next-generation application framework that combines the performance of Rust with the flexibility of a plugin-based architecture. Built with modern async patterns and comprehensive type safety, it enables developers to create scalable, cross-platform applications with ease.
 
-- MIT License ([LICENSE](LICENSE))
+### 🎯 Key Features
 
-## Support
+- **🚀 Cross-Platform**: Deploy seamlessly on Desktop (Windows, macOS, Linux), Mobile (iOS, Android), and Web (WebAssembly)
+- **🧩 Plugin Architecture**: Extensible system with hot-reloading and dependency management
+- **⚡ Async-First**: Built on Tokio with comprehensive async managers and type-safe concurrency
+- **🎨 Modern UI**: Powered by Dioxus for reactive, component-based user interfaces
+- **🔐 Security-First**: Built-in authentication, authorization, and security policies
+- **📊 Observability**: Comprehensive logging, metrics, and health monitoring
+- **⚙️ Configuration**: Tiered configuration system with hot-reloading and validation
+- **🗃️ Data Management**: Integrated file, database, and storage abstractions
 
-- Documentation: [docs.rs/QorzenOxide](https://docs.rs/QorzenOxide)
-- Issues: [GitHub Issues](https://github.com/sssolid/QorzenOxide/issues)
-- Discussions: [GitHub Discussions](https://github.com/sssolid/QorzenOxide/discussions)
+### 🌟 Why Qorzen Oxide?
 
-## Acknowledgments
+| Feature | Traditional Frameworks | Qorzen Oxide |
+|---------|----------------------|--------------|
+| **Performance** | Interpreted/JIT | Native Rust compilation |
+| **Memory Safety** | Runtime errors | Compile-time guarantees |
+| **Concurrency** | Thread pools/callbacks | Async/await with structured concurrency |
+| **Plugin System** | Basic loading | Hot-reload, dependency resolution, sandboxing |
+| **Cross-Platform** | Multiple codebases | Single Rust codebase |
+| **Type Safety** | Runtime type checking | Compile-time type system |
 
-Built with the excellent Rust ecosystem including Tokio, Serde, Tracing, and many other fantastic crates.
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Rust 1.70+** - [Install Rust](https://rustup.rs/)
+- **Git** - For cloning the repository
+
+### Installation
+
+#### Option 1: From Crates.io
+```bash
+cargo install qorzen_oxide
+```
+
+#### Option 2: From Source
+```bash
+git clone https://github.com/sssolid/QorzenOxide.git
+cd QorzenOxide
+cargo build --release
+```
+
+#### Option 3: Using Docker
+```bash
+docker pull qorzen/oxide:latest
+docker run -p 8080:8080 qorzen/oxide:latest
+```
+
+### Platform-Specific Setup
+
+#### Desktop Application
+```bash
+cargo run --features desktop --bin qorzen_desktop
+```
+
+#### Web Application (WASM)
+```bash
+# Install trunk for WASM builds
+cargo install trunk
+trunk serve
+```
+
+#### Development Mode
+```bash
+cargo run -- dev --port 8080
+```
+
+## 🏗️ Architecture
+
+Qorzen Oxide follows a modular architecture with well-defined separation of concerns:
+
+![Architecture](public/static/architecture.png)
+
+### Core Managers
+
+- **Configuration Manager**: Tiered configuration with hot-reloading
+- **Authentication Manager**: Secure user management and session handling
+- **Event Bus**: High-performance pub/sub messaging system
+- **Task Manager**: Async task scheduling and execution
+- **File Manager**: Cross-platform file operations with watching
+- **Plugin Manager**: Dynamic plugin loading and lifecycle management
+- **Platform Manager**: OS/browser abstraction layer
+
+## 🔧 Configuration
+
+Qorzen Oxide uses a flexible tiered configuration system:
+
+```
+System Config → Global Config → User Config → Local Config → Runtime Config
+    (lowest priority)                                    (highest priority)
+```
+
+Configuration files support YAML, JSON, and TOML formats with automatic format detection.
+
+## 🧩 Plugin Development
+
+Create powerful plugins with the Qorzen Plugin API:
+
+- **Hot Reloading**: Develop without restarts
+- **Dependency Management**: Automatic resolution and loading
+- **Sandboxed Execution**: Safe plugin isolation
+- **UI Integration**: Seamless component integration
+- **Event System**: React to system and user events
+
+## 📱 Supported Platforms
+
+| Platform | Status | Features |
+|----------|--------|----------|
+| **Windows** | ✅ Full Support | Native UI, File System, Notifications |
+| **macOS** | ✅ Full Support | Native UI, File 
