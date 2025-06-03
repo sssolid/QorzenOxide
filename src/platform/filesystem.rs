@@ -26,18 +26,16 @@ pub struct FileMetadata {
     pub accessed: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub type DynFileSystem = dyn FileSystemProvider + Send + Sync;
+/// Unified filesystem provider trait bounds
+pub trait FileSystemBounds: Send + Sync + std::fmt::Debug {}
 
-#[cfg(target_arch = "wasm32")]
-pub type DynFileSystem = dyn FileSystemProvider + Sync;
-
+pub type DynFileSystem = dyn FileSystemProvider;
 pub type FileSystemArc = Arc<DynFileSystem>;
 
-/// File system operations
+/// File system operations - unified across platforms
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait FileSystemProvider: FileSystemBounds + std::fmt::Debug {
+pub trait FileSystemProvider: FileSystemBounds {
     async fn read_file(&self, path: &str) -> Result<Vec<u8>>;
     async fn write_file(&self, path: &str, data: &[u8]) -> Result<()>;
     async fn delete_file(&self, path: &str) -> Result<()>;
@@ -46,9 +44,3 @@ pub trait FileSystemProvider: FileSystemBounds + std::fmt::Debug {
     async fn file_exists(&self, path: &str) -> bool;
     async fn get_metadata(&self, path: &str) -> Result<FileMetadata>;
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-pub trait FileSystemBounds: Send + Sync + std::fmt::Debug {}
-
-#[cfg(target_arch = "wasm32")]
-pub trait FileSystemBounds: Sync {}

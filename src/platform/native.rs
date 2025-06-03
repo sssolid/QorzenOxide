@@ -15,8 +15,8 @@ use crate::platform::*;
 /// Creates native platform providers
 pub fn create_providers() -> Result<PlatformProviders> {
     Ok(PlatformProviders {
-        filesystem: Arc::new(NativeFileSystem::new()?),
-        database: Arc::new(SqliteDatabase::new()?),
+        filesystem: Arc::new(NativeFileSystem::new()?) as FileSystemArc,
+        database: Arc::new(SqliteDatabase::new()?) as DatabaseArc,
         network: Arc::new(NativeNetwork::new()),
         storage: Arc::new(NativeStorage::new()?),
     })
@@ -278,6 +278,7 @@ impl DatabaseProvider for SqliteDatabase {
 }
 
 /// Native network implementation
+#[derive(Debug)]
 pub struct NativeNetwork {
     client: reqwest::Client,
 }
@@ -376,6 +377,7 @@ impl NetworkProvider for NativeNetwork {
 }
 
 /// Native storage implementation (using filesystem)
+#[derive(Debug)]
 pub struct NativeStorage {
     storage_path: std::path::PathBuf,
 }

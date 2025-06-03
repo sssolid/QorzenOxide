@@ -113,7 +113,7 @@ pub trait EventHandler: Send + Sync + Debug {
 
 #[cfg(target_arch = "wasm32")]
 #[async_trait(?Send)]
-pub trait EventHandler: Sync + Debug {
+pub trait EventHandler: Debug {
     /// Handle an event
     async fn handle(&self, event: &dyn Event) -> Result<()>;
 
@@ -230,6 +230,9 @@ impl Default for EventFilter {
     }
 }
 
+/// Cross-platform event reference type
+pub type EventRef = Arc<dyn Event>;
+
 /// Event subscription
 pub struct EventSubscription {
     /// Subscription ID
@@ -237,7 +240,7 @@ pub struct EventSubscription {
     /// Filter for events
     pub filter: EventFilter,
     /// Event sender channel
-    pub sender: mpsc::UnboundedSender<Arc<dyn Event>>,
+    pub sender: mpsc::UnboundedSender<EventRef>,
     /// When subscription was created
     pub created_at: DateTime<Utc>,
     /// Whether subscription is active
@@ -327,7 +330,7 @@ impl Default for EventBusConfig {
 #[derive(Debug)]
 struct EventEnvelope {
     /// The actual event
-    event: Arc<dyn Event>,
+    event: EventRef,
     /// When event was received
     #[allow(dead_code)]
     received_at: Instant,
@@ -339,6 +342,13 @@ struct EventEnvelope {
     max_retries: u32,
 }
 
+/// Cross-platform worker handle type
+#[cfg(not(target_arch = "wasm32"))]
+type WorkerHandle = tokio::task::JoinHandle<()>;
+
+#[cfg(target_arch = "wasm32")]
+type WorkerHandle = ();
+
 /// Event bus manager
 pub struct EventBusManager {
     state: ManagedState,
@@ -347,7 +357,7 @@ pub struct EventBusManager {
     event_queue: mpsc::UnboundedSender<EventEnvelope>,
     stats: Arc<RwLock<EventStats>>,
     event_counter: Arc<AtomicU64>,
-    worker_handles: Vec<tokio::task::JoinHandle<()>>,
+    worker_handles: Vec<WorkerHandle>,
 }
 
 impl Debug for EventBusManager {
@@ -385,8 +395,11 @@ impl EventBusManager {
     }
 
     /// Publish an event to the bus
-    pub async fn publish<E: Event + 'static>(&self, event: E) -> Result<()> {
-        let event_arc: Arc<dyn Event> = Arc::new(event);
+    pub async fn publish<E>(&self, event: E) -> Result<()>
+    where
+        E: Event + 'static,
+    {
+        let event_arc: EventRef = Arc::new(event);
 
         // Update statistics
         self.event_counter.fetch_add(1, Ordering::Relaxed);
@@ -430,8 +443,8 @@ impl EventBusManager {
     pub async fn subscribe(
         &self,
         filter: EventFilter,
-    ) -> Result<mpsc::UnboundedReceiver<Arc<dyn Event>>> {
-        let (sender, receiver) = mpsc::unbounded_channel::<Arc<dyn Event>>();
+    ) -> Result<mpsc::UnboundedReceiver<EventRef>> {
+        let (sender, receiver) = mpsc::unbounded_channel::<EventRef>();
         let subscription_id = Uuid::new_v4();
 
         let subscription = EventSubscription {
@@ -458,11 +471,14 @@ impl EventBusManager {
 
     /// Subscribe with a handler
     #[cfg(not(target_arch = "wasm32"))]
-    pub async fn subscribe_with_handler<H: EventHandler + 'static + Send>(
+    pub async fn subscribe_with_handler<H>(
         &self,
         filter: EventFilter,
         handler: Arc<H>,
-    ) -> Result<Uuid> {
+    ) -> Result<Uuid>
+    where
+        H: EventHandler + 'static + Send + Sync,
+    {
         let mut receiver = self.subscribe(filter).await?;
         let handler_name = handler.name().to_string();
 
@@ -499,11 +515,14 @@ impl EventBusManager {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub async fn subscribe_with_handler<H: EventHandler + 'static>(
+    pub async fn subscribe_with_handler<H>(
         &self,
         filter: EventFilter,
         handler: Arc<H>,
-    ) -> Result<Uuid> {
+    ) -> Result<Uuid>
+    where
+        H: EventHandler + 'static,
+    {
         let mut receiver = self.subscribe(filter).await?;
         let handler_name = handler.name().to_string();
 
@@ -520,7 +539,7 @@ impl EventBusManager {
                                 "Handler '{}' processed event in {:?}",
                                 handler_name, processing_time
                             )
-                            .into(),
+                                .into(),
                         );
                     }
                     Err(e) => {
@@ -571,6 +590,7 @@ impl EventBusManager {
     }
 
     /// Start event processing workers
+    #[cfg(not(target_arch = "wasm32"))]
     async fn start_workers(&mut self) -> Result<()> {
         let (event_sender, event_receiver) = mpsc::unbounded_channel::<EventEnvelope>();
         self.event_queue = event_sender;
@@ -586,19 +606,43 @@ impl EventBusManager {
         Ok(())
     }
 
-    // This function owns event_receiver and can move it safely
+    #[cfg(target_arch = "wasm32")]
+    async fn start_workers(&mut self) -> Result<()> {
+        let (event_sender, event_receiver) = mpsc::unbounded_channel::<EventEnvelope>();
+        self.event_queue = event_sender;
+
+        let subscriptions = Arc::clone(&self.subscriptions);
+        let stats = Arc::clone(&self.stats);
+
+        // For WASM, spawn locally
+        wasm_bindgen_futures::spawn_local(Self::worker_task(event_receiver, subscriptions, stats));
+
+        self.worker_handles.push(());
+
+        Ok(())
+    }
+
+    /// This function owns event_receiver and can move it safely
     async fn worker_task(
         mut event_receiver: mpsc::UnboundedReceiver<EventEnvelope>,
         subscriptions: Arc<DashMap<Uuid, EventSubscription>>,
         stats: Arc<RwLock<EventStats>>,
     ) {
+        #[cfg(not(target_arch = "wasm32"))]
         tracing::debug!("Event worker started");
+
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"Event worker started".into());
 
         while let Some(envelope) = event_receiver.recv().await {
             Self::process_event(envelope, &subscriptions, &stats).await;
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         tracing::debug!("Event worker stopped");
+
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"Event worker stopped".into());
     }
 
     /// Process a single event
@@ -611,7 +655,7 @@ impl EventBusManager {
         let event = &envelope.event;
 
         // Find matching subscriptions
-        let matching_subscriptions: Vec<(Uuid, Arc<dyn Event>)> = subscriptions
+        let matching_subscriptions: Vec<(Uuid, EventRef)> = subscriptions
             .iter()
             .filter_map(|entry| {
                 let subscription = entry.value();
@@ -633,9 +677,20 @@ impl EventBusManager {
                     Ok(()) => successful_deliveries += 1,
                     Err(_) => {
                         failed_deliveries += 1;
+
+                        #[cfg(not(target_arch = "wasm32"))]
                         tracing::warn!(
                             "Failed to deliver event to subscription {}",
                             subscription_id
+                        );
+
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::warn_1(
+                            &format!(
+                                "Failed to deliver event to subscription {}",
+                                subscription_id
+                            )
+                                .into(),
                         );
                     }
                 }
@@ -660,6 +715,7 @@ impl EventBusManager {
                 / total_processed as f64;
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         tracing::trace!(
             "Processed event '{}' in {:?} (delivered to {} subscriptions, {} failed)",
             event.event_type(),
@@ -667,14 +723,34 @@ impl EventBusManager {
             successful_deliveries,
             failed_deliveries
         );
+
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(
+            &format!(
+                "Processed event '{}' in {:?} (delivered to {} subscriptions, {} failed)",
+                event.event_type(),
+                processing_time,
+                successful_deliveries,
+                failed_deliveries
+            )
+                .into(),
+        );
     }
 
     /// Stop all workers
+    #[cfg(not(target_arch = "wasm32"))]
     async fn stop_workers(&mut self) {
         for handle in self.worker_handles.drain(..) {
             handle.abort();
             let _ = handle.await;
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn stop_workers(&mut self) {
+        // In WASM, we can't really stop spawned local tasks
+        // They will stop when the receiver is dropped
+        self.worker_handles.clear();
     }
 }
 
@@ -777,9 +853,13 @@ impl Manager for EventBusManager {
         self.state
             .set_state(crate::manager::ManagerState::Running)
             .await;
-        tracing::info!(
-            "Event bus manager initialized with {} workers",
-            self.config.worker_count
+
+        web_sys::console::log_1(
+            &format!(
+                "Event bus manager initialized with {} workers",
+                self.config.worker_count
+            )
+                .into(),
         );
         Ok(())
     }
@@ -798,7 +878,8 @@ impl Manager for EventBusManager {
         self.state
             .set_state(crate::manager::ManagerState::Shutdown)
             .await;
-        tracing::info!("Event bus manager shut down");
+
+        web_sys::console::log_1(&"Event bus manager shut down".into());
         Ok(())
     }
 

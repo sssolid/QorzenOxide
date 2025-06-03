@@ -32,25 +32,17 @@ pub struct Migration {
     pub down_sql: String,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub type DynDatabase = dyn DatabaseProvider + Send + Sync;
+/// Unified database provider trait bounds
+pub trait DatabaseBounds: Send + Sync + std::fmt::Debug {}
 
-#[cfg(target_arch = "wasm32")]
-pub type DynDatabase = dyn DatabaseProvider + Sync;
-
+pub type DynDatabase = dyn DatabaseProvider;
 pub type DatabaseArc = Arc<DynDatabase>;
 
-/// Database operations - made dyn compatible by removing generic transaction method
+/// Database operations - unified across platforms
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait DatabaseProvider: DatabaseBounds + std::fmt::Debug {
+pub trait DatabaseProvider: DatabaseBounds {
     async fn execute(&self, query: &str, params: &[serde_json::Value]) -> Result<QueryResult>;
     async fn query(&self, query: &str, params: &[serde_json::Value]) -> Result<Vec<Row>>;
     async fn migrate(&self, migrations: &[Migration]) -> Result<()>;
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-pub trait DatabaseBounds: Send + Sync + std::fmt::Debug {}
-
-#[cfg(target_arch = "wasm32")]
-pub trait DatabaseBounds: Sync {}

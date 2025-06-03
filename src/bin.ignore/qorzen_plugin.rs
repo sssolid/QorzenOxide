@@ -450,8 +450,8 @@
 //             description: "A comprehensive todo list plugin with search and categorization".to_string(),
 //             author: "Qorzen Team".to_string(),
 //             license: "MIT".to_string(),
-//             homepage: Some("https://github.com/qorzen/plugins/todo".to_string()),
-//             repository: Some("https://github.com/qorzen/plugins".to_string()),
+//             homepage: Some("https://github.com/sssolid/plugins/todo".to_string()),
+//             repository: Some("https://github.com/sssolid/plugins".to_string()),
 //             minimum_core_version: "0.1.0".to_string(),
 //             supported_platforms: vec![Platform::All],
 //         }

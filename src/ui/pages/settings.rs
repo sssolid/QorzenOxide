@@ -999,7 +999,7 @@ fn AboutSettings() -> Element {
                     div {
                         class: "mt-8 flex justify-center space-x-6",
                         a {
-                            href: "https://github.com/qorzen/qorzen-oxide",
+                            href: "https://github.com/sssolid/QorzenOxide",
                             target: "_blank",
                             rel: "noopener noreferrer",
                             class: "text-gray-400 hover:text-gray-500",

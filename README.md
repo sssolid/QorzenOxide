@@ -24,7 +24,7 @@ Qorzen Oxide is a next-generation application framework that combines the perfor
 ### 🎯 Key Features
 
 - **🚀 Cross-Platform**: Deploy seamlessly on Desktop (Windows, macOS, Linux), Mobile (iOS, Android), and Web (WebAssembly)
-- **🧩 Plugin Architecture**: Extensible system with hot-reloading and dependency management
+- **🧩 Plugin Architecture**: Extensible system with dependency management
 - **⚡ Async-First**: Built on Tokio with comprehensive async managers and type-safe concurrency
 - **🎨 Modern UI**: Powered by Dioxus for reactive, component-based user interfaces
 - **🔐 Security-First**: Built-in authentication, authorization, and security policies
@@ -102,7 +102,7 @@ Qorzen Oxide follows a modular architecture with well-defined separation of conc
 - **Event Bus**: High-performance pub/sub messaging system
 - **Task Manager**: Async task scheduling and execution
 - **File Manager**: Cross-platform file operations with watching
-- **Plugin Manager**: Dynamic plugin loading and lifecycle management
+- **Plugin Manager**: Loading and lifecycle management
 - **Platform Manager**: OS/browser abstraction layer
 
 ## 🔧 Configuration
@@ -120,7 +120,6 @@ Configuration files support YAML, JSON, and TOML formats with automatic format d
 
 Create powerful plugins with the Qorzen Plugin API:
 
-- **Hot Reloading**: Develop without restarts
 - **Dependency Management**: Automatic resolution and loading
 - **Sandboxed Execution**: Safe plugin isolation
 - **UI Integration**: Seamless component integration

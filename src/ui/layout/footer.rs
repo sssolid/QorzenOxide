@@ -45,7 +45,7 @@ pub fn Footer() -> Element {
                         }
 
                         a {
-                            href: "https://github.com/qorzen/qorzen-oxide",
+                            href: "https://github.com/sssolid/QorzenOxide",
                             target: "_blank",
                             rel: "noopener noreferrer",
                             class: "text-sm text-gray-500 hover:text-gray-600 transition-colors",
@@ -215,14 +215,14 @@ pub fn ExpandedFooter() -> Element {
                             class: "flex space-x-4",
                             // Social links would go here
                             a {
-                                href: "https://github.com/qorzen",
+                                href: "https://github.com/sssolid",
                                 target: "_blank",
                                 rel: "noopener noreferrer",
                                 class: "text-gray-400 hover:text-gray-600 transition-colors",
                                 "GitHub"
                             }
                             a {
-                                href: "https://twitter.com/qorzen",
+                                href: "https://twitter.com/qorzenhq",
                                 target: "_blank",
                                 rel: "noopener noreferrer",
                                 class: "text-gray-400 hover:text-gray-600 transition-colors",

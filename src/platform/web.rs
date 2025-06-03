@@ -201,6 +201,7 @@ impl DatabaseProvider for IndexedDbDatabase {
     }
 }
 
+#[derive(Debug)]
 pub struct FetchNetwork;
 
 impl FetchNetwork {
@@ -291,6 +292,7 @@ impl NetworkProvider for FetchNetwork {
     }
 }
 
+#[derive(Debug)]
 pub struct WebStorage;
 
 impl WebStorage {

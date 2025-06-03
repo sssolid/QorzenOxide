@@ -5,6 +5,7 @@ mod manager;
 mod manifest;
 mod sdk;
 mod search;
+mod registry;
 
 use std::collections::HashMap;
 use std::sync::Arc;
