@@ -17,6 +17,7 @@ pub struct AppStateContext {
     pub notifications: Vec<Notification>,
     pub sidebar_collapsed: bool,
     pub mobile_menu_open: bool,
+    pub plugin_stats: Option<crate::plugin::PluginStats>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +36,7 @@ pub enum AppAction {
     SetSidebarCollapsed(bool),
     ToggleMobileMenu,
     SetMobileMenuOpen(bool),
+    SetPluginStats(Option<crate::plugin::PluginStats>),
 }
 
 pub fn app_state_reducer(state: &AppStateContext, action: AppAction) -> AppStateContext {
@@ -84,6 +86,9 @@ pub fn app_state_reducer(state: &AppStateContext, action: AppAction) -> AppState
         }
         AppAction::SetMobileMenuOpen(open) => {
             new_state.mobile_menu_open = open;
+        }
+        AppAction::SetPluginStats(stats) => {
+            new_state.plugin_stats = stats;
         }
     }
 
@@ -145,6 +150,11 @@ pub fn AppStateProvider(children: Element) -> Element {
 pub fn use_app_state() -> AppStateContext {
     let state_signal = use_context::<Signal<AppStateContext>>();
     state_signal()
+}
+
+pub fn use_plugin_stats() -> Option<crate::plugin::PluginStats> {
+    let state = use_app_state();
+    state.plugin_stats
 }
 
 /// Hook to get the dispatch function (write-only)

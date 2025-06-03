@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -12,7 +11,7 @@ use crate::auth::{
     AccountManager, MemorySessionStore, MemoryUserStore, SecurityPolicy, User, UserSession,
 };
 use crate::config::{ConfigurationTier, MemoryConfigStore, TieredConfigManager};
-use crate::error::{Error, Result};
+use crate::error::{Result};
 use crate::event::EventBusManager;
 use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState};
 use crate::platform::PlatformManager;
@@ -88,6 +87,7 @@ pub struct ApplicationCore {
     event_bus_manager: Option<Arc<EventBusManager>>,
     account_manager: Option<AccountManager>,
     plugin_manager: Option<PluginManager>,
+    plugin_contexts: HashMap<String, crate::plugin::PluginContext>,
     ui_layout_manager: Option<UILayoutManager>,
 
     // Current user context
@@ -117,6 +117,7 @@ impl ApplicationCore {
             event_bus_manager: None,
             account_manager: None,
             plugin_manager: None,
+            plugin_contexts: HashMap::new(),
             ui_layout_manager: None,
             current_user: None,
             current_session: None,
@@ -237,11 +238,93 @@ impl ApplicationCore {
 
     async fn init_plugin_manager(&mut self) -> Result<()> {
         web_sys::console::log_1(&"Initializing plugin manager".into());
-        let loader = Box::new(SimplePluginLoader::new());
-        let mut plugin_manager = PluginManager::new(loader);
+
+        // Initialize plugin factory registry first
+        crate::plugin::PluginFactoryRegistry::initialize();
+
+        // Register builtin plugins
+        crate::plugin::BuiltinPluginRegistry::register_builtin_plugins().await?;
+
+        // Create plugin manager
+        let plugins_dir = std::path::PathBuf::from("plugins");
+        let mut plugin_manager = crate::plugin::PluginManager::new(plugins_dir);
+
+        // Set up dependencies
+        if let Some(ref event_bus) = self.event_bus_manager {
+            plugin_manager.set_event_bus(Arc::clone(event_bus));
+        }
+
+        if let Some(ref platform_manager) = self.platform_manager {
+            plugin_manager.set_platform_manager(Arc::clone(platform_manager));
+        }
+
+        // Initialize the plugin manager
         plugin_manager.initialize().await?;
+
+        // Load default plugins
+        let default_plugins = ["system_monitor", "notifications"];
+
+        #[cfg(feature = "example_plugin")]
+        let default_plugins = ["system_monitor", "notifications", "product_catalog"];
+
+        for plugin_id in default_plugins {
+            match self.simulate_plugin_installation(&mut plugin_manager, plugin_id).await {
+                Ok(_) => {
+                    web_sys::console::log_1(&format!("Successfully loaded plugin: {}", plugin_id).into());
+                }
+                Err(e) => {
+                    web_sys::console::warn_1(&format!("Failed to load plugin {}: {}", plugin_id, e).into());
+                }
+            }
+        }
+
         self.plugin_manager = Some(plugin_manager);
+        web_sys::console::log_1(&"Plugin manager initialized successfully".into());
         Ok(())
+    }
+
+    async fn simulate_plugin_installation(
+        &mut self,
+        plugin_manager: &mut crate::plugin::PluginManager,
+        plugin_id: &str
+    ) -> Result<()> {
+        // For WASM, we simulate the installation process since plugins are compiled in
+        web_sys::console::log_1(&format!("Simulating installation of plugin: {}", plugin_id).into());
+
+        // Create simulated installation request
+        let install_request = crate::plugin::PluginInstallRequest {
+            source: crate::plugin::InstallationSource::Registry {
+                url: "builtin".to_string(),
+                plugin_id: plugin_id.to_string(),
+                version: None,
+            },
+            force_reinstall: false,
+            auto_enable: true,
+        };
+
+        // Simulate installation
+        if let Err(e) = plugin_manager.install_plugin(install_request).await {
+            web_sys::console::warn_1(&format!("Plugin install simulation failed: {}", e).into());
+        }
+
+        // Load the plugin
+        plugin_manager.load_plugin(plugin_id).await?;
+
+        Ok(())
+    }
+
+    // Add method to access plugin manager for UI
+    pub fn get_plugin_manager(&self) -> Option<&crate::plugin::PluginManager> {
+        self.plugin_manager.as_ref()
+    }
+
+    // Add method to get plugin statistics for UI
+    pub async fn get_plugin_stats(&self) -> Option<crate::plugin::PluginStats> {
+        if let Some(ref plugin_manager) = self.plugin_manager {
+            Some(plugin_manager.get_plugin_stats().await)
+        } else {
+            None
+        }
     }
 
     pub async fn shutdown(&mut self) -> Result<()> {
@@ -358,35 +441,36 @@ impl Default for ApplicationCore {
     }
 }
 
-struct SimplePluginLoader;
-
-impl SimplePluginLoader {
-    fn new() -> Self {
-        Self
-    }
-}
-
-#[async_trait(?Send)]
-impl crate::plugin::PluginLoader for SimplePluginLoader {
-    async fn load_plugin(&self, _path: &str) -> Result<Box<dyn crate::plugin::Plugin>> {
-        Err(Error::plugin(
-            "loader",
-            "Plugin loading not implemented in web version",
-        ))
-    }
-
-    async fn validate_plugin(
-        &self,
-        _plugin: &dyn crate::plugin::Plugin,
-    ) -> Result<crate::plugin::ValidationResult> {
-        Ok(crate::plugin::ValidationResult {
-            is_valid: true,
-            errors: Vec::new(),
-            warnings: Vec::new(),
-        })
-    }
-
-    async fn unload_plugin(&self, _plugin_id: &str) -> Result<()> {
-        Ok(())
-    }
-}
+// #[derive(Debug)]
+// struct SimplePluginLoader;
+//
+// impl SimplePluginLoader {
+//     fn new() -> Self {
+//         Self
+//     }
+// }
+//
+// #[async_trait(?Send)]
+// impl crate::plugin::PluginLoader for SimplePluginLoader {
+//     async fn load_plugin(&self, _path: &str) -> Result<Box<dyn crate::plugin::Plugin>> {
+//         Err(Error::plugin(
+//             "loader",
+//             "Plugin loading not implemented in web version",
+//         ))
+//     }
+//
+//     async fn validate_plugin(
+//         &self,
+//         _plugin: &dyn crate::plugin::Plugin,
+//     ) -> Result<crate::plugin::ValidationResult> {
+//         Ok(crate::plugin::ValidationResult {
+//             is_valid: true,
+//             errors: Vec::new(),
+//             warnings: Vec::new(),
+//         })
+//     }
+//
+//     async fn unload_plugin(&self, _plugin_id: &str) -> Result<()> {
+//         Ok(())
+//     }
+// }

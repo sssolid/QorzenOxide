@@ -1,11 +1,10 @@
 use dioxus::prelude::*;
 #[allow(unused_imports)]
 use dioxus_router::prelude::*;
-
+use crate::plugin::PluginFactoryRegistry;
 use crate::ui::{
     pages::{EmptyState, PageWrapper},
     router::Route,
-    state::use_app_state,
 };
 
 /// Plugin information from the plugin manager
@@ -17,16 +16,15 @@ pub struct PluginInfo {
     pub author: String,
     pub description: String,
     pub icon: String,
-    pub rating: f32,
-    pub downloads: String,
-    pub category: String,
     pub status: PluginStatus,
     pub installed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub error_message: Option<String>,
     pub source: PluginSource,
+    pub has_ui_components: bool,
+    pub has_menu_items: bool,
+    pub has_settings: bool,
 }
 
-/// Plugin status enum
 #[derive(Debug, Clone, PartialEq)]
 pub enum PluginStatus {
     Available,
@@ -57,6 +55,7 @@ impl std::fmt::Display for PluginStatus {
 pub enum PluginSource {
     Installed,
     Registry,
+    Builtin,
 }
 
 /// Plugin update information
@@ -79,7 +78,7 @@ pub fn Plugins() -> Element {
     let mut installing_plugins = use_signal(|| std::collections::HashSet::<String>::new());
     let mut error_message = use_signal(|| None::<String>);
 
-    // Get real plugin data
+    // Real data resources
     let mut installed_plugins = use_resource(move || async move {
         get_installed_plugins().await
     });
@@ -88,9 +87,9 @@ pub fn Plugins() -> Element {
         let query = search_query();
         async move {
             if query.is_empty() {
-                get_featured_plugins().await
+                get_available_plugins().await
             } else {
-                search_registry_plugins(&query).await
+                search_plugins(&query).await
             }
         }
     });
@@ -103,7 +102,6 @@ pub fn Plugins() -> Element {
             #[cfg(target_arch = "wasm32")]
             gloo_timers::future::TimeoutFuture::new(1000).await;
 
-            // Trigger refresh of resources
             installed_plugins.restart();
             available_plugins.restart();
             loading.set(false);
@@ -118,18 +116,13 @@ pub fn Plugins() -> Element {
         spawn(async move {
             match install_plugin(&plugin_id).await {
                 Ok(_) => {
-                    // Refresh the installed plugins list
                     installed_plugins.restart();
-
-                    // Remove from installing set
                     let mut installing = installing_plugins();
                     installing.remove(&plugin_id);
                     installing_plugins.set(installing);
                 }
                 Err(e) => {
                     error_message.set(Some(format!("Failed to install {}: {}", plugin_id, e)));
-
-                    // Remove from installing set
                     let mut installing = installing_plugins();
                     installing.remove(&plugin_id);
                     installing_plugins.set(installing);
@@ -153,11 +146,8 @@ pub fn Plugins() -> Element {
                         view_box: "0 0 24 24",
                         circle {
                             class: "opacity-25",
-                            cx: "12",
-                            cy: "12",
-                            r: "10",
-                            stroke: "currentColor",
-                            stroke_width: "4"
+                            cx: "12", cy: "12", r: "10",
+                            stroke: "currentColor", stroke_width: "4"
                         }
                         path {
                             class: "opacity-75",
@@ -171,10 +161,7 @@ pub fn Plugins() -> Element {
                         xmlns: "http://www.w3.org/2000/svg",
                         fill: "none",
                         view_box: "0 0 24 24",
-                        stroke: "currentColor",
-                        stroke_linecap: "round",
-                        stroke_linejoin: "round",
-                        stroke_width: "2",
+                        stroke: "currentColor", stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "2",
                         d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     }
                 }
@@ -188,10 +175,7 @@ pub fn Plugins() -> Element {
                     xmlns: "http://www.w3.org/2000/svg",
                     fill: "none",
                     view_box: "0 0 24 24",
-                    stroke: "currentColor",
-                    stroke_linecap: "round",
-                    stroke_linejoin: "round",
-                    stroke_width: "2",
+                    stroke: "currentColor", stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "2",
                     d: "M12 6v6m0 0v6m0-6h6m-6 0H6"
                 }
                 "Plugin Settings"
@@ -205,7 +189,6 @@ pub fn Plugins() -> Element {
             subtitle: Some("Extend your application with plugins".to_string()),
             actions: Some(page_actions),
 
-            // Error message
             if let Some(error) = error_message() {
                 div { class: "mb-6 bg-red-50 border border-red-200 rounded-md p-4",
                     div { class: "flex",
@@ -214,12 +197,9 @@ pub fn Plugins() -> Element {
                                 class: "h-5 w-5 text-red-400",
                                 xmlns: "http://www.w3.org/2000/svg",
                                 view_box: "0 0 20 20",
-                                fill: "currentColor",
-                                path {
-                                    fill_rule: "evenodd",
-                                    d: "M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z",
-                                    clip_rule: "evenodd"
-                                }
+                                fill: "currentColor", fill_rule: "evenodd",
+                                d: "M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z",
+                                clip_rule: "evenodd"
                             }
                         }
                         div { class: "ml-3",
@@ -236,12 +216,9 @@ pub fn Plugins() -> Element {
                                     class: "h-5 w-5",
                                     xmlns: "http://www.w3.org/2000/svg",
                                     view_box: "0 0 20 20",
-                                    fill: "currentColor",
-                                    path {
-                                        fill_rule: "evenodd",
-                                        d: "M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z",
-                                        clip_rule: "evenodd"
-                                    }
+                                    fill: "currentColor", fill_rule: "evenodd",
+                                    d: "M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z",
+                                    clip_rule: "evenodd"
                                 }
                             }
                         }
@@ -249,7 +226,6 @@ pub fn Plugins() -> Element {
                 }
             }
 
-            // Search bar (only show for available tab)
             if active_tab() == "available" {
                 div { class: "mb-6",
                     div { class: "relative",
@@ -268,19 +244,15 @@ pub fn Plugins() -> Element {
                                 class: "h-5 w-5 text-gray-400",
                                 xmlns: "http://www.w3.org/2000/svg",
                                 view_box: "0 0 20 20",
-                                fill: "currentColor",
-                                path {
-                                    fill_rule: "evenodd",
-                                    d: "M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z",
-                                    clip_rule: "evenodd"
-                                }
+                                fill: "currentColor", fill_rule: "evenodd",
+                                d: "M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z",
+                                clip_rule: "evenodd"
                             }
                         }
                     }
                 }
             }
 
-            // Tabs
             div { class: "border-b border-gray-200 mb-6",
                 nav { class: "-mb-px flex space-x-8",
                     button {
@@ -310,22 +282,9 @@ pub fn Plugins() -> Element {
                         onclick: move |_| active_tab.set("available".to_string()),
                         "Available"
                     }
-                    button {
-                        r#type: "button",
-                        class: format!("py-2 px-1 border-b-2 font-medium text-sm {}",
-                            if active_tab() == "updates" {
-                                "border-blue-500 text-blue-600"
-                            } else {
-                                "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                            }
-                        ),
-                        onclick: move |_| active_tab.set("updates".to_string()),
-                        "Updates (2)"
-                    }
                 }
             }
 
-            // Tab content
             match active_tab().as_str() {
                 "installed" => rsx! {
                     InstalledPluginsTab {
@@ -340,18 +299,88 @@ pub fn Plugins() -> Element {
                         on_install: handle_install,
                     }
                 },
-                "updates" => rsx! {
-                    UpdatesTab {}
-                },
-                _ => rsx! {
-                    div { "Unknown tab" }
-                }
+                _ => rsx! { div { "Unknown tab" } }
             }
         }
     }
 }
 
 /// Installed plugins tab component
+/// Get real installed plugins from the system
+async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
+    // Simulate loading delay
+    #[cfg(not(target_arch = "wasm32"))]
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    #[cfg(target_arch = "wasm32")]
+    gloo_timers::future::TimeoutFuture::new(500).await;
+
+    let plugin_infos = PluginFactoryRegistry::get_all_plugin_info().await;
+
+    Ok(plugin_infos.into_iter().map(|info| PluginInfo {
+        id: info.id.clone(),
+        name: info.name.clone(),
+        version: info.version.clone(),
+        author: info.author.clone(),
+        description: info.description.clone(),
+        icon: get_plugin_icon(&info.id),
+        status: PluginStatus::Running,
+        installed_at: Some(chrono::Utc::now()),
+        error_message: None,
+        source: PluginSource::Builtin,
+        has_ui_components: true,
+        has_menu_items: true,
+        has_settings: true,
+    }).collect())
+}
+
+/// Get available plugins for installation
+async fn get_available_plugins() -> Result<Vec<PluginInfo>, String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    #[cfg(target_arch = "wasm32")]
+    gloo_timers::future::TimeoutFuture::new(800).await;
+
+    // For now, return empty list since we're focusing on builtin plugins
+    Ok(vec![])
+}
+
+/// Search for plugins
+async fn search_plugins(query: &str) -> Result<Vec<PluginInfo>, String> {
+    let all_available = get_available_plugins().await?;
+    Ok(all_available.into_iter().filter(|p| {
+        p.name.to_lowercase().contains(&query.to_lowercase()) ||
+            p.description.to_lowercase().contains(&query.to_lowercase())
+    }).collect())
+}
+
+/// Install a plugin (simulated for now)
+async fn install_plugin(plugin_id: &str) -> Result<(), String> {
+    tracing::info!("Installing plugin: {}", plugin_id);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+    #[cfg(target_arch = "wasm32")]
+    gloo_timers::future::TimeoutFuture::new(2000).await;
+
+    // Simulate occasional failures
+    if plugin_id == "failing_plugin" && rand::random::<f32>() < 0.3 {
+        return Err("Network timeout during installation".to_string());
+    }
+
+    Ok(())
+}
+
+/// Get appropriate icon for plugin
+fn get_plugin_icon(plugin_id: &str) -> String {
+    match plugin_id {
+        "product_catalog" => "📦".to_string(),
+        "system_monitor" => "🖥️".to_string(),
+        "notifications" => "🔔".to_string(),
+        _ => "🧩".to_string(),
+    }
+}
+
+// Use the same tab components from the original file, but with real data
 #[component]
 fn InstalledPluginsTab(
     plugins_resource: Resource<Result<Vec<PluginInfo>, String>>,
@@ -392,7 +421,7 @@ fn InstalledPluginsTab(
         },
         None => rsx! {
             div { class: "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3",
-                for _ in 0..6 {
+                for _ in 0..3 {
                     div { class: "animate-pulse",
                         div { class: "bg-white overflow-hidden shadow rounded-lg",
                             div { class: "p-6",
@@ -428,9 +457,9 @@ fn AvailablePluginsTab(
             if plugins.is_empty() {
                 rsx! {
                     EmptyState {
-                        icon: "🔍".to_string(),
-                        title: "No plugins found".to_string(),
-                        description: "Try adjusting your search terms".to_string(),
+                        icon: "✨".to_string(),
+                        title: "All plugins installed".to_string(),
+                        description: "You have all available plugins installed. Check back later for new plugins.".to_string(),
                     }
                 }
             } else {
@@ -508,9 +537,7 @@ fn PluginCard(
                 }
 
                 if let Some(error) = &plugin.error_message {
-                    div { class: "mt-3 text-sm text-red-600",
-                        "Error: {error}"
-                    }
+                    div { class: "mt-3 text-sm text-red-600", "Error: {error}" }
                 }
 
                 div { class: "mt-4 flex items-center text-xs text-gray-500 space-x-4",
@@ -519,46 +546,33 @@ fn PluginCard(
                             class: "h-4 w-4 mr-1",
                             xmlns: "http://www.w3.org/2000/svg",
                             view_box: "0 0 20 20",
-                            fill: "currentColor",
-                            path {
-                                d: "M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-                            }
+                            fill: "currentColor"
                         }
-                        "{plugin.rating}/5"
+                        if plugin.has_ui_components { "UI Components" } else { "No UI" }
                     }
                     div { class: "flex items-center",
                         svg {
                             class: "h-4 w-4 mr-1",
                             xmlns: "http://www.w3.org/2000/svg",
                             view_box: "0 0 20 20",
-                            fill: "currentColor",
-                            path {
-                                fill_rule: "evenodd",
-                                d: "M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z",
-                                clip_rule: "evenodd"
-                            }
+                            fill: "currentColor"
                         }
-                        "{plugin.downloads}"
+                        if plugin.has_menu_items { "Menu Items" } else { "No Menu" }
                     }
                     div { class: "flex items-center",
                         svg {
                             class: "h-4 w-4 mr-1",
                             xmlns: "http://www.w3.org/2000/svg",
                             view_box: "0 0 20 20",
-                            fill: "currentColor",
-                            path {
-                                fill_rule: "evenodd",
-                                d: "M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z",
-                                clip_rule: "evenodd"
-                            }
+                            fill: "currentColor"
                         }
-                        "{plugin.category}"
+                        if plugin.has_settings { "Configurable" } else { "No Settings" }
                     }
                 }
 
                 div { class: "mt-6 flex space-x-3",
                     match plugin.source {
-                        PluginSource::Installed => rsx! {
+                        PluginSource::Installed | PluginSource::Builtin => rsx! {
                             Link {
                                 to: Route::Plugin { plugin_id: plugin.id.clone() },
                                 class: "flex-1 bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-center",
@@ -586,11 +600,7 @@ fn PluginCard(
                                         class: "flex-1 bg-blue-600 py-2 px-3 border border-transparent rounded-md shadow-sm text-sm leading-4 font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50",
                                         disabled: is_installing,
                                         onclick: move |_| on_install.call(plugin.id.clone()),
-                                        if is_installing {
-                                            "Installing..."
-                                        } else {
-                                            "Install"
-                                        }
+                                        if is_installing { "Installing..." } else { "Install" }
                                     }
                                     button {
                                         r#type: "button",
@@ -734,145 +744,6 @@ pub fn PluginView(plugin_id: String, page: Option<String>) -> Element {
             }
         }
     }
-}
-
-// Mock data functions (replace with real API calls)
-
-/// Get installed plugins from the plugin manager
-async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
-    // This would call the actual plugin manager
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        // Simulate API call
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        gloo_timers::future::TimeoutFuture::new(500).await;
-    }
-
-    Ok(vec![
-        PluginInfo {
-            id: "inventory_management".to_string(),
-            name: "Inventory Management".to_string(),
-            version: "2.1.0".to_string(),
-            author: "QorzenTech".to_string(),
-            description: "Complete inventory tracking and management system with barcode support"
-                .to_string(),
-            icon: "📦".to_string(),
-            rating: 4.8,
-            downloads: "12.5k".to_string(),
-            category: "Business".to_string(),
-            status: PluginStatus::Running,
-            installed_at: Some(chrono::Utc::now()),
-            error_message: None,
-            source: PluginSource::Installed,
-        },
-        PluginInfo {
-            id: "analytics_dashboard".to_string(),
-            name: "Analytics Dashboard".to_string(),
-            version: "1.5.2".to_string(),
-            author: "DataViz Inc".to_string(),
-            description: "Advanced analytics and reporting with beautiful visualizations".to_string(),
-            icon: "📊".to_string(),
-            rating: 4.6,
-            downloads: "8.2k".to_string(),
-            category: "Analytics".to_string(),
-            status: PluginStatus::Failed,
-            installed_at: Some(chrono::Utc::now()),
-            error_message: Some("Initialization timeout".to_string()),
-            source: PluginSource::Installed,
-        },
-    ])
-}
-
-/// Get featured plugins from registry
-async fn get_featured_plugins() -> Result<Vec<PluginInfo>, String> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        gloo_timers::future::TimeoutFuture::new(800).await;
-    }
-
-    Ok(vec![
-        PluginInfo {
-            id: "crm_system".to_string(),
-            name: "Customer Relations".to_string(),
-            version: "1.2.0".to_string(),
-            author: "CRM Solutions".to_string(),
-            description: "Comprehensive customer relationship management system".to_string(),
-            icon: "👥".to_string(),
-            rating: 4.4,
-            downloads: "6.8k".to_string(),
-            category: "Business".to_string(),
-            status: PluginStatus::Available,
-            installed_at: None,
-            error_message: None,
-            source: PluginSource::Registry,
-        },
-        PluginInfo {
-            id: "payment_processing".to_string(),
-            name: "Payment Processing".to_string(),
-            version: "2.3.1".to_string(),
-            author: "PayTech".to_string(),
-            description: "Secure payment processing with multiple gateway support".to_string(),
-            icon: "💳".to_string(),
-            rating: 4.7,
-            downloads: "9.4k".to_string(),
-            category: "Finance".to_string(),
-            status: PluginStatus::Available,
-            installed_at: None,
-            error_message: None,
-            source: PluginSource::Registry,
-        },
-    ])
-}
-
-/// Search plugins in registry
-async fn search_registry_plugins(query: &str) -> Result<Vec<PluginInfo>, String> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        gloo_timers::future::TimeoutFuture::new(600).await;
-    }
-
-    let all_plugins = get_featured_plugins().await?;
-
-    Ok(all_plugins
-        .into_iter()
-        .filter(|p| {
-            p.name.to_lowercase().contains(&query.to_lowercase())
-                || p.description.to_lowercase().contains(&query.to_lowercase())
-                || p.category.to_lowercase().contains(&query.to_lowercase())
-        })
-        .collect())
-}
-
-/// Install a plugin
-async fn install_plugin(plugin_id: &str) -> Result<(), String> {
-    tracing::info!("Installing plugin: {}", plugin_id);
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        gloo_timers::future::TimeoutFuture::new(2000).await;
-    }
-
-    // Simulate occasional failures
-    if plugin_id == "payment_processing" && rand::random::<f32>() < 0.3 {
-        return Err("Network timeout during installation".to_string());
-    }
-
-    Ok(())
 }
 
 /// Get plugin updates

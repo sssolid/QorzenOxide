@@ -16,7 +16,7 @@ pub use admin::Admin;
 pub use dashboard::Dashboard;
 pub use login::Login;
 pub use not_found::NotFound;
-pub use plugins::{PluginView, Plugins};
+pub use plugins::{Plugins, PluginView};
 pub use profile::Profile;
 pub use settings::Settings;
 

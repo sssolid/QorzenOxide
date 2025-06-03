@@ -1,0 +1,29 @@
+[plugin_manager]
+auto_load = true
+hot_reload = false  # Disabled for WASM
+registry_url = "https://registry.qorzen.com"
+
+# Default plugins to load
+default_plugins = [
+    "system_monitor",
+    "notifications",
+    "product_catalog"
+]
+
+# Plugin-specific configurations
+[plugin_configs.system_monitor]
+refresh_interval = 5000
+show_cpu = true
+show_memory = true
+alert_threshold = 80.0
+
+[plugin_configs.notifications]
+email_enabled = true
+push_enabled = false
+default_priority = "normal"
+
+[plugin_configs.product_catalog]
+api_endpoint = "https://api.example.com/products"
+cache_duration_secs = 300
+search_enabled = true
+max_results = 100

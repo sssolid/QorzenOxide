@@ -20,6 +20,8 @@ use qorzen_oxide::ui::App;
 #[cfg(not(target_arch = "wasm32"))]
 use qorzen_oxide::app::ApplicationCore;
 
+use qorzen_oxide::plugin::config::BuiltinPluginRegistry;
+
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Parser)]
 #[command(name = "qorzen-oxide", version = qorzen_oxide::VERSION)]

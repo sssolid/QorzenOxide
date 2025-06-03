@@ -80,10 +80,6 @@ pub enum ErrorKind {
         user_id: Option<String>,
         permission: Option<String>,
     },
-    Validation {
-        field: Option<String>,
-        rules: Vec<String>,
-    },
     Authentication {
         provider: Option<String>,
         reason: String,
@@ -97,6 +93,7 @@ pub enum ErrorKind {
     Io,
     Serialization,
     Timeout,
+    Validation,
     ResourceExhausted,
 }
 

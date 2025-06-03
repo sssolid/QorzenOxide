@@ -10,7 +10,8 @@ homepage = "https://www.qorzen.com"
 repository = "https://github.com/sssolid/QorzenOxide"
 
 [features]
-default = []
+default = ["example_plugin"]
+example_plugin = []
 desktop = []
 web = []
 tracing-wasm = []

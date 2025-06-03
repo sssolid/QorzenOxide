@@ -514,6 +514,7 @@ impl PluginInstallationManager {
 
     /// Discover plugins in the plugins directory
     pub async fn discover_plugins(&self) -> Result<Vec<String>> {
+        #[allow(unused_assignments)]
         let mut discovered = Vec::new();
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -604,7 +605,7 @@ impl PluginInstallationManager {
     #[cfg(target_arch = "wasm32")]
     async fn discover_plugins_wasm(&self) -> Result<Vec<String>> {
         // For WASM, we need to discover from registered plugins
-        if let Some(wasm_loader) = self.plugin_loader.as_any().downcast_ref::<WasmPluginLoader>() {
+        if let Some(_wasm_loader) = self.plugin_loader.as_any().downcast_ref::<WasmPluginLoader>() {
             // This would require exposing list_available_plugins from WasmPluginLoader
             // For now, return empty list
             Ok(vec![])
