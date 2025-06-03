@@ -15,7 +15,7 @@ use crate::error::{Result};
 use crate::event::EventBusManager;
 use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState};
 use crate::platform::PlatformManager;
-use crate::plugin::PluginManager;
+use crate::plugin::{PluginManager, PluginManagerConfig};
 use crate::ui::UILayoutManager;
 use crate::utils::Time;
 
@@ -82,7 +82,7 @@ pub struct ApplicationCore {
     started_at: f64,
 
     // Core managers for web
-    platform_manager: Option<PlatformManager>,
+    platform_manager: Option<Arc<PlatformManager>>,
     config_manager: Option<TieredConfigManager>,
     event_bus_manager: Option<Arc<EventBusManager>>,
     account_manager: Option<AccountManager>,
@@ -176,7 +176,7 @@ impl ApplicationCore {
         web_sys::console::log_1(&"Initializing platform manager".into());
         let mut platform_manager = PlatformManager::new()?;
         platform_manager.initialize().await?;
-        self.platform_manager = Some(platform_manager);
+        self.platform_manager = Some(Arc::new(platform_manager));
         Ok(())
     }
 
@@ -243,11 +243,11 @@ impl ApplicationCore {
         crate::plugin::PluginFactoryRegistry::initialize();
 
         // Register builtin plugins
-        crate::plugin::BuiltinPluginRegistry::register_builtin_plugins().await?;
+        crate::plugin::builtin::register_builtin_plugins().await?;
 
-        // Create plugin manager
-        let plugins_dir = std::path::PathBuf::from("plugins");
-        let mut plugin_manager = crate::plugin::PluginManager::new(plugins_dir);
+        // Create plugin manager with proper config
+        let plugin_config = PluginManagerConfig::default();
+        let mut plugin_manager = PluginManager::new(plugin_config);
 
         // Set up dependencies
         if let Some(ref event_bus) = self.event_bus_manager {
@@ -285,7 +285,7 @@ impl ApplicationCore {
 
     async fn simulate_plugin_installation(
         &mut self,
-        plugin_manager: &mut crate::plugin::PluginManager,
+        plugin_manager: &mut PluginManager,
         plugin_id: &str
     ) -> Result<()> {
         // For WASM, we simulate the installation process since plugins are compiled in
@@ -314,7 +314,7 @@ impl ApplicationCore {
     }
 
     // Add method to access plugin manager for UI
-    pub fn get_plugin_manager(&self) -> Option<&crate::plugin::PluginManager> {
+    pub fn get_plugin_manager(&self) -> Option<&PluginManager> {
         self.plugin_manager.as_ref()
     }
 
@@ -355,8 +355,10 @@ impl ApplicationCore {
             let _ = config_manager.shutdown().await;
         }
 
-        if let Some(mut platform_manager) = self.platform_manager.take() {
-            let _ = platform_manager.shutdown().await;
+        if let Some(platform_manager) = self.platform_manager.take() {
+            if let Ok(mut manager) = Arc::try_unwrap(platform_manager) {
+                let _ = manager.shutdown().await;
+            }
         }
 
         self.state.set_state(ManagerState::Shutdown).await;
@@ -440,37 +442,3 @@ impl Default for ApplicationCore {
         Self::new()
     }
 }
-
-// #[derive(Debug)]
-// struct SimplePluginLoader;
-//
-// impl SimplePluginLoader {
-//     fn new() -> Self {
-//         Self
-//     }
-// }
-//
-// #[async_trait(?Send)]
-// impl crate::plugin::PluginLoader for SimplePluginLoader {
-//     async fn load_plugin(&self, _path: &str) -> Result<Box<dyn crate::plugin::Plugin>> {
-//         Err(Error::plugin(
-//             "loader",
-//             "Plugin loading not implemented in web version",
-//         ))
-//     }
-//
-//     async fn validate_plugin(
-//         &self,
-//         _plugin: &dyn crate::plugin::Plugin,
-//     ) -> Result<crate::plugin::ValidationResult> {
-//         Ok(crate::plugin::ValidationResult {
-//             is_valid: true,
-//             errors: Vec::new(),
-//             warnings: Vec::new(),
-//         })
-//     }
-//
-//     async fn unload_plugin(&self, _plugin_id: &str) -> Result<()> {
-//         Ok(())
-//     }
-// }

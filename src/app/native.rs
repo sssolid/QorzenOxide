@@ -1,4 +1,4 @@
-// src/app.rs - Enhanced application core with all systems integrated
+// src/app/native.rs - Enhanced application core with all systems integrated
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -26,7 +26,7 @@ use crate::file::FileManager;
 use crate::logging::LoggingManager;
 use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState, ManagerStatus};
 use crate::platform::PlatformManager;
-use crate::plugin::PluginManager;
+use crate::plugin::{PluginManager, PluginManagerConfig};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::task::TaskManager;
 use crate::ui::UILayoutManager;
@@ -99,7 +99,7 @@ pub struct ApplicationCore {
     started_at: DateTime<Utc>,
 
     // Platform abstraction (must be first)
-    platform_manager: Option<PlatformManager>,
+    platform_manager: Option<Arc<PlatformManager>>,
 
     // Core configuration and settings
     config_manager: Option<Arc<Mutex<TieredConfigManager>>>,
@@ -222,7 +222,7 @@ impl ApplicationCore {
         tracing::info!("Initializing platform manager");
         let mut platform_manager = PlatformManager::new()?;
         platform_manager.initialize().await?;
-        self.platform_manager = Some(platform_manager);
+        self.platform_manager = Some(Arc::new(platform_manager));
         Ok(())
     }
 
@@ -396,10 +396,42 @@ impl ApplicationCore {
     async fn init_plugin_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing plugin manager");
 
-        // Create a simple plugin loader for this example
-        let loader = Box::new(SimplePluginLoader::new());
-        let mut plugin_manager = PluginManager::new(loader);
+        // Initialize the plugin factory registry first
+        crate::plugin::PluginFactoryRegistry::initialize();
+
+        // Register built-in plugins
+        crate::plugin::builtin::register_builtin_plugins().await?;
+
+        // Create plugin manager with proper configuration
+        let plugin_config = PluginManagerConfig::default();
+        let mut plugin_manager = PluginManager::new(plugin_config);
+
+        // Set up dependencies
+        if let Some(ref event_bus) = self.event_bus_manager {
+            plugin_manager.set_event_bus(Arc::clone(event_bus));
+        }
+
+        if let Some(ref platform_manager) = self.platform_manager {
+            plugin_manager.set_platform_manager(Arc::clone(platform_manager));
+        }
+
+        // Initialize the plugin manager
         plugin_manager.initialize().await?;
+
+        // Load default plugins
+        let default_plugins = ["system_monitor", "notifications"];
+
+        #[cfg(feature = "example_plugin")]
+        let default_plugins = ["system_monitor", "notifications", "product_catalog"];
+
+        for plugin_id in default_plugins {
+            if let Err(e) = plugin_manager.load_plugin(plugin_id).await {
+                tracing::warn!("Failed to load plugin {}: {}", plugin_id, e);
+            } else {
+                tracing::info!("Successfully loaded plugin: {}", plugin_id);
+            }
+        }
+
         self.plugin_manager = Some(plugin_manager);
         Ok(())
     }
@@ -547,8 +579,10 @@ impl ApplicationCore {
             let _ = timeout(Duration::from_secs(2), manager.shutdown()).await;
         }
 
-        if let Some(mut platform_manager) = self.platform_manager.take() {
-            let _ = timeout(Duration::from_secs(5), platform_manager.shutdown()).await;
+        if let Some(platform_manager) = self.platform_manager.take() {
+            if let Ok(mut manager) = Arc::try_unwrap(platform_manager) {
+                let _ = timeout(Duration::from_secs(5), manager.shutdown()).await;
+            }
         }
 
         *self.app_state.write().await = ApplicationState::Shutdown;
@@ -646,6 +680,20 @@ impl ApplicationCore {
     pub async fn get_state(&self) -> ApplicationState {
         *self.app_state.read().await
     }
+
+    /// Get access to the plugin manager for UI integration
+    pub fn get_plugin_manager(&self) -> Option<&PluginManager> {
+        self.plugin_manager.as_ref()
+    }
+
+    /// Get plugin statistics for UI display
+    pub async fn get_plugin_stats(&self) -> Option<crate::plugin::PluginStats> {
+        if let Some(ref plugin_manager) = self.plugin_manager {
+            Some(plugin_manager.get_plugin_stats().await)
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for ApplicationCore {
@@ -698,42 +746,6 @@ impl Manager for ApplicationCore {
     async fn health_check(&self) -> HealthStatus {
         let health = self.get_health().await;
         health.status
-    }
-}
-
-/// Simple plugin loader for demonstration
-struct SimplePluginLoader {
-    // Plugin loading implementation
-}
-
-impl SimplePluginLoader {
-    fn new() -> Self {
-        Self {}
-    }
-}
-
-#[async_trait]
-impl crate::plugin::PluginLoader for SimplePluginLoader {
-    async fn load_plugin(&self, _path: &str) -> Result<Box<dyn crate::plugin::Plugin>> {
-        Err(Error::plugin(
-            "loader",
-            "Plugin loading not implemented in example",
-        ))
-    }
-
-    async fn validate_plugin(
-        &self,
-        _plugin: &dyn crate::plugin::Plugin,
-    ) -> Result<crate::plugin::ValidationResult> {
-        Ok(crate::plugin::ValidationResult {
-            is_valid: true,
-            errors: Vec::new(),
-            warnings: Vec::new(),
-        })
-    }
-
-    async fn unload_plugin(&self, _plugin_id: &str) -> Result<()> {
-        Ok(())
     }
 }
 

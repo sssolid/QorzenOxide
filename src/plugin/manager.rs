@@ -72,6 +72,7 @@ pub struct RegistryPlugin {
 #[derive(Debug)]
 pub struct PluginRegistry {
     base_url: String,
+    #[cfg(not(target_arch = "wasm32"))]
     client: Option<reqwest::Client>,
 }
 
@@ -80,10 +81,12 @@ impl PluginRegistry {
     pub fn new(base_url: String) -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         let client = Some(reqwest::Client::new());
-        #[cfg(target_arch = "wasm32")]
-        let client = None;
 
-        Self { base_url, client }
+        Self {
+            base_url,
+            #[cfg(not(target_arch = "wasm32"))]
+            client,
+        }
     }
 
     /// Search for plugins in the registry
@@ -433,7 +436,7 @@ impl PluginManager {
     }
 
     /// Install plugin from registry
-    #[allow(unused_variables)]   
+    #[allow(unused_variables)]
     async fn install_from_registry(
         &self,
         plugin_id: String,
@@ -830,7 +833,8 @@ impl PluginManager {
                 .map_err(|e| Error::plugin("installer", format!("Failed to get file type: {}", e)))?
                 .is_dir()
             {
-                self.copy_directory(&src_path, &dst_path).await?;
+                // Use Box::pin to handle recursive async call
+                Box::pin(self.copy_directory(&src_path, &dst_path)).await?;
             } else {
                 tokio::fs::copy(&src_path, &dst_path).await.map_err(|e| {
                     Error::plugin("installer", format!("Failed to copy file: {}", e))

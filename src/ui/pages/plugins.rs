@@ -78,7 +78,7 @@ pub fn Plugins() -> Element {
     let mut installing_plugins = use_signal(|| std::collections::HashSet::<String>::new());
     let mut error_message = use_signal(|| None::<String>);
 
-    // Real data resources
+    // Real data resources using the actual plugin system
     let mut installed_plugins = use_resource(move || async move {
         get_installed_plugins().await
     });
@@ -305,8 +305,7 @@ pub fn Plugins() -> Element {
     }
 }
 
-/// Installed plugins tab component
-/// Get real installed plugins from the system
+/// Get real installed plugins from the plugin factory registry
 async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
     // Simulate loading delay
     #[cfg(not(target_arch = "wasm32"))]
@@ -314,6 +313,7 @@ async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
     #[cfg(target_arch = "wasm32")]
     gloo_timers::future::TimeoutFuture::new(500).await;
 
+    // Get plugins from the actual plugin factory registry
     let plugin_infos = PluginFactoryRegistry::get_all_plugin_info().await;
 
     Ok(plugin_infos.into_iter().map(|info| PluginInfo {
@@ -323,7 +323,7 @@ async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
         author: info.author.clone(),
         description: info.description.clone(),
         icon: get_plugin_icon(&info.id),
-        status: PluginStatus::Running,
+        status: PluginStatus::Running, // All registered plugins are running
         installed_at: Some(chrono::Utc::now()),
         error_message: None,
         source: PluginSource::Builtin,
@@ -333,7 +333,7 @@ async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
     }).collect())
 }
 
-/// Get available plugins for installation
+/// Get available plugins for installation (currently empty - registry integration would go here)
 async fn get_available_plugins() -> Result<Vec<PluginInfo>, String> {
     #[cfg(not(target_arch = "wasm32"))]
     tokio::time::sleep(std::time::Duration::from_millis(800)).await;
@@ -341,6 +341,7 @@ async fn get_available_plugins() -> Result<Vec<PluginInfo>, String> {
     gloo_timers::future::TimeoutFuture::new(800).await;
 
     // For now, return empty list since we're focusing on builtin plugins
+    // In the future, this would query a plugin registry
     Ok(vec![])
 }
 
@@ -380,7 +381,7 @@ fn get_plugin_icon(plugin_id: &str) -> String {
     }
 }
 
-// Use the same tab components from the original file, but with real data
+/// Installed plugins tab component
 #[component]
 fn InstalledPluginsTab(
     plugins_resource: Resource<Result<Vec<PluginInfo>, String>>,
@@ -625,154 +626,108 @@ fn PluginCard(
     }
 }
 
-/// Updates tab component
-#[component]
-fn UpdatesTab() -> Element {
-    let updates = get_plugin_updates();
-
-    if updates.is_empty() {
-        rsx! {
-            EmptyState {
-                icon: "✅".to_string(),
-                title: "All plugins up to date".to_string(),
-                description: "Your plugins are running the latest versions".to_string(),
-            }
-        }
-    } else {
-        rsx! {
-            div { class: "space-y-4",
-                for update in updates {
-                    UpdateCard {
-                        key: "{update.plugin_id}",
-                        update: update.clone(),
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Update card component
-#[component]
-fn UpdateCard(update: PluginUpdate) -> Element {
-    let mut updating = use_signal(|| false);
-
-    let handle_update = move |_| {
-        updating.set(true);
-        spawn(async move {
-            #[cfg(not(target_arch = "wasm32"))]
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-            #[cfg(target_arch = "wasm32")]
-            gloo_timers::future::TimeoutFuture::new(2000).await;
-            updating.set(false);
-        });
-    };
-
-    rsx! {
-        div { class: "bg-white overflow-hidden shadow rounded-lg border-l-4 border-yellow-400",
-            div { class: "p-6",
-                div { class: "flex items-center justify-between",
-                    div { class: "flex items-center space-x-3",
-                        div { class: "flex-shrink-0",
-                            span { class: "text-2xl", "{update.icon}" }
-                        }
-                        div { class: "ml-4",
-                            h3 { class: "text-lg font-medium text-gray-900", "{update.name}" }
-                            p { class: "text-sm text-gray-500",
-                                "Update available: v{update.current_version} → v{update.new_version}"
-                            }
-                        }
-                    }
-                    div { class: "flex space-x-3",
-                        button {
-                            r#type: "button",
-                            class: "bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
-                            "View Changes"
-                        }
-                        button {
-                            r#type: "button",
-                            class: "bg-yellow-600 py-2 px-3 border border-transparent rounded-md shadow-sm text-sm leading-4 font-medium text-white hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50",
-                            disabled: updating(),
-                            onclick: handle_update,
-                            if updating() {
-                                "Updating..."
-                            } else {
-                                "Update"
-                            }
-                        }
-                    }
-                }
-
-                if !update.changelog.is_empty() {
-                    div { class: "mt-4",
-                        h4 { class: "text-sm font-medium text-gray-900 mb-2", "What's New:" }
-                        ul { class: "text-sm text-gray-600 space-y-1",
-                            for item in &update.changelog {
-                                li { class: "flex items-start",
-                                    span { class: "text-green-500 mr-2", "•" }
-                                    "{item}"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 /// Plugin view component for individual plugin pages
 #[component]
 pub fn PluginView(plugin_id: String, page: Option<String>) -> Element {
+    // Get the actual plugin from the registry
+    let plugin_info = use_resource({
+        let plugin_id = plugin_id.clone(); // clone once for local capture
+
+        move || {
+            let plugin_id = plugin_id.clone(); // clone again for move inside async
+            async move {
+                PluginFactoryRegistry::get_plugin_info(&plugin_id).await
+            }
+        }
+    });
+
     rsx! {
         PageWrapper {
             title: format!("Plugin: {}", plugin_id),
             subtitle: Some("Plugin configuration and management".to_string()),
-            div { class: "bg-white shadow rounded-lg p-6",
-                h2 { class: "text-xl font-semibold text-gray-900 mb-4", "Plugin: {plugin_id}" }
-                if let Some(page_name) = page {
-                    p { class: "text-gray-600 mb-4", "Page: {page_name}" }
-                }
-                p { class: "text-gray-600",
-                    "This would show the plugin's interface and configuration options."
-                }
-                div { class: "mt-6 p-4 bg-blue-50 rounded-md",
-                    p { class: "text-sm text-blue-800",
-                        "🔌 Plugin content would be rendered here dynamically based on the plugin's configuration."
+
+            match &*plugin_info.read_unchecked() {
+                Some(Some(info)) => rsx! {
+                    div { class: "bg-white shadow rounded-lg p-6",
+                        div { class: "flex items-center mb-6",
+                            span { class: "text-4xl mr-4", "{get_plugin_icon(&info.id)}" }
+                            div {
+                                h2 { class: "text-2xl font-semibold text-gray-900", "{info.name}" }
+                                p { class: "text-gray-600", "v{info.version} by {info.author}" }
+                                p { class: "text-sm text-gray-500 mt-1", "{info.description}" }
+                            }
+                        }
+
+                        if let Some(page_name) = page {
+                            div { class: "mb-4 p-3 bg-blue-50 rounded-md",
+                                p { class: "text-sm text-blue-800", "Page: {page_name}" }
+                            }
+                        }
+
+                        div { class: "grid grid-cols-1 md:grid-cols-2 gap-6",
+                            div { class: "p-4 bg-gray-50 rounded-lg",
+                                h3 { class: "font-medium text-gray-900 mb-2", "Plugin Information" }
+                                dl { class: "space-y-2 text-sm",
+                                    div { class: "flex justify-between",
+                                        dt { class: "text-gray-500", "ID:" }
+                                        dd { class: "text-gray-900", "{info.id}" }
+                                    }
+                                    div { class: "flex justify-between",
+                                        dt { class: "text-gray-500", "Version:" }
+                                        dd { class: "text-gray-900", "{info.version}" }
+                                    }
+                                    div { class: "flex justify-between",
+                                        dt { class: "text-gray-500", "Author:" }
+                                        dd { class: "text-gray-900", "{info.author}" }
+                                    }
+                                    div { class: "flex justify-between",
+                                        dt { class: "text-gray-500", "License:" }
+                                        dd { class: "text-gray-900", "{info.license}" }
+                                    }
+                                }
+                            }
+
+                            div { class: "p-4 bg-green-50 rounded-lg",
+                                h3 { class: "font-medium text-gray-900 mb-2", "Status" }
+                                div { class: "flex items-center",
+                                    div { class: "w-3 h-3 bg-green-500 rounded-full mr-2" }
+                                    span { class: "text-sm text-green-700", "Plugin is running and active" }
+                                }
+                            }
+                        }
+
+                        div { class: "mt-6 p-4 bg-blue-50 rounded-md",
+                            p { class: "text-sm text-blue-800",
+                                "🔌 Plugin components and functionality would be rendered here dynamically."
+                            }
+                        }
+                    }
+                },
+                Some(None) => rsx! {
+                    div { class: "bg-white shadow rounded-lg p-6",
+                        div { class: "text-center py-12",
+                            div { class: "text-6xl text-gray-400 mb-4", "🧩" }
+                            h2 { class: "text-2xl font-bold text-gray-900 mb-2", "Plugin Not Found" }
+                            p { class: "text-gray-600", "The plugin '{plugin_id}' could not be found." }
+                        }
+                    }
+                },
+                None => rsx! {
+                    div { class: "bg-white shadow rounded-lg p-6",
+                        div { class: "animate-pulse",
+                            div { class: "flex items-center mb-6",
+                                div { class: "w-16 h-16 bg-gray-200 rounded mr-4" }
+                                div {
+                                    div { class: "h-6 bg-gray-200 rounded w-48 mb-2" }
+                                    div { class: "h-4 bg-gray-200 rounded w-32" }
+                                }
+                            }
+                            div { class: "h-4 bg-gray-200 rounded mb-2" }
+                            div { class: "h-4 bg-gray-200 rounded w-3/4" }
+                        }
                     }
                 }
             }
         }
     }
-}
-
-/// Get plugin updates
-fn get_plugin_updates() -> Vec<PluginUpdate> {
-    vec![
-        PluginUpdate {
-            plugin_id: "inventory_management".to_string(),
-            name: "Inventory Management".to_string(),
-            icon: "📦".to_string(),
-            current_version: "2.1.0".to_string(),
-            new_version: "2.2.0".to_string(),
-            changelog: vec![
-                "Added bulk import/export functionality".to_string(),
-                "Improved barcode scanning accuracy".to_string(),
-                "Fixed issue with low stock alerts".to_string(),
-                "Enhanced reporting capabilities".to_string(),
-            ],
-        },
-        PluginUpdate {
-            plugin_id: "analytics_dashboard".to_string(),
-            name: "Analytics Dashboard".to_string(),
-            icon: "📊".to_string(),
-            current_version: "1.5.2".to_string(),
-            new_version: "1.6.0".to_string(),
-            changelog: vec![
-                "New real-time dashboard widgets".to_string(),
-                "Added data export to Excel".to_string(),
-                "Performance improvements for large datasets".to_string(),
-            ],
-        },
-    ]
 }

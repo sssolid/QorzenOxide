@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::error::{Error, Result};
-use crate::plugin::builtin;
 
 /// Plugin configuration loaded from config files
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,13 +27,14 @@ pub struct PluginManagerConfig {
     pub cache_settings: PluginCacheSettings,
 }
 
+/// Built-in plugin registry helper for initialization
 pub struct BuiltinPluginRegistry;
 
 impl BuiltinPluginRegistry {
     /// Initialize all built-in plugins
-    pub async fn register_builtin_plugins() -> crate::error::Result<()> {
+    pub async fn register_builtin_plugins() -> Result<()> {
         // This function is now a wrapper around the builtin module's function
-        builtin::register_builtin_plugins().await
+        super::registry::builtin::register_builtin_plugins().await
     }
 }
 
