@@ -24,6 +24,10 @@ name = "qorzen_desktop"
 path = "src/main.rs"
 required-features = ["desktop"]
 
+[[bin]]
+name = "build_plugins"
+path = "scripts/build_plugins.rs"
+
 [dependencies]
 # Core dependencies
 serde = { version = "1.0", features = ["derive"] }

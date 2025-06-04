@@ -1,29 +1,25 @@
+// src/plugin/registry.rs - Enhanced Plugin Registry
+
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::sync::{OnceLock};
+use std::sync::OnceLock;
 use tokio::sync::RwLock;
 
 use crate::plugin::{Plugin, PluginInfo, Platform, PluginContext};
 use crate::error::{Error, Result};
 
-/// Global plugin factory registry for compile-time plugin registration
 static PLUGIN_FACTORIES: OnceLock<RwLock<HashMap<String, Box<dyn PluginFactory>>>> = OnceLock::new();
 
-/// Trait for plugin factories that can create plugin instances
+/// Plugin factory trait for creating plugin instances
 pub trait PluginFactory: Send + Sync {
-    /// Create a new instance of the plugin
     fn create(&self) -> Box<dyn Plugin>;
-
-    /// Get plugin information without creating an instance
     fn info(&self) -> PluginInfo;
-
-    /// Get the plugin ID
     fn id(&self) -> String {
         self.info().id.clone()
     }
 }
 
-/// Helper struct for simple plugin factories
+/// Simple plugin factory implementation
 pub struct SimplePluginFactory<T>
 where
     T: Plugin + Default + 'static,
@@ -57,11 +53,11 @@ where
     }
 }
 
-/// Global plugin registry functions
+/// Global plugin factory registry
 pub struct PluginFactoryRegistry;
 
 impl PluginFactoryRegistry {
-    /// Initialize the global plugin registry
+    /// Initialize the registry
     pub fn initialize() {
         PLUGIN_FACTORIES.get_or_init(|| RwLock::new(HashMap::new()));
     }
@@ -72,16 +68,12 @@ impl PluginFactoryRegistry {
         F: PluginFactory + 'static,
     {
         Self::initialize();
-
-        let registry = PLUGIN_FACTORIES.get().unwrap();
+        let registry = PLUGIN_FACTORIES.get().unwrap(); // SAFETY: We just initialized it
         let mut factories = registry.write().await;
-
         let plugin_id = factory.id().to_string();
+
         if factories.contains_key(&plugin_id) {
-            return Err(Error::plugin(
-                &plugin_id,
-                "Plugin factory already registered"
-            ));
+            return Err(Error::plugin(&plugin_id, "Plugin factory already registered"));
         }
 
         factories.insert(plugin_id.clone(), Box::new(factory));
@@ -89,44 +81,62 @@ impl PluginFactoryRegistry {
         Ok(())
     }
 
-    /// Get a list of all registered plugin IDs
+    /// List all registered plugins
     pub async fn list_plugins() -> Vec<String> {
         Self::initialize();
-
-        let registry = PLUGIN_FACTORIES.get().unwrap();
+        let registry = PLUGIN_FACTORIES.get().unwrap(); // SAFETY: We just initialized it
         let factories = registry.read().await;
         factories.keys().cloned().collect()
     }
 
-    /// Get plugin info for a registered plugin
+    /// Get plugin info by ID
     pub async fn get_plugin_info(plugin_id: &str) -> Option<PluginInfo> {
         Self::initialize();
-
-        let registry = PLUGIN_FACTORIES.get().unwrap();
+        let registry = PLUGIN_FACTORIES.get().unwrap(); // SAFETY: We just initialized it
         let factories = registry.read().await;
         factories.get(plugin_id).map(|f| f.info())
     }
 
-    /// Create a plugin instance
+    /// Create a plugin instance by ID
     pub async fn create_plugin(plugin_id: &str) -> Option<Box<dyn Plugin>> {
         Self::initialize();
-
-        let registry = PLUGIN_FACTORIES.get().unwrap();
+        let registry = PLUGIN_FACTORIES.get().unwrap(); // SAFETY: We just initialized it
         let factories = registry.read().await;
         factories.get(plugin_id).map(|f| f.create())
     }
 
-    /// Get all plugin information
+    /// Get all plugin info
     pub async fn get_all_plugin_info() -> Vec<PluginInfo> {
         Self::initialize();
-
-        let registry = PLUGIN_FACTORIES.get().unwrap();
+        let registry = PLUGIN_FACTORIES.get().unwrap(); // SAFETY: We just initialized it
         let factories = registry.read().await;
         factories.values().map(|f| f.info()).collect()
     }
+
+    /// Check if a plugin is registered
+    pub async fn is_registered(plugin_id: &str) -> bool {
+        Self::initialize();
+        let registry = PLUGIN_FACTORIES.get().unwrap(); // SAFETY: We just initialized it
+        let factories = registry.read().await;
+        factories.contains_key(plugin_id)
+    }
+
+    /// Unregister a plugin factory
+    pub async fn unregister(plugin_id: &str) -> Result<()> {
+        Self::initialize();
+        let registry = PLUGIN_FACTORIES.get().unwrap(); // SAFETY: We just initialized it
+        let mut factories = registry.write().await;
+
+        if factories.remove(plugin_id).is_some() {
+            tracing::info!("Unregistered plugin factory: {}", plugin_id);
+            Ok(())
+        } else {
+            Err(Error::plugin(plugin_id, "Plugin factory not found"))
+        }
+    }
 }
 
-/// Macro to register a plugin at compile time
+/// Macro for registering plugins at compile time
 #[macro_export]
 macro_rules! register_plugin {
     ($plugin_type:ty, $info:expr) => {
@@ -149,7 +159,7 @@ macro_rules! register_plugin {
     };
 }
 
-/// Built-in plugin implementations for demonstration
+/// Built-in plugins module
 pub mod builtin {
     use super::*;
     use crate::plugin::*;
@@ -160,7 +170,7 @@ pub mod builtin {
     use dioxus::prelude::*;
     use serde_json::Value;
 
-    /// Example system monitor plugin
+    /// System Monitor Plugin
     #[derive(Debug, Default)]
     pub struct SystemMonitorPlugin {
         context: Option<PluginContext>,
@@ -215,43 +225,39 @@ pub mod builtin {
         }
 
         fn ui_components(&self) -> Vec<UIComponent> {
-            vec![
-                UIComponent {
-                    id: "system_metrics".to_string(),
-                    name: "System Metrics".to_string(),
-                    component_type: ComponentType::Widget,
-                    props: serde_json::json!({
-                        "refresh_interval": 5000,
-                        "show_cpu": true,
-                        "show_memory": true,
-                        "show_disk": true
-                    }),
-                    required_permissions: vec![Permission {
-                        resource: "system".to_string(),
-                        action: "monitor".to_string(),
-                        scope: PermissionScope::Global,
-                    }],
-                },
-            ]
+            vec![UIComponent {
+                id: "system_metrics".to_string(),
+                name: "System Metrics".to_string(),
+                component_type: ComponentType::Widget,
+                props: serde_json::json!({
+                    "refresh_interval": 5000,
+                    "show_cpu": true,
+                    "show_memory": true,
+                    "show_disk": true
+                }),
+                required_permissions: vec![Permission {
+                    resource: "system".to_string(),
+                    action: "monitor".to_string(),
+                    scope: PermissionScope::Global,
+                }],
+            }]
         }
 
         fn menu_items(&self) -> Vec<MenuItem> {
-            vec![
-                MenuItem {
-                    id: "system_monitor".to_string(),
-                    label: "System Monitor".to_string(),
-                    icon: Some("🖥️".to_string()),
-                    route: Some("/plugins/system_monitor".to_string()),
-                    action: None,
-                    required_permissions: vec![Permission {
-                        resource: "system".to_string(),
-                        action: "monitor".to_string(),
-                        scope: PermissionScope::Global,
-                    }],
-                    order: 100,
-                    children: vec![],
-                },
-            ]
+            vec![MenuItem {
+                id: "system_monitor".to_string(),
+                label: "System Monitor".to_string(),
+                icon: Some("🖥️".to_string()),
+                route: Some("/plugins/system_monitor".to_string()),
+                action: None,
+                required_permissions: vec![Permission {
+                    resource: "system".to_string(),
+                    action: "monitor".to_string(),
+                    scope: PermissionScope::Global,
+                }],
+                order: 300,
+                children: vec![],
+            }]
         }
 
         fn settings_schema(&self) -> Option<SettingsSchema> {
@@ -298,59 +304,51 @@ pub mod builtin {
         }
 
         fn api_routes(&self) -> Vec<ApiRoute> {
-            vec![
-                ApiRoute {
-                    path: "/api/plugins/system_monitor/metrics".to_string(),
-                    method: HttpMethod::GET,
-                    handler_id: "get_system_metrics".to_string(),
-                    required_permissions: vec![Permission {
-                        resource: "system".to_string(),
-                        action: "monitor".to_string(),
-                        scope: PermissionScope::Global,
+            vec![ApiRoute {
+                path: "/api/plugins/system_monitor/metrics".to_string(),
+                method: HttpMethod::GET,
+                handler_id: "get_system_metrics".to_string(),
+                required_permissions: vec![Permission {
+                    resource: "system".to_string(),
+                    action: "monitor".to_string(),
+                    scope: PermissionScope::Global,
+                }],
+                rate_limit: None,
+                documentation: ApiDocumentation {
+                    summary: "Get system metrics".to_string(),
+                    description: "Retrieve current system performance metrics".to_string(),
+                    parameters: vec![],
+                    responses: vec![ApiResponse {
+                        status_code: 200,
+                        description: "System metrics".to_string(),
+                        schema: Some(serde_json::json!({
+                            "type": "object",
+                            "properties": {
+                                "cpu_usage": {"type": "number"},
+                                "memory_usage": {"type": "number"},
+                                "disk_usage": {"type": "number"},
+                                "timestamp": {"type": "string"}
+                            }
+                        })),
                     }],
-                    rate_limit: Some(RateLimit {
-                        requests_per_minute: 120,
-                        burst_limit: 20,
-                    }),
-                    documentation: ApiDocumentation {
-                        summary: "Get system metrics".to_string(),
-                        description: "Retrieve current system performance metrics".to_string(),
-                        parameters: vec![],
-                        responses: vec![
-                            ApiResponse {
-                                status_code: 200,
-                                description: "System metrics".to_string(),
-                                schema: Some(serde_json::json!({
-                                    "type": "object",
-                                    "properties": {
-                                        "cpu_usage": {"type": "number"},
-                                        "memory_usage": {"type": "number"},
-                                        "disk_usage": {"type": "number"},
-                                        "timestamp": {"type": "string"}
-                                    }
-                                })),
-                            },
-                        ],
-                        examples: vec![],
-                    },
+                    examples: vec![],
                 },
-            ]
+            }]
         }
 
         fn event_handlers(&self) -> Vec<crate::plugin::EventHandler> {
-            vec![
-                crate::plugin::EventHandler {
-                    event_type: "system.alert".to_string(),
-                    handler_id: "handle_system_alert".to_string(),
-                    priority: 100,
-                },
-            ]
+            vec![crate::plugin::EventHandler {
+                event_type: "system.alert".to_string(),
+                handler_id: "handle_system_alert".to_string(),
+                priority: 100,
+            }]
         }
 
         fn render_component(&self, component_id: &str, props: Value) -> Result<VNode> {
             match component_id {
                 "system_metrics" => {
-                    let refresh_interval = props.get("refresh_interval")
+                    let refresh_interval = props
+                        .get("refresh_interval")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(5000);
 
@@ -386,20 +384,17 @@ pub mod builtin {
                                     }
                                 }
                             }
-                            p { class: "text-xs text-gray-500 mt-2",
-                                "Refreshes every {refresh_interval}ms"
-                            }
+                            p { class: "text-xs text-gray-500 mt-2", "Refreshes every {refresh_interval}ms" }
                         }
                     }))
                 }
-                _ => Err(Error::plugin("system_monitor", "Unknown component"))
+                _ => Err(Error::plugin("system_monitor", "Unknown component")),
             }
         }
 
         async fn handle_api_request(&self, route_id: &str, _request: ApiRequest) -> Result<ApiResponse> {
             match route_id {
                 "get_system_metrics" => {
-                    // In a real implementation, this would gather actual system metrics
                     let metrics = serde_json::json!({
                         "cpu_usage": 23.5,
                         "memory_usage": 67.2,
@@ -413,7 +408,7 @@ pub mod builtin {
                         schema: Some(metrics),
                     })
                 }
-                _ => Err(Error::plugin("system_monitor", "Unknown API route"))
+                _ => Err(Error::plugin("system_monitor", "Unknown API route")),
             }
         }
 
@@ -421,15 +416,14 @@ pub mod builtin {
             match handler_id {
                 "handle_system_alert" => {
                     tracing::warn!("System alert received: {}", event.event_type());
-                    // Could send notifications, log alerts, etc.
                     Ok(())
                 }
-                _ => Err(Error::plugin("system_monitor", "Unknown event handler"))
+                _ => Err(Error::plugin("system_monitor", "Unknown event handler")),
             }
         }
     }
 
-    /// Example notification plugin
+    /// Notification Plugin
     #[derive(Debug, Default)]
     pub struct NotificationPlugin {
         context: Option<PluginContext>,
@@ -484,42 +478,38 @@ pub mod builtin {
         }
 
         fn ui_components(&self) -> Vec<UIComponent> {
-            vec![
-                UIComponent {
-                    id: "notification_center".to_string(),
-                    name: "Notification Center".to_string(),
-                    component_type: ComponentType::Widget,
-                    props: serde_json::json!({
-                        "max_visible": 5,
-                        "auto_dismiss": true,
-                        "dismiss_timeout": 5000
-                    }),
-                    required_permissions: vec![Permission {
-                        resource: "notifications".to_string(),
-                        action: "view".to_string(),
-                        scope: PermissionScope::Global,
-                    }],
-                },
-            ]
+            vec![UIComponent {
+                id: "notification_center".to_string(),
+                name: "Notification Center".to_string(),
+                component_type: ComponentType::Widget,
+                props: serde_json::json!({
+                    "max_visible": 5,
+                    "auto_dismiss": true,
+                    "dismiss_timeout": 5000
+                }),
+                required_permissions: vec![Permission {
+                    resource: "notifications".to_string(),
+                    action: "view".to_string(),
+                    scope: PermissionScope::Global,
+                }],
+            }]
         }
 
         fn menu_items(&self) -> Vec<MenuItem> {
-            vec![
-                MenuItem {
-                    id: "notifications".to_string(),
-                    label: "Notifications".to_string(),
-                    icon: Some("🔔".to_string()),
-                    route: Some("/plugins/notifications".to_string()),
-                    action: None,
-                    required_permissions: vec![Permission {
-                        resource: "notifications".to_string(),
-                        action: "manage".to_string(),
-                        scope: PermissionScope::Global,
-                    }],
-                    order: 200,
-                    children: vec![],
-                },
-            ]
+            vec![MenuItem {
+                id: "notifications".to_string(),
+                label: "Notifications".to_string(),
+                icon: Some("🔔".to_string()),
+                route: Some("/plugins/notifications".to_string()),
+                action: None,
+                required_permissions: vec![Permission {
+                    resource: "notifications".to_string(),
+                    action: "manage".to_string(),
+                    scope: PermissionScope::Global,
+                }],
+                order: 200,
+                children: vec![],
+            }]
         }
 
         fn settings_schema(&self) -> Option<SettingsSchema> {
@@ -555,69 +545,62 @@ pub mod builtin {
         }
 
         fn api_routes(&self) -> Vec<ApiRoute> {
-            vec![
-                ApiRoute {
-                    path: "/api/plugins/notifications/send".to_string(),
-                    method: HttpMethod::POST,
-                    handler_id: "send_notification".to_string(),
-                    required_permissions: vec![Permission {
-                        resource: "notifications".to_string(),
-                        action: "send".to_string(),
-                        scope: PermissionScope::Global,
+            vec![ApiRoute {
+                path: "/api/plugins/notifications/send".to_string(),
+                method: HttpMethod::POST,
+                handler_id: "send_notification".to_string(),
+                required_permissions: vec![Permission {
+                    resource: "notifications".to_string(),
+                    action: "send".to_string(),
+                    scope: PermissionScope::Global,
+                }],
+                rate_limit: Some(RateLimit {
+                    requests_per_minute: 60,
+                    burst_limit: 10,
+                }),
+                documentation: ApiDocumentation {
+                    summary: "Send notification".to_string(),
+                    description: "Send a notification through configured channels".to_string(),
+                    parameters: vec![ApiParameter {
+                        name: "message".to_string(),
+                        parameter_type: ParameterType::Body,
+                        required: true,
+                        description: "Notification message content".to_string(),
+                        example: Some(serde_json::json!({
+                            "title": "Alert",
+                            "message": "System requires attention",
+                            "priority": "high"
+                        })),
                     }],
-                    rate_limit: Some(RateLimit {
-                        requests_per_minute: 60,
-                        burst_limit: 10,
-                    }),
-                    documentation: ApiDocumentation {
-                        summary: "Send notification".to_string(),
-                        description: "Send a notification through configured channels".to_string(),
-                        parameters: vec![
-                            ApiParameter {
-                                name: "message".to_string(),
-                                parameter_type: ParameterType::Body,
-                                required: true,
-                                description: "Notification message content".to_string(),
-                                example: Some(serde_json::json!({
-                                    "title": "Alert",
-                                    "message": "System requires attention",
-                                    "priority": "high"
-                                })),
-                            },
-                        ],
-                        responses: vec![
-                            ApiResponse {
-                                status_code: 200,
-                                description: "Notification sent successfully".to_string(),
-                                schema: Some(serde_json::json!({
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {"type": "string"},
-                                        "status": {"type": "string"}
-                                    }
-                                })),
-                            },
-                        ],
-                        examples: vec![],
-                    },
+                    responses: vec![ApiResponse {
+                        status_code: 200,
+                        description: "Notification sent successfully".to_string(),
+                        schema: Some(serde_json::json!({
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "status": {"type": "string"}
+                            }
+                        })),
+                    }],
+                    examples: vec![],
                 },
-            ]
+            }]
         }
 
         fn event_handlers(&self) -> Vec<crate::plugin::EventHandler> {
-            vec![
-                crate::plugin::EventHandler {
-                    event_type: "*".to_string(), // Listen to all events
-                    handler_id: "process_event_notification".to_string(),
-                    priority: 50,
-                },
-            ]
+            vec![crate::plugin::EventHandler {
+                event_type: "*".to_string(),
+                handler_id: "process_event_notification".to_string(),
+                priority: 50,
+            }]
         }
 
         fn render_component(&self, component_id: &str, props: Value) -> Result<VNode> {
             match component_id {
                 "notification_center" => {
-                    let max_visible = props.get("max_visible")
+                    let max_visible = props
+                        .get("max_visible")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(5);
 
@@ -625,7 +608,6 @@ pub mod builtin {
                         div { class: "notification-center",
                             h3 { class: "text-lg font-semibold mb-4", "Notifications" }
                             div { class: "space-y-2",
-                                // Mock notifications
                                 div { class: "bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r",
                                     div { class: "flex justify-between items-start",
                                         div {
@@ -645,13 +627,11 @@ pub mod builtin {
                                     }
                                 }
                             }
-                            p { class: "text-xs text-gray-500 mt-2",
-                                "Showing up to {max_visible} notifications"
-                            }
+                            p { class: "text-xs text-gray-500 mt-2", "Showing up to {max_visible} notifications" }
                         }
                     }))
                 }
-                _ => Err(Error::plugin("notifications", "Unknown component"))
+                _ => Err(Error::plugin("notifications", "Unknown component")),
             }
         }
 
@@ -659,8 +639,6 @@ pub mod builtin {
             match route_id {
                 "send_notification" => {
                     let notification_id = uuid::Uuid::new_v4().to_string();
-
-                    // In a real implementation, this would actually send the notification
                     tracing::info!("Sending notification: {:?}", request.body);
 
                     Ok(ApiResponse {
@@ -672,34 +650,32 @@ pub mod builtin {
                         })),
                     })
                 }
-                _ => Err(Error::plugin("notifications", "Unknown API route"))
+                _ => Err(Error::plugin("notifications", "Unknown API route")),
             }
         }
 
         async fn handle_event(&self, handler_id: &str, event: &dyn Event) -> Result<()> {
             match handler_id {
                 "process_event_notification" => {
-                    // Filter events that should trigger notifications
                     if event.event_type().contains("error") || event.event_type().contains("alert") {
                         tracing::info!("Processing notification for event: {}", event.event_type());
-                        // Could create and send notifications based on event content
                     }
                     Ok(())
                 }
-                _ => Err(Error::plugin("notifications", "Unknown event handler"))
+                _ => Err(Error::plugin("notifications", "Unknown event handler")),
             }
         }
     }
 
-    /// Function to register all built-in plugins
+    /// Register all built-in plugins
     pub async fn register_builtin_plugins() -> Result<()> {
-        // Register system monitor plugin
+        // Register System Monitor
         let system_monitor_factory = SimplePluginFactory::<SystemMonitorPlugin>::new(
             SystemMonitorPlugin::default().info()
         );
         PluginFactoryRegistry::register(system_monitor_factory).await?;
 
-        // Register notification plugin
+        // Register Notifications
         let notification_factory = SimplePluginFactory::<NotificationPlugin>::new(
             NotificationPlugin::default().info()
         );
@@ -718,34 +694,19 @@ mod tests {
     async fn test_plugin_factory_registry() {
         use builtin::SystemMonitorPlugin;
 
-        // Test registration
         let factory = SimplePluginFactory::<SystemMonitorPlugin>::new(
             SystemMonitorPlugin::default().info()
         );
-
         PluginFactoryRegistry::register(factory).await.unwrap();
 
-        // Test listing
         let plugins = PluginFactoryRegistry::list_plugins().await;
         assert!(plugins.contains(&"system_monitor".to_string()));
 
-        // Test creation
-        let plugin = PluginFactoryRegistry::create_plugin("system_monitor").await;
-        assert!(plugin.is_some());
-
-        // Test info retrieval
         let info = PluginFactoryRegistry::get_plugin_info("system_monitor").await;
         assert!(info.is_some());
-        assert_eq!(info.unwrap().id, "system_monitor");
-    }
 
-    #[tokio::test]
-    async fn test_builtin_plugins() {
-        builtin::register_builtin_plugins().await.unwrap();
-
-        let plugins = PluginFactoryRegistry::list_plugins().await;
-        assert!(plugins.contains(&"system_monitor".to_string()));
-        assert!(plugins.contains(&"notifications".to_string()));
+        let plugin = PluginFactoryRegistry::create_plugin("system_monitor").await;
+        assert!(plugin.is_some());
     }
 
     #[test]
@@ -758,5 +719,14 @@ mod tests {
         assert_eq!(info.id, "system_monitor");
         assert_eq!(info.name, "System Monitor");
         assert_eq!(info.version, "1.0.0");
+    }
+
+    #[tokio::test]
+    async fn test_builtin_plugins_registration() {
+        builtin::register_builtin_plugins().await.unwrap();
+
+        let plugins = PluginFactoryRegistry::list_plugins().await;
+        assert!(plugins.contains(&"system_monitor".to_string()));
+        assert!(plugins.contains(&"notifications".to_string()));
     }
 }

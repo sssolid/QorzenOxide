@@ -1,10 +1,10 @@
 [package]
-name = "example_plugin"
+name = "product_catalog"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "example_plugin"
+name = "product_catalog"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

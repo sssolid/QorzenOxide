@@ -12,7 +12,7 @@ supported_platforms = ["All"]
 
 [build]
 target = "native"
-library_name = "example_plugin"
+library_name = "product_catalog"
 
 [dependencies]
 qorzen_oxide = "0.1.0"
