@@ -421,9 +421,6 @@ impl ApplicationCore {
         // Load default plugins
         let default_plugins = ["system_monitor", "notifications"];
 
-        #[cfg(feature = "example_plugin")]
-        let default_plugins = ["system_monitor", "notifications", "product_catalog"];
-
         for plugin_id in default_plugins {
             if let Err(e) = plugin_manager.load_plugin(plugin_id).await {
                 tracing::warn!("Failed to load plugin {}: {}", plugin_id, e);

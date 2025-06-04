@@ -1,4 +1,4 @@
-// src/ui/layout/sidebar.rs - Navigation sidebar with menu items and plugin integration
+// src/ui/layout/sidebar.rs - Navigation sidebar with actual plugin integration
 
 use dioxus::prelude::*;
 #[allow(unused_imports)]
@@ -323,26 +323,70 @@ fn NavigationItem(
     }
 }
 
-/// Plugin navigation section
+/// Plugin navigation section - now uses actual plugin data
 #[component]
 fn PluginNavigation(
     #[props(default = None)] on_click: Option<Callback<Event<MouseData>>>,
 ) -> Element {
-    // Mock plugin data - in real app this would come from plugin manager
-    let plugins = vec![
-        ("inventory", "📦", "Inventory"),
-        ("sales", "💰", "Sales"),
-        ("reports", "📊", "Reports"),
-        ("users", "👥", "User Management"),
-    ];
+    // Get actual plugin information from registry
+    let plugin_menu_items = use_resource(|| async move {
+        get_plugin_menu_items().await
+    });
 
-    rsx! {
-        div {
-            class: "space-y-1",
-            for (plugin_id, icon, label) in plugins {
+    match &*plugin_menu_items.read_unchecked() {
+        Some(Ok(items)) => {
+            if items.is_empty() {
+                rsx! {
+                    div {
+                        class: "text-sm text-gray-500 italic px-2 py-2",
+                        "No plugins with menu items"
+                    }
+                }
+            } else {
+                rsx! {
+                    div {
+                        class: "space-y-1",
+                        for item in items {
+                            PluginMenuItem {
+                                key: "{item.id}",
+                                item: item.clone(),
+                                on_click: on_click
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Some(Err(error)) => rsx! {
+            div {
+                class: "text-sm text-red-500 px-2 py-2",
+                "Error loading plugins: {error}"
+            }
+        },
+        None => rsx! {
+            div {
+                class: "text-sm text-gray-500 px-2 py-2",
+                "Loading plugins..."
+            }
+        }
+    }
+}
+
+/// Individual plugin menu item component
+#[component]
+fn PluginMenuItem(
+    item: crate::plugin::MenuItem,
+    #[props(default = None)] on_click: Option<Callback<Event<MouseData>>>,
+) -> Element {
+    // Extract shared values before rsx
+    let icon = item.icon.clone().unwrap_or_else(|| "🧩".to_string());
+
+    if let Some(route_str) = &item.route {
+        if route_str.starts_with("/plugins/") {
+            let plugin_id = route_str.strip_prefix("/plugins/").unwrap_or("unknown").to_string();
+            rsx! {
                 Link {
-                    key: "{plugin_id}",
-                    to: Route::Plugin { plugin_id: plugin_id.to_string() },
+                    to: Route::Plugin { plugin_id },
                     class: "group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
                     onclick: move |e| {
                         if let Some(callback) = &on_click {
@@ -353,11 +397,67 @@ fn PluginNavigation(
                         class: "text-lg mr-3",
                         "{icon}"
                     }
-                    "{label}"
+                    "{item.label}"
+                }
+            }
+        } else {
+            rsx! {
+                a {
+                    href: route_str.clone(),
+                    class: "group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    span {
+                        class: "text-lg mr-3",
+                        "{icon}"
+                    }
+                    "{item.label}"
                 }
             }
         }
+    } else if let Some(action) = &item.action {
+        let action = action.clone();
+        rsx! {
+            button {
+                r#type: "button",
+                class: "group w-full flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                onclick: move |_| {
+                    tracing::info!("Plugin action triggered: {}", action);
+                },
+                span {
+                    class: "text-lg mr-3",
+                    "{icon}"
+                }
+                "{item.label}"
+            }
+        }
+    } else {
+        rsx! { Fragment {} }
     }
+}
+
+/// Get menu items from loaded plugins
+async fn get_plugin_menu_items() -> Result<Vec<crate::plugin::MenuItem>, String> {
+    // Get all registered plugins
+    let plugin_infos = crate::plugin::PluginFactoryRegistry::get_all_plugin_info().await;
+
+    let mut all_menu_items = Vec::new();
+
+    // For each plugin, try to create it and get its menu items
+    for plugin_info in plugin_infos {
+        match crate::plugin::PluginFactoryRegistry::create_plugin(&plugin_info.id).await {
+            Some(plugin) => {
+                let menu_items = plugin.menu_items();
+                all_menu_items.extend(menu_items);
+            }
+            None => {
+                tracing::warn!("Could not create plugin instance for: {}", plugin_info.id);
+            }
+        }
+    }
+
+    // Sort by order
+    all_menu_items.sort_by(|a, b| a.order.cmp(&b.order));
+
+    Ok(all_menu_items)
 }
 
 /// Get the navigation items configuration
@@ -389,7 +489,7 @@ fn get_navigation_items() -> Vec<NavItem> {
             icon: "🧩".to_string(),
             route: Some(Route::Plugins {}),
             children: vec![],
-            required_permission: Some(("plugins".to_string(), "read".to_string())),
+            required_permission: None, // Some(("plugins".to_string(), "read".to_string())),
             badge: None,
             external_url: None,
         },

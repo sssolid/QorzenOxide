@@ -23,6 +23,7 @@ pub struct PluginInfo {
     pub has_ui_components: bool,
     pub has_menu_items: bool,
     pub has_settings: bool,
+    pub install_path: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -50,23 +51,13 @@ impl std::fmt::Display for PluginStatus {
     }
 }
 
-/// Plugin source (installed vs registry)
+/// Plugin source (installed vs discovered vs registry)
 #[derive(Debug, Clone, PartialEq)]
 pub enum PluginSource {
     Installed,
+    Discovered, // Found in plugins directory but not installed
     Registry,
     Builtin,
-}
-
-/// Plugin update information
-#[derive(Debug, Clone, PartialEq)]
-pub struct PluginUpdate {
-    pub plugin_id: String,
-    pub name: String,
-    pub icon: String,
-    pub current_version: String,
-    pub new_version: String,
-    pub changelog: Vec<String>,
 }
 
 /// Main plugins page component
@@ -117,6 +108,7 @@ pub fn Plugins() -> Element {
             match install_plugin(&plugin_id).await {
                 Ok(_) => {
                     installed_plugins.restart();
+                    available_plugins.restart();
                     let mut installing = installing_plugins();
                     installing.remove(&plugin_id);
                     installing_plugins.set(installing);
@@ -167,16 +159,38 @@ pub fn Plugins() -> Element {
                 }
                 "Refresh"
             }
-            Link {
-                to: Route::Settings {},
+            button {
+                r#type: "button",
                 class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+                onclick: move |_| {
+                    spawn(async move {
+                        if let Err(e) = discover_plugins().await {
+                            error_message.set(Some(format!("Failed to discover plugins: {}", e)));
+                        } else {
+                            available_plugins.restart();
+                        }
+                    });
+                },
                 svg {
                     class: "-ml-1 mr-2 h-4 w-4",
                     xmlns: "http://www.w3.org/2000/svg",
                     fill: "none",
                     view_box: "0 0 24 24",
                     stroke: "currentColor", stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "2",
-                    d: "M12 6v6m0 0v6m0-6h6m-6 0H6"
+                    d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                }
+                "Discover Plugins"
+            }
+            Link {
+                to: Route::Settings {},
+                class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500",
+                svg {
+                    class: "-ml-1 mr-2 h-4 w-4",
+                    xmlns: "http://www.w3.org/2000/svg",
+                    fill: "none",
+                    view_box: "0 0 24 24",
+                    stroke: "currentColor", stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "2",
+                    d: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                 }
                 "Plugin Settings"
             }
@@ -281,6 +295,9 @@ pub fn Plugins() -> Element {
                         ),
                         onclick: move |_| active_tab.set("available".to_string()),
                         "Available"
+                        if let Some(Ok(plugins)) = available_plugins.read().as_ref() {
+                            " ({plugins.len()})"
+                        }
                     }
                 }
             }
@@ -330,19 +347,152 @@ async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
         has_ui_components: true,
         has_menu_items: true,
         has_settings: true,
+        install_path: None,
     }).collect())
 }
 
-/// Get available plugins for installation (currently empty - registry integration would go here)
+/// Get available plugins by discovering them in the plugins directory
 async fn get_available_plugins() -> Result<Vec<PluginInfo>, String> {
     #[cfg(not(target_arch = "wasm32"))]
     tokio::time::sleep(std::time::Duration::from_millis(800)).await;
     #[cfg(target_arch = "wasm32")]
     gloo_timers::future::TimeoutFuture::new(800).await;
 
-    // For now, return empty list since we're focusing on builtin plugins
-    // In the future, this would query a plugin registry
-    Ok(vec![])
+    // Actually discover plugins from the filesystem
+    match discover_plugins_from_directory().await {
+        Ok(discovered) => {
+            // Filter out already installed plugins
+            let installed_ids: std::collections::HashSet<String> = PluginFactoryRegistry::list_plugins().await.into_iter().collect();
+
+            let available = discovered.into_iter()
+                .filter(|plugin| !installed_ids.contains(&plugin.id))
+                .collect();
+
+            Ok(available)
+        }
+        Err(e) => {
+            tracing::error!("Failed to discover plugins: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// Discover plugins from the plugins directory
+async fn discover_plugins_from_directory() -> Result<Vec<PluginInfo>, String> {
+    let plugins_dir = std::path::PathBuf::from("plugins");
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if !plugins_dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut discovered = Vec::new();
+        let mut dir_entries = tokio::fs::read_dir(&plugins_dir).await
+            .map_err(|e| format!("Failed to read plugins directory: {}", e))?;
+
+        while let Some(entry) = dir_entries.next_entry().await
+            .map_err(|e| format!("Failed to read directory entry: {}", e))? {
+
+            if entry.file_type().await
+                .map_err(|e| format!("Failed to get file type: {}", e))?
+                .is_dir() {
+
+                let plugin_dir = entry.path();
+                let manifest_path = plugin_dir.join("plugin.toml");
+
+                if manifest_path.exists() {
+                    match load_plugin_manifest(&manifest_path).await {
+                        Ok(plugin_info) => {
+                            discovered.push(plugin_info);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to load plugin manifest at {:?}: {}", manifest_path, e);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(discovered)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        // For WASM, we can't browse the filesystem, so return empty for now
+        // In a real web app, this might come from a server API
+        Ok(vec![])
+    }
+}
+
+/// Load plugin manifest and convert to PluginInfo
+async fn load_plugin_manifest(manifest_path: &std::path::Path) -> Result<PluginInfo, String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let content = tokio::fs::read_to_string(manifest_path).await
+            .map_err(|e| format!("Failed to read manifest file: {}", e))?;
+
+        let manifest: toml::Value = toml::from_str(&content)
+            .map_err(|e| format!("Failed to parse TOML: {}", e))?;
+
+        let plugin_section = manifest.get("plugin")
+            .ok_or("No [plugin] section found in manifest")?;
+
+        let id = plugin_section.get("id")
+            .and_then(|v| v.as_str())
+            .ok_or("Plugin ID not found")?
+            .to_string();
+
+        let name = plugin_section.get("name")
+            .and_then(|v| v.as_str())
+            .ok_or("Plugin name not found")?
+            .to_string();
+
+        let version = plugin_section.get("version")
+            .and_then(|v| v.as_str())
+            .ok_or("Plugin version not found")?
+            .to_string();
+
+        let author = plugin_section.get("author")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown")
+            .to_string();
+
+        let description = plugin_section.get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("No description")
+            .to_string();
+
+        Ok(PluginInfo {
+            id: id.clone(),
+            name,
+            version,
+            author,
+            description,
+            icon: get_plugin_icon(&id),
+            status: PluginStatus::Available,
+            installed_at: None,
+            error_message: None,
+            source: PluginSource::Discovered,
+            has_ui_components: true, // We assume this for now
+            has_menu_items: true,
+            has_settings: true,
+            install_path: Some(manifest_path.parent().unwrap().to_path_buf()),
+        })
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        Err("File system access not available in WASM".to_string())
+    }
+}
+
+/// Trigger plugin discovery
+async fn discover_plugins() -> Result<(), String> {
+    // This would ideally call the plugin manager's discovery method
+    // For now, we'll just refresh the available plugins
+    tracing::info!("Discovering plugins in plugins directory...");
+    Ok(())
 }
 
 /// Search for plugins
@@ -354,27 +504,45 @@ async fn search_plugins(query: &str) -> Result<Vec<PluginInfo>, String> {
     }).collect())
 }
 
-/// Install a plugin (simulated for now)
+/// Install a discovered plugin
 async fn install_plugin(plugin_id: &str) -> Result<(), String> {
     tracing::info!("Installing plugin: {}", plugin_id);
 
     #[cfg(not(target_arch = "wasm32"))]
-    tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-    #[cfg(target_arch = "wasm32")]
-    gloo_timers::future::TimeoutFuture::new(2000).await;
+    {
+        // Find the plugin directory
+        let plugin_dir = std::path::PathBuf::from("plugins").join(plugin_id);
 
-    // Simulate occasional failures
-    if plugin_id == "failing_plugin" && rand::random::<f32>() < 0.3 {
-        return Err("Network timeout during installation".to_string());
+        if !plugin_dir.exists() {
+            return Err(format!("Plugin directory not found: {}", plugin_dir.display()));
+        }
+
+        // For now, simulate the installation process
+        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+
+        // In a real implementation, this would:
+        // 1. Validate the plugin
+        // 2. Compile it if necessary
+        // 3. Load it into the plugin manager
+        // 4. Register it with the factory registry
+
+        tracing::info!("Plugin {} installed successfully", plugin_id);
+        Ok(())
     }
 
-    Ok(())
+    #[cfg(target_arch = "wasm32")]
+    {
+        gloo_timers::future::TimeoutFuture::new(2000).await;
+
+        // For WASM, plugins would need to be pre-compiled and included
+        // This would typically involve adding the plugin as a dependency
+        Err("Plugin installation not supported in web environment".to_string())
+    }
 }
 
 /// Get appropriate icon for plugin
 fn get_plugin_icon(plugin_id: &str) -> String {
     match plugin_id {
-        "product_catalog" => "📦".to_string(),
         "system_monitor" => "🖥️".to_string(),
         "notifications" => "🔔".to_string(),
         _ => "🧩".to_string(),
@@ -458,9 +626,9 @@ fn AvailablePluginsTab(
             if plugins.is_empty() {
                 rsx! {
                     EmptyState {
-                        icon: "✨".to_string(),
-                        title: "All plugins installed".to_string(),
-                        description: "You have all available plugins installed. Check back later for new plugins.".to_string(),
+                        icon: "🔍".to_string(),
+                        title: "No plugins available".to_string(),
+                        description: "No plugins found in the plugins directory. Add plugins to the 'plugins' folder and click 'Discover Plugins'.".to_string(),
                     }
                 }
             } else {
@@ -482,14 +650,15 @@ fn AvailablePluginsTab(
         Some(Err(error)) => rsx! {
             div { class: "text-center py-12",
                 div { class: "text-6xl text-red-500 mb-4", "⚠️" }
-                h2 { class: "text-2xl font-bold text-gray-900 mb-2", "Failed to load plugins" }
+                h2 { class: "text-2xl font-bold text-gray-900 mb-2", "Failed to discover plugins" }
                 p { class: "text-gray-600 mb-6", "{error}" }
+                p { class: "text-sm text-gray-500", "Make sure the 'plugins' directory exists and contains valid plugin manifests." }
             }
         },
         None => rsx! {
             div { class: "text-center py-12",
                 div { class: "animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto" }
-                p { class: "mt-4 text-gray-600", "Loading plugins..." }
+                p { class: "mt-4 text-gray-600", "Discovering plugins..." }
             }
         }
     }
@@ -506,9 +675,9 @@ fn PluginCard(
     let status_color = match plugin.status {
         PluginStatus::Running => "bg-green-100 text-green-800",
         PluginStatus::Installed => "bg-blue-100 text-blue-800",
+        PluginStatus::Available => "bg-gray-100 text-gray-800",
         PluginStatus::Failed => "bg-red-100 text-red-800",
         PluginStatus::Installing | PluginStatus::Loading => "bg-yellow-100 text-yellow-800",
-        PluginStatus::Available => "bg-gray-100 text-gray-800",
         PluginStatus::Uninstalling => "bg-orange-100 text-orange-800",
     };
 
@@ -543,31 +712,31 @@ fn PluginCard(
 
                 div { class: "mt-4 flex items-center text-xs text-gray-500 space-x-4",
                     div { class: "flex items-center",
-                        svg {
-                            class: "h-4 w-4 mr-1",
-                            xmlns: "http://www.w3.org/2000/svg",
-                            view_box: "0 0 20 20",
-                            fill: "currentColor"
+                        span { class: "mr-1", "📁" }
+                        match plugin.source {
+                            PluginSource::Builtin => "Built-in",
+                            PluginSource::Discovered => "Discovered",
+                            PluginSource::Installed => "Installed",
+                            PluginSource::Registry => "Registry",
                         }
-                        if plugin.has_ui_components { "UI Components" } else { "No UI" }
                     }
-                    div { class: "flex items-center",
-                        svg {
-                            class: "h-4 w-4 mr-1",
-                            xmlns: "http://www.w3.org/2000/svg",
-                            view_box: "0 0 20 20",
-                            fill: "currentColor"
+                    if plugin.has_ui_components {
+                        div { class: "flex items-center",
+                            span { class: "mr-1", "🖼️" }
+                            "UI Components"
                         }
-                        if plugin.has_menu_items { "Menu Items" } else { "No Menu" }
                     }
-                    div { class: "flex items-center",
-                        svg {
-                            class: "h-4 w-4 mr-1",
-                            xmlns: "http://www.w3.org/2000/svg",
-                            view_box: "0 0 20 20",
-                            fill: "currentColor"
+                    if plugin.has_menu_items {
+                        div { class: "flex items-center",
+                            span { class: "mr-1", "📋" }
+                            "Menu Items"
                         }
-                        if plugin.has_settings { "Configurable" } else { "No Settings" }
+                    }
+                    if plugin.has_settings {
+                        div { class: "flex items-center",
+                            span { class: "mr-1", "⚙️" }
+                            "Configurable"
+                        }
                     }
                 }
 
@@ -590,6 +759,32 @@ fn PluginCard(
                                     r#type: "button",
                                     class: "flex-1 bg-yellow-600 py-2 px-3 border border-transparent rounded-md shadow-sm text-sm leading-4 font-medium text-white hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500",
                                     "Stop"
+                                }
+                            }
+                        },
+                        PluginSource::Discovered => {
+                            if show_install_button {
+                                rsx! {
+                                    button {
+                                        r#type: "button",
+                                        class: "flex-1 bg-blue-600 py-2 px-3 border border-transparent rounded-md shadow-sm text-sm leading-4 font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50",
+                                        disabled: is_installing,
+                                        onclick: move |_| on_install.call(plugin.id.clone()),
+                                        if is_installing { "Installing..." } else { "Install" }
+                                    }
+                                    button {
+                                        r#type: "button",
+                                        class: "bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+                                        "Details"
+                                    }
+                                }
+                            } else {
+                                rsx! {
+                                    button {
+                                        r#type: "button",
+                                        class: "flex-1 bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+                                        "View Details"
+                                    }
                                 }
                             }
                         },

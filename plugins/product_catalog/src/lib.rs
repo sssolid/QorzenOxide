@@ -14,7 +14,7 @@ use chrono::{DateTime, Utc};
 
 use qorzen_oxide::{
     plugin::*,
-    plugin::search::*,
+    plugin::search::{SearchProvider, SearchResult, ProviderHealth, SearchSuggestion, SearchFacet, FacetValue},
     auth::{Permission, PermissionScope},
     error::{Error, Result},
     event::Event,
@@ -68,7 +68,7 @@ impl Default for PluginConfig {
 /// Product data source trait
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-trait ProductDataSource: Send + Sync {
+trait ProductDataSource: Send + Sync + std::fmt::Debug {
     async fn get_products(&self, limit: Option<usize>, offset: Option<usize>) -> Result<Vec<Product>>;
     async fn get_product(&self, id: &str) -> Result<Option<Product>>;
     async fn search_products(&self, query: &str, limit: Option<usize>) -> Result<Vec<Product>>;
@@ -665,28 +665,30 @@ impl Plugin for ProductCatalogPlugin {
 
         match component_id {
             "product_list" => {
-                Ok(rsx! {
-                    div { class: "product-list",
-                        h2 { "Product Catalog" }
-                        p { "This is a placeholder for the product list component." }
-                        div { class: "notice",
-                            "Component rendering would be implemented with actual product data in a real plugin."
-                        }
+                let node = rsx! {
+                div { class: "product-list",
+                    h2 { "Product Catalog" }
+                    p { "This is a placeholder for the product list component." }
+                    div { class: "notice",
+                        "Component rendering would be implemented with actual product data in a real plugin."
                     }
-                })
+                }
+            }.map_err(|e| Error::plugin("product_catalog", &e.to_string()))?;
+                Ok(node)
             }
             "product_detail" => {
-                Ok(rsx! {
-                    div { class: "product-detail",
-                        h2 { "Product Details" }
-                        p { "This is a placeholder for the product detail component." }
-                        div { class: "notice",
-                            "Component rendering would be implemented with actual product data in a real plugin."
-                        }
+                let node = rsx! {
+                div { class: "product-detail",
+                    h2 { "Product Details" }
+                    p { "This is a placeholder for the product detail component." }
+                    div { class: "notice",
+                        "Component rendering would be implemented with actual product data in a real plugin."
                     }
-                })
+                }
+            }.map_err(|e| Error::plugin("product_catalog", &e.to_string()))?;
+                Ok(node)
             }
-            _ => Err(Error::plugin("product_catalog", "Unknown component"))
+            _ => Err(Error::plugin("product_catalog", "Unknown component")),
         }
     }
 
@@ -853,8 +855,10 @@ impl SearchProvider for ProductSearchProvider {
     }
 }
 
+#[macro_use]
+extern crate qorzen_oxide;
 // Export the plugin using the framework's macro
-qorzen_oxide::export_plugin!(ProductCatalogPlugin);
+export_plugin!(ProductCatalogPlugin);
 
 #[cfg(test)]
 mod tests {

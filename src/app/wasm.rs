@@ -265,7 +265,7 @@ impl ApplicationCore {
         let default_plugins = ["system_monitor", "notifications"];
 
         #[cfg(feature = "example_plugin")]
-        let default_plugins = ["system_monitor", "notifications", "product_catalog"];
+        let default_plugins = ["system_monitor", "notifications"];
 
         for plugin_id in default_plugins {
             match self.simulate_plugin_installation(&mut plugin_manager, plugin_id).await {

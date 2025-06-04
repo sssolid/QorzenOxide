@@ -1,4 +1,4 @@
-// src/main.rs - Fixed application entry point with proper WASM handling
+// src/main.rs - Fixed application entry point with plugin initialization for UI
 
 #![allow(clippy::result_large_err)]
 #![cfg_attr(
@@ -162,6 +162,7 @@ fn run_ui_application(_cli: &Cli) {
         qorzen_oxide::VERSION
     );
 
+    // Plugin initialization will happen in the UI state provider
     // For Dioxus desktop, we use the launch function with custom CSS injected via the App component
     dioxus::launch(AppWithDesktopCSS);
 }

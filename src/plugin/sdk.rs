@@ -75,22 +75,6 @@ impl Event for PluginEvent {
     }
 }
 
-/// Export the plugin creation function for native plugins
-#[macro_export]
-macro_rules! export_plugin {
-    ($plugin_type:ty) => {
-        // For safe plugin loading, we register the plugin factory function
-        pub fn create_plugin() -> Box<dyn $crate::plugin::Plugin> {
-            Box::new(<$plugin_type>::new())
-        }
-
-        // Export plugin info for discovery
-        pub fn plugin_info() -> $crate::plugin::PluginInfo {
-            <$plugin_type>::new().info()
-        }
-    };
-}
-
 /// Create a plugin with basic metadata using a more ergonomic syntax
 #[macro_export]
 macro_rules! plugin {

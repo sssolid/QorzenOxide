@@ -1,0 +1,31 @@
+[plugin]
+id = "product_catalog"
+name = "Product Catalog"
+version = "1.0.0"
+description = "Product catalog management with search capabilities"
+author = "Qorzen Team"
+license = "MIT"
+homepage = "https://github.com/qorzen/plugins/product-catalog"
+repository = "https://github.com/qorzen/plugins"
+minimum_core_version = "0.1.0"
+supported_platforms = ["All"]
+
+[build]
+target = "native"
+library_name = "example_plugin"
+
+[dependencies]
+qorzen_oxide = "0.1.0"
+
+[permissions]
+required = [
+    { resource = "products", action = "read", scope = "Global" },
+    { resource = "search", action = "provide", scope = "Global" },
+    { resource = "ui", action = "render", scope = "Global" }
+]
+
+[settings]
+api_endpoint = { type = "string", default = "https://api.example.com/products" }
+cache_duration_secs = { type = "integer", default = 300 }
+search_enabled = { type = "boolean", default = true }
+max_results = { type = "integer", default = 100 }

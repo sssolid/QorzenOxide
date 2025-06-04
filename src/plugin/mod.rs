@@ -6,7 +6,7 @@ mod manager;
 mod manifest;
 mod registry;
 mod sdk;
-mod search;
+pub mod search;
 
 // Re-export core types and traits with specific imports to avoid conflicts
 pub use config::*;
@@ -435,6 +435,62 @@ pub struct ValidationResult {
     pub is_valid: bool,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
+}
+
+/// Macro to export a plugin for dynamic loading
+#[macro_export]
+macro_rules! export_plugin {
+    ($plugin_type:ty) => {
+        use std::ffi::c_void;
+        use std::mem;
+
+        /// Export function for dynamic loading - creates a new plugin instance
+        #[no_mangle]
+        pub extern "C" fn create_plugin() -> *mut dyn $crate::plugin::Plugin {
+            let plugin = <$plugin_type>::default();
+            let boxed: Box<dyn $crate::plugin::Plugin> = Box::new(plugin);
+            Box::into_raw(boxed)
+        }
+
+        /// Export function for dynamic loading - destroys a plugin instance
+        #[no_mangle]
+        pub extern "C" fn destroy_plugin(plugin: *mut dyn $crate::plugin::Plugin) {
+            if !plugin.is_null() {
+                unsafe {
+                    let _boxed = Box::from_raw(plugin);
+                    // Plugin will be dropped automatically
+                }
+            }
+        }
+
+        /// Export function to get plugin info without creating instance
+        #[no_mangle]
+        pub extern "C" fn get_plugin_info() -> *mut std::ffi::c_char {
+            let plugin = <$plugin_type>::default();
+            let info = plugin.info();
+            let json = match serde_json::to_string(&info) {
+                Ok(json) => json,
+                Err(_) => return std::ptr::null_mut(),
+            };
+
+            let c_string = match std::ffi::CString::new(json) {
+                Ok(c_str) => c_str,
+                Err(_) => return std::ptr::null_mut(),
+            };
+
+            c_string.into_raw()
+        }
+
+        /// Free the string returned by get_plugin_info
+        #[no_mangle]
+        pub extern "C" fn free_plugin_info_string(s: *mut std::ffi::c_char) {
+            if !s.is_null() {
+                unsafe {
+                    let _ = std::ffi::CString::from_raw(s);
+                }
+            }
+        }
+    };
 }
 
 #[cfg(test)]

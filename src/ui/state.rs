@@ -1,4 +1,4 @@
-// src/ui/state.rs - Fixed state management with cross-platform time support
+// src/ui/state.rs - Fixed state management with plugin system initialization
 
 use dioxus::prelude::*;
 
@@ -111,10 +111,20 @@ pub fn AppStateProvider(children: Element) -> Element {
     use_context_provider(|| app_state);
     use_context_provider(|| dispatch);
 
-    // Initialize mock data - separate from state reading to avoid infinite loop
+    // Initialize plugin system and mock data
     use_effect(move || {
-        // Only run once by not reading any signals inside
         spawn(async move {
+            // Initialize the plugin factory registry
+            crate::plugin::PluginFactoryRegistry::initialize();
+
+            // Register built-in plugins
+            if let Err(e) = crate::plugin::builtin::register_builtin_plugins().await {
+                tracing::error!("Failed to register builtin plugins: {}", e);
+                dispatch(AppAction::SetError(Some(format!("Failed to load plugins: {}", e))));
+            } else {
+                tracing::info!("Successfully registered builtin plugins");
+            }
+
             // Add mock notifications using cross-platform time
             let now = Time::now();
             let two_hours_ago = now - Time::duration_hours(2);
@@ -131,9 +141,9 @@ pub fn AppStateProvider(children: Element) -> Element {
 
             dispatch(AppAction::AddNotification(Notification {
                 id: uuid::Uuid::new_v4(),
-                title: "System Update".to_string(),
-                message: "A new version is available for download.".to_string(),
-                notification_type: crate::ui::NotificationType::System,
+                title: "Plugins Loaded".to_string(),
+                message: "Built-in plugins have been successfully loaded.".to_string(),
+                notification_type: crate::ui::NotificationType::Success,
                 timestamp: two_hours_ago,
                 read: false,
                 actions: vec![],

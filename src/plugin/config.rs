@@ -70,7 +70,6 @@ impl Default for PluginManagerConfig {
             default_plugins: vec![
                 "system_monitor".to_string(),
                 "notifications".to_string(),
-                "product_catalog".to_string(),
             ],
             plugin_configs: {
                 let mut configs = HashMap::new();
@@ -88,15 +87,6 @@ impl Default for PluginManagerConfig {
                     "email_enabled": true,
                     "push_enabled": false,
                     "default_priority": "normal"
-                }));
-
-                // Product catalog default config
-                configs.insert("product_catalog".to_string(), serde_json::json!({
-                    "api_endpoint": "https://api.example.com/products",
-                    "cache_duration_secs": 300,
-                    "search_enabled": true,
-                    "max_results": 100,
-                    "use_api": cfg!(target_arch = "wasm32")
                 }));
 
                 configs
@@ -404,26 +394,6 @@ impl PluginConfigurationRegistry {
             }
         }));
 
-        // Product catalog plugin configuration
-        configs.insert("product_catalog".to_string(), serde_json::json!({
-            "api_endpoint": "https://api.example.com/products",
-            "database_url": "",
-            "use_api": cfg!(target_arch = "wasm32"),
-            "cache_duration_secs": 300,
-            "search_enabled": true,
-            "max_results": 100,
-            "pagination": {
-                "default_page_size": 20,
-                "max_page_size": 100
-            },
-            "features": {
-                "enable_categories": true,
-                "enable_search": true,
-                "enable_filtering": true,
-                "enable_sorting": true
-            }
-        }));
-
         configs
     }
 
@@ -457,7 +427,6 @@ mod tests {
         assert!(!config.default_plugins.is_empty());
         assert!(config.plugin_configs.contains_key("system_monitor"));
         assert!(config.plugin_configs.contains_key("notifications"));
-        assert!(config.plugin_configs.contains_key("product_catalog"));
     }
 
     #[test]
@@ -558,7 +527,6 @@ mod tests {
         let configs = PluginConfigurationRegistry::initialize_builtin_configs();
         assert!(configs.contains_key("system_monitor"));
         assert!(configs.contains_key("notifications"));
-        assert!(configs.contains_key("product_catalog"));
 
         let system_config = PluginConfigurationRegistry::get_builtin_config("system_monitor");
         assert!(system_config.is_some());
