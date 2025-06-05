@@ -1,0 +1,29 @@
+# Plugin Manager Configuration
+auto_load = true
+hot_reload = true # Desktop only
+max_concurrent_operations = 10
+loading_timeout_secs = 30
+enable_sandboxing = true
+# Registry settings
+registry_url = "https://registry.qorzen.com"
+# Default plugins to auto-load
+default_plugins = [
+ "system_monitor",
+ "notifications"
+]
+# Plugin-specific configurations
+[plugin_configs.system_monitor]
+refresh_interval = 5000
+show_cpu = true
+show_memory = true
+alert_threshold = 80.0
+[plugin_configs.notifications]
+email_enabled = true
+push_enabled = false
+default_priority = "normal"
+# Cache settings
+[cache_settings]
+enable_metadata_cache = true
+metadata_cache_ttl_secs = 3600
+max_cache_size_mb = 100
+cache_directory = "cache"
