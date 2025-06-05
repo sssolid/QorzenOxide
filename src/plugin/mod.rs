@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Plugin information structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PluginInfo {
     pub id: String,
     pub name: String,

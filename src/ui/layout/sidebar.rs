@@ -4,10 +4,7 @@ use dioxus::prelude::*;
 #[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
-use crate::ui::{
-    router::{nav, Route},
-    state::auth::use_has_permission,
-};
+use crate::ui::{router::{nav, Route}, state::auth::use_has_permission, use_app_state};
 
 /// Sidebar component props
 #[derive(Props, Clone, PartialEq)]
@@ -328,109 +325,57 @@ fn NavigationItem(
 fn PluginNavigation(
     #[props(default = None)] on_click: Option<Callback<Event<MouseData>>>,
 ) -> Element {
-    // Get actual plugin information from registry
-    let plugin_menu_items = use_resource(|| async move {
-        get_plugin_menu_items().await
-    });
+    let app_state = use_app_state();
 
-    match &*plugin_menu_items.read_unchecked() {
-        Some(Ok(items)) => {
-            if items.is_empty() {
-                rsx! {
-                    div {
-                        class: "text-sm text-gray-500 italic px-2 py-2",
-                        "No plugins with menu items"
-                    }
-                }
-            } else {
-                rsx! {
-                    div {
-                        class: "space-y-1",
-                        for item in items {
-                            PluginMenuItem {
-                                key: "{item.id}",
-                                item: item.clone(),
-                                on_click: on_click
-                            }
-                        }
-                    }
-                }
+    if app_state.available_plugins.is_empty() {
+        rsx! {
+            div { class: "text-sm text-gray-500 italic px-2 py-2",
+                "No plugins available"
             }
         }
-        Some(Err(error)) => rsx! {
-            div {
-                class: "text-sm text-red-500 px-2 py-2",
-                "Error loading plugins: {error}"
-            }
-        },
-        None => rsx! {
-            div {
-                class: "text-sm text-gray-500 px-2 py-2",
-                "Loading plugins..."
+    } else {
+        rsx! {
+            div { class: "space-y-1",
+                for plugin in &app_state.available_plugins {
+                    PluginMenuItem {
+                        key: "{plugin.id}",
+                        plugin_info: plugin.clone(),
+                        on_click: on_click
+                    }
+                }
             }
         }
     }
 }
 
-/// Individual plugin menu item component
 #[component]
 fn PluginMenuItem(
-    item: crate::plugin::MenuItem,
+    plugin_info: crate::plugin::PluginInfo,
     #[props(default = None)] on_click: Option<Callback<Event<MouseData>>>,
 ) -> Element {
-    // Extract shared values before rsx
-    let icon = item.icon.clone().unwrap_or_else(|| "🧩".to_string());
+    let icon = get_plugin_icon(&plugin_info.id);
 
-    if let Some(route_str) = &item.route {
-        if route_str.starts_with("/plugins/") {
-            let plugin_id = route_str.strip_prefix("/plugins/").unwrap_or("unknown").to_string();
-            rsx! {
-                Link {
-                    to: Route::Plugin { plugin_id },
-                    class: "group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-                    onclick: move |e| {
-                        if let Some(callback) = &on_click {
-                            callback.call(e);
-                        }
-                    },
-                    span {
-                        class: "text-lg mr-3",
-                        "{icon}"
-                    }
-                    "{item.label}"
+    rsx! {
+        Link {
+            to: Route::Plugin { plugin_id: plugin_info.id.clone() },
+            class: "group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+            onclick: move |e| {
+                if let Some(callback) = &on_click {
+                    callback.call(e);
                 }
-            }
-        } else {
-            rsx! {
-                a {
-                    href: route_str.clone(),
-                    class: "group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-                    span {
-                        class: "text-lg mr-3",
-                        "{icon}"
-                    }
-                    "{item.label}"
-                }
-            }
+            },
+            span { class: "text-lg mr-3", "{icon}" }
+            "{plugin_info.name}"
         }
-    } else if let Some(action) = &item.action {
-        let action = action.clone();
-        rsx! {
-            button {
-                r#type: "button",
-                class: "group w-full flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-                onclick: move |_| {
-                    tracing::info!("Plugin action triggered: {}", action);
-                },
-                span {
-                    class: "text-lg mr-3",
-                    "{icon}"
-                }
-                "{item.label}"
-            }
-        }
-    } else {
-        rsx! { Fragment {} }
+    }
+}
+
+fn get_plugin_icon(plugin_id: &str) -> String {
+    match plugin_id {
+        "system_monitor" => "🖥️".to_string(),
+        "notifications" => "🔔".to_string(),
+        "product_catalog" => "📦".to_string(),
+        _ => "🧩".to_string(),
     }
 }
 

@@ -4,6 +4,8 @@ use dioxus::prelude::*;
 #[allow(unused_imports)]
 use dioxus_router::prelude::*;
 
+use crate::ui::components::plugin_manager_provider::PluginManagerProvider;
+
 use crate::ui::{
     layout::Layout,
     pages::{Dashboard, Login, NotFound, Profile},
@@ -16,7 +18,9 @@ use crate::ui::{
 pub fn App() -> Element {
     rsx! {
         AppStateProvider {
-            Router::<Route> {}
+            PluginManagerProvider {
+                Router::<Route> {}
+            }
         }
     }
 }

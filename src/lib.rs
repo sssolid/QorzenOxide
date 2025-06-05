@@ -16,26 +16,24 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
 pub fn main() {
-    // SETUP PANIC HOOK FIRST
     console_error_panic_hook::set_once();
-
-    // SETUP WASM LOGGING
     tracing_wasm::set_as_global_default();
 
-    // NOW YOUR LOGS WILL WORK
-    web_sys::console::error_1(&"🚀 WASM ENTRY POINT CALLED".into());
     web_sys::console::log_1(&"🚀 WASM ENTRY POINT CALLED".into());
-    web_sys::console::warn_1(&"🚀 WASM ENTRY POINT CALLED".into());
-    web_sys::console::info_1(&"🚀 WASM ENTRY POINT CALLED".into());
-
-    // TRACING LOGS
-    tracing::error!("🚀 TRACING ERROR LOG");
-    tracing::warn!("🚀 TRACING WARN LOG");
     tracing::info!("🚀 TRACING INFO LOG");
-    tracing::debug!("🚀 TRACING DEBUG LOG");
 
-    // Just launch a simple div - DON'T use your complex App yet
-    // Launch the Dioxus application for web
+    // Initialize plugin registry for WASM
+    wasm_bindgen_futures::spawn_local(async {
+        plugin::PluginFactoryRegistry::initialize();
+
+        if let Err(e) = plugin::builtin::register_builtin_plugins().await {
+            tracing::error!("Failed to register builtin plugins: {}", e);
+            web_sys::console::error_1(&format!("Plugin registration failed: {}", e).into());
+        } else {
+            tracing::info!("Successfully registered builtin plugins");
+        }
+    });
+
     dioxus::launch(ui::App);
 }
 

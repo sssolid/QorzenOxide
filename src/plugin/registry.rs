@@ -68,12 +68,14 @@ impl PluginFactoryRegistry {
         F: PluginFactory + 'static,
     {
         Self::initialize();
-        let registry = PLUGIN_FACTORIES.get().unwrap(); // SAFETY: We just initialized it
+        let registry = PLUGIN_FACTORIES.get().unwrap();
         let mut factories = registry.write().await;
         let plugin_id = factory.id().to_string();
 
+        // Check if already registered and return Ok instead of error
         if factories.contains_key(&plugin_id) {
-            return Err(Error::plugin(&plugin_id, "Plugin factory already registered"));
+            tracing::debug!("Plugin factory '{}' already registered, skipping", plugin_id);
+            return Ok(());
         }
 
         factories.insert(plugin_id.clone(), Box::new(factory));

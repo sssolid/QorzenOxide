@@ -157,13 +157,22 @@ fn print_system_info() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn run_ui_application(_cli: &Cli) {
-    tracing::info!(
-        "Starting Qorzen Oxide v{} (Desktop UI)",
-        qorzen_oxide::VERSION
-    );
+    tracing::info!("Starting Qorzen Oxide v{} (Desktop UI)", qorzen_oxide::VERSION);
 
-    // Plugin initialization will happen in the UI state provider
-    // For Dioxus desktop, we use the launch function with custom CSS injected via the App component
+    // Initialize plugin registry first, then register builtins
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    rt.block_on(async {
+        // Initialize the plugin factory registry
+        qorzen_oxide::plugin::PluginFactoryRegistry::initialize();
+
+        // Register builtin plugins once
+        if let Err(e) = qorzen_oxide::plugin::builtin::register_builtin_plugins().await {
+            tracing::error!("Failed to register builtin plugins: {}", e);
+        } else {
+            tracing::info!("Successfully registered builtin plugins");
+        }
+    });
+
     dioxus::launch(AppWithDesktopCSS);
 }
 

@@ -48,6 +48,9 @@ pub enum Route {
     #[route("/plugin/:plugin_id/:page")]
     PluginPage { plugin_id: String, page: String },
 
+    #[route("/plugins/:plugin_id/component/:component_id")]
+    PluginComponent { plugin_id: String, component_id: String },
+
     // Catch-all for 404
     #[route("/:..segments")]
     NotFound { segments: Vec<String> },
@@ -194,9 +197,22 @@ pub fn Plugin(plugin_id: String) -> Element {
 pub fn PluginPage(plugin_id: String, page: String) -> Element {
     rsx! {
         AuthenticatedLayout {
-            crate::ui::pages::PluginView {
-                plugin_id: plugin_id,
+            crate::ui::components::plugin_renderer::PluginPageWrapper {
+                plugin_id,
                 page: Some(page)
+            }
+        }
+    }
+}
+
+#[component]
+pub fn PluginComponent(plugin_id: String, component_id: String) -> Element {
+    rsx! {
+        AuthenticatedLayout {
+            crate::ui::components::plugin_renderer::PluginComponentRenderer {
+                plugin_id,
+                component_id,
+                props: serde_json::json!({})
             }
         }
     }
@@ -322,6 +338,7 @@ pub mod nav {
             Route::Admin { .. } => "Admin",
             Route::Plugin { .. } => "Plugin",
             Route::PluginPage { .. } => "Plugin Page",
+            Route::PluginComponent { .. } => "Plugin Component",
             Route::NotFound { .. } => "Not Found",
         }
     }
@@ -338,6 +355,7 @@ pub mod nav {
             Route::Admin { .. } => "👑",
             Route::Plugin { .. } => "🔌",
             Route::PluginPage { .. } => "📄",
+            Route::PluginComponent { .. } => "🧩",
             Route::NotFound { .. } => "❓",
         }
     }

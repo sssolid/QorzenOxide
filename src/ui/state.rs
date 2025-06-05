@@ -18,6 +18,8 @@ pub struct AppStateContext {
     pub sidebar_collapsed: bool,
     pub mobile_menu_open: bool,
     pub plugin_stats: Option<crate::plugin::PluginStats>,
+    pub plugin_manager_initialized: bool,
+    pub available_plugins: Vec<crate::plugin::PluginInfo>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +39,8 @@ pub enum AppAction {
     ToggleMobileMenu,
     SetMobileMenuOpen(bool),
     SetPluginStats(Option<crate::plugin::PluginStats>),
+    SetPluginManagerInitialized(bool),
+    SetAvailablePlugins(Vec<crate::plugin::PluginInfo>),
 }
 
 pub fn app_state_reducer(state: &AppStateContext, action: AppAction) -> AppStateContext {
@@ -90,6 +94,12 @@ pub fn app_state_reducer(state: &AppStateContext, action: AppAction) -> AppState
         AppAction::SetPluginStats(stats) => {
             new_state.plugin_stats = stats;
         }
+        AppAction::SetPluginManagerInitialized(initialized) => {
+            new_state.plugin_manager_initialized = initialized;
+        }
+        AppAction::SetAvailablePlugins(plugins) => {
+            new_state.available_plugins = plugins;
+        }
     }
 
     new_state
@@ -111,21 +121,21 @@ pub fn AppStateProvider(children: Element) -> Element {
     use_context_provider(|| app_state);
     use_context_provider(|| dispatch);
 
-    // Initialize plugin system and mock data
+    // In AppStateProvider component - REPLACE the previous plugin code with:
     use_effect(move || {
         spawn(async move {
-            // Initialize the plugin factory registry
-            crate::plugin::PluginFactoryRegistry::initialize();
+            // Check if plugins are already registered instead of re-registering
+            let plugins = crate::plugin::PluginFactoryRegistry::get_all_plugin_info().await;
 
-            // Register built-in plugins
-            if let Err(e) = crate::plugin::builtin::register_builtin_plugins().await {
-                tracing::error!("Failed to register builtin plugins: {}", e);
-                dispatch(AppAction::SetError(Some(format!("Failed to load plugins: {}", e))));
+            if plugins.is_empty() {
+                tracing::warn!("No plugins found in registry - they may not be initialized yet");
             } else {
-                tracing::info!("Successfully registered builtin plugins");
+                tracing::info!("Found {} registered plugins", plugins.len());
+                dispatch(AppAction::SetAvailablePlugins(plugins));
+                dispatch(AppAction::SetPluginManagerInitialized(true));
             }
 
-            // Add mock notifications using cross-platform time
+            // Add welcome notifications
             let now = Time::now();
             let two_hours_ago = now - Time::duration_hours(2);
 

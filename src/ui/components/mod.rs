@@ -1,5 +1,10 @@
 // src/ui/components/mod.rs - Reusable UI components
 
+pub mod plugin_renderer;
+pub mod plugin_manager_provider;
+
+pub use plugin_renderer::{PluginComponentRenderer, PluginPageWrapper};
+
 use dioxus::prelude::*;
 
 /// Button component with consistent styling
