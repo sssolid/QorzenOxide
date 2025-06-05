@@ -14,26 +14,22 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
+#[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn main() {
+    // Emergency error handling
     console_error_panic_hook::set_once();
-    tracing_wasm::set_as_global_default();
 
-    web_sys::console::log_1(&"🚀 WASM ENTRY POINT CALLED".into());
-    tracing::info!("🚀 TRACING INFO LOG");
+    // Force immediate console output
+    web_sys::console::log_1(&"🚀 WASM APPLICATION STARTING".into());
 
-    wasm_bindgen_futures::spawn_local(async {
-        plugin::PluginFactoryRegistry::initialize();
+    // Set up tracing with error handling
+    if let Err(e) = tracing_wasm::try_set_as_global_default() {
+        web_sys::console::error_1(&format!("Failed to set up tracing: {:?}", e).into());
+    }
 
-        // Register plugins based on feature flags
-        if let Err(e) = plugin::builtin::register_builtin_plugins().await {
-            tracing::error!("Failed to register builtin plugins: {}", e);
-            web_sys::console::error_1(&format!("Plugin registration failed: {}", e).into());
-        } else {
-            tracing::info!("Successfully registered builtin plugins for WASM");
-        }
-    });
+    web_sys::console::log_1(&"🔧 Tracing setup complete".into());
 
+    // Launch Dioxus with error handling
     dioxus::launch(ui::App);
 }
 
@@ -62,7 +58,6 @@ pub mod logging;
 pub mod task;
 
 // Re-export commonly used types
-pub use app::ApplicationCore;
 pub use error::{Error, ErrorKind, Result, ResultExt};
 pub use manager::{Manager, ManagerState, ManagerStatus};
 

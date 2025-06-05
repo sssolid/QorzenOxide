@@ -20,7 +20,10 @@ use qorzen_oxide::error::Result;
 use qorzen_oxide::ui::App;
 
 #[cfg(not(target_arch = "wasm32"))]
-use qorzen_oxide::app::ApplicationCore;
+use qorzen_oxide::app::native::ApplicationCore;
+
+#[cfg(target_arch = "wasm32")]
+use qorzen_oxide::app::wasm::ApplicationCore;
 
 // Global state to share ApplicationCore with UI
 #[cfg(not(target_arch = "wasm32"))]

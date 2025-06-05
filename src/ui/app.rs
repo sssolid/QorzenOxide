@@ -236,7 +236,7 @@ pub fn use_init_state() -> Signal<AppInitContext> {
 
 /// Hook to access ApplicationCore (native only)
 #[cfg(not(target_arch = "wasm32"))]
-pub fn use_application_core() -> Option<std::sync::Arc<tokio::sync::RwLock<crate::app::ApplicationCore>>> {
+pub fn use_application_core() -> Option<std::sync::Arc<tokio::sync::RwLock<crate::app::native::ApplicationCore>>> {
     get_application_core()
 }
 

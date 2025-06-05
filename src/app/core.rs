@@ -1,6 +1,6 @@
 // src/app/core.rs
 
-use crate::app::ApplicationCore;
+use crate::app;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
@@ -8,6 +8,12 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 #[cfg(not(target_arch = "wasm32"))]
 use once_cell::sync::OnceCell;
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::app::native::ApplicationCore;
+
+#[cfg(target_arch = "wasm32")]
+use crate::app::wasm::ApplicationCore;
 
 #[cfg(not(target_arch = "wasm32"))]
 static APP_CORE: OnceCell<Arc<RwLock<ApplicationCore>>> = OnceCell::new();
