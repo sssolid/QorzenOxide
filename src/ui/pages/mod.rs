@@ -10,9 +10,11 @@ mod not_found;
 mod plugins;
 mod profile;
 mod settings;
+mod logs;
 
 // Re-exports
 pub use admin::Admin;
+pub use logs::Logs;
 pub use dashboard::Dashboard;
 pub use login::Login;
 pub use not_found::NotFound;

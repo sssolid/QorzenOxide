@@ -40,6 +40,9 @@ pub enum Route {
 
     #[route("/admin")]
     Admin {},
+    
+    #[route("/logs")]
+    Logs {},
 
     // Plugin routes (dynamically loaded)
     #[route("/plugin/:plugin_id")]
@@ -124,6 +127,15 @@ pub fn Admin() -> Element {
     }
 }
 
+#[component]
+pub fn Logs() -> Element {
+    rsx! {
+        AuthenticatedLayout {
+            LogsPage {}
+        }
+    }
+}
+
 /// Admin page with permission checking
 #[component]
 fn AdminPageWithPermissionCheck() -> Element {
@@ -154,6 +166,15 @@ fn AdminPageWithPermissionCheck() -> Element {
             rsx! {
                 AccessDenied {}
             }
+        }
+    }
+}
+
+#[component]
+pub fn LogsPage() -> Element {
+    rsx! {
+        AuthenticatedLayout {
+            crate::ui::pages::Logs { }
         }
     }
 }
@@ -374,6 +395,7 @@ pub mod nav {
             Route::Plugins { .. } => "Plugins",
             Route::Settings { .. } => "Settings",
             Route::Admin { .. } => "Admin",
+            Route::Logs { .. } => "Logs",
             Route::Plugin { .. } => "Plugin",
             Route::PluginPage { .. } => "Plugin Page",
             Route::PluginComponent { .. } => "Plugin Component",
@@ -392,6 +414,7 @@ pub mod nav {
             Route::Plugins { .. } => "🧩",
             Route::Settings { .. } => "⚙️",
             Route::Admin { .. } => "👑",
+            Route::Logs { .. } => "❓",
             Route::Plugin { .. } => "🔌",
             Route::PluginPage { .. } => "📄",
             Route::PluginComponent { .. } => "🧩",

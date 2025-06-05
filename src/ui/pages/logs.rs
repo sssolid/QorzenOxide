@@ -1,0 +1,39 @@
+use dioxus::prelude::*;
+
+#[component]
+pub fn Logs() -> Element {
+    let mut log_content = use_resource(|| async {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            match tokio::fs::read_to_string("logs/qorzen.log").await {
+                Ok(content) => content,
+                Err(_) => "No log file found".to_string(),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            "Logs not available in WASM".to_string()
+        }
+    });
+
+    rsx! {
+        div { class: "p-6",
+            h1 { class: "text-2xl font-bold mb-4", "Application Logs" }
+            div { class: "bg-black text-green-400 p-4 rounded-lg font-mono text-sm overflow-auto max-h-96",
+                match &*log_content.read_unchecked() {
+                    Some(content) => rsx! {
+                        pre { "{content}" }
+                    },
+                    None => rsx! {
+                        div { "Loading logs..." }
+                    }
+                }
+            }
+            button {
+                class: "mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700",
+                onclick: move |_| log_content.restart(),
+                "Refresh Logs"
+            }
+        }
+    }
+}

@@ -87,20 +87,19 @@ pub fn Header(props: HeaderProps) -> Element {
     };
 
     let left_side_logo = rsx! {
-        // Logo
         Link {
             to: Route::Dashboard {},
             class: "flex items-center",
             div {
                 class: "flex-shrink-0 flex items-center",
-                // Logo placeholder - in real app this would be an image
-                div {
-                    class: "h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center",
-                    span {
-                        class: "text-white font-bold text-sm",
-                        "Q"
-                    }
+
+                // Replacing placeholder with image
+                img {
+                    class: "h-8 w-8 rounded-lg",
+                    src: "/static/qorzen_icon_squared.png",
+                    alt: "Qorzen Icon"
                 }
+
                 span {
                     class: "ml-2 text-xl font-bold text-gray-900 hidden sm:block",
                     "Qorzen"

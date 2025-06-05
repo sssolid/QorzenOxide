@@ -247,13 +247,11 @@ impl ApplicationCore {
     }
 
     async fn init_logging_manager(&mut self) -> Result<()> {
-        tracing::info!("Initializing logging manager");
+        tracing::info!("📝 Initializing logging manager");
+
         let config = if let Some(config_manager) = &self.config_manager {
-            // Get logging config from configuration system
-            let manager = config_manager.lock().await;
-            manager
-                .get("logging")
-                .await
+            let config_manager = config_manager.lock().await;
+            config_manager.get::<crate::config::LoggingConfig>("logging").await
                 .unwrap_or(None)
                 .unwrap_or_else(crate::config::LoggingConfig::default)
         } else {
@@ -263,6 +261,7 @@ impl ApplicationCore {
         let mut logging_manager = LoggingManager::new(config);
         logging_manager.initialize().await?;
         self.logging_manager = Some(logging_manager);
+        tracing::info!("✅ Logging manager initialized");
         Ok(())
     }
 
@@ -398,11 +397,12 @@ impl ApplicationCore {
         tracing::info!("Initializing plugin manager");
 
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager.lock().await.get::<PluginManagerConfig>("plugins").await
+            let config_manager = config_manager.lock().await;
+            config_manager.get::<crate::plugin::PluginManagerConfig>("plugin_manager").await
                 .unwrap_or(None)
-                .unwrap_or_else(PluginManagerConfig::default)
+                .unwrap_or_else(crate::plugin::PluginManagerConfig::default)
         } else {
-            PluginManagerConfig::default()
+            crate::plugin::PluginManagerConfig::default()
         };
 
         let mut plugin_manager = PluginManager::new(config);
@@ -415,21 +415,35 @@ impl ApplicationCore {
             plugin_manager.set_platform_manager(Arc::clone(platform_manager));
         }
 
-        plugin_manager.load_config(Some("plugins.toml")).await?;
-        plugin_manager.initialize().await?;
-        plugin_manager.register_builtin_plugins().await?;
-        plugin_manager.auto_load_plugins().await?;
+        // Add timeout to plugin operations
+        let load_config_future = plugin_manager.load_config(Some("plugins.toml"));
+        if let Err(e) = tokio::time::timeout(Duration::from_secs(10), load_config_future).await {
+            tracing::warn!("Plugin config loading timed out: {:?}", e);
+        }
 
-        // Store the real plugin manager in an Arc
+        let init_future = plugin_manager.initialize();
+        tokio::time::timeout(Duration::from_secs(10), init_future).await
+            .map_err(|_| Error::new(ErrorKind::Application, "Plugin manager initialization timeout"))??;
+
+        // Don't register builtin plugins again - they were already registered in main.rs
+        // Remove or comment out this line:
+        // plugin_manager.register_builtin_plugins().await?;
+
+        let auto_load_future = plugin_manager.auto_load_plugins();
+        if let Err(e) = tokio::time::timeout(Duration::from_secs(5), auto_load_future).await {
+            tracing::warn!("Plugin auto-load timed out: {:?}", e);
+        }
+
         let manager_arc = Arc::new(RwLock::new(plugin_manager));
-
-        // Initialize the plugin service with the real plugin manager
         tracing::info!("Connecting plugin manager to UI service");
-        initialize_plugin_service(manager_arc.clone()).await;
 
-        // Store the Arc for our use
+        // Make service initialization non-blocking
+        let service_init = initialize_plugin_service(manager_arc.clone());
+        if let Err(e) = tokio::time::timeout(Duration::from_secs(3), service_init).await {
+            tracing::warn!("Plugin service initialization timed out: {:?}", e);
+        }
+
         self.plugin_manager = Some(manager_arc);
-
         tracing::info!("Plugin manager initialization complete");
         Ok(())
     }

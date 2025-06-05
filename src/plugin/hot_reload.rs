@@ -1,4 +1,5 @@
 // src/plugin/hot_reload.rs
+#[cfg(not(target_arch = "wasm32"))]
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -9,6 +10,7 @@ use crate::error::Result;
 use crate::plugin::PluginManager;
 
 /// Hot reload manager for plugins
+#[cfg(not(target_arch = "wasm32"))]
 pub struct PluginHotReloader {
     plugin_manager: Arc<RwLock<PluginManager>>,
     plugins_dir: PathBuf,
@@ -16,6 +18,7 @@ pub struct PluginHotReloader {
     reload_tx: mpsc::UnboundedSender<String>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl PluginHotReloader {
     /// Create a new hot reloader
     pub fn new(plugin_manager: Arc<RwLock<PluginManager>>, plugins_dir: PathBuf) -> Self {

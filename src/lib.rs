@@ -45,7 +45,6 @@ pub mod plugin;
 pub mod types;
 pub mod ui;
 pub mod utils;
-pub mod utils_general;
 
 // Native-only modules
 #[cfg(not(target_arch = "wasm32"))]

@@ -1008,7 +1008,7 @@ impl FileManager {
 
         // Simple gzip compression implementation
         let source_data = self.read_file(source).await?;
-        let compressed_data = crate::utils_general::compression::compress_gzip(&source_data)?;
+        let compressed_data = crate::utils::compression::compress_gzip(&source_data)?;
         self.write_file(destination, &compressed_data, None).await?;
 
         Ok(())
@@ -1022,7 +1022,7 @@ impl FileManager {
     ) -> Result<()> {
         let compressed_data = self.read_file(source).await?;
         let decompressed_data =
-            crate::utils_general::compression::decompress_gzip(&compressed_data)?;
+            crate::utils::compression::decompress_gzip(&compressed_data)?;
         self.write_file(destination, &decompressed_data, None)
             .await?;
 

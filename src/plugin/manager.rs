@@ -525,35 +525,37 @@ impl PluginManager {
 
         #[cfg(target_arch = "wasm32")]
         {
-            // For WASM, only load from factory registry (already registered)
             tracing::info!("WASM: Loading plugins from factory registry");
             for plugin_id in &self.config.default_plugins {
-                if let Err(e) = self.load_plugin(plugin_id).await {
-                    tracing::error!("Failed to auto-load plugin {}: {}", plugin_id, e);
+                if !self.active_plugins.read().await.contains_key(plugin_id) {
+                    if let Err(e) = self.load_plugin(plugin_id).await {
+                        tracing::error!("Failed to auto-load plugin {}: {}", plugin_id, e);
+                    }
+                } else {
+                    tracing::debug!("Plugin {} already loaded, skipping", plugin_id);
                 }
             }
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // For desktop, first load from factory registry, then discover and load from filesystem
             tracing::info!("Desktop: Loading plugins from config and filesystem");
-
-            // Load configured default plugins (may be builtin or from filesystem)
             for plugin_id in &self.config.default_plugins {
-                if let Err(e) = self.load_plugin(plugin_id).await {
-                    tracing::error!("Failed to auto-load configured plugin {}: {}", plugin_id, e);
+                if !self.active_plugins.read().await.contains_key(plugin_id) {
+                    if let Err(e) = self.load_plugin(plugin_id).await {
+                        tracing::error!("Failed to auto-load configured plugin {}: {}", plugin_id, e);
+                    }
+                } else {
+                    tracing::debug!("Plugin {} already loaded, skipping", plugin_id);
                 }
             }
 
-            // Discover and load plugins from filesystem
             let installation_manager = self.installation_manager.lock().await;
             let discovered = installation_manager.discover_plugins().await?;
             drop(installation_manager);
 
             for plugin_id in discovered {
                 if !self.active_plugins.read().await.contains_key(&plugin_id) {
-                    // Check if this plugin is in auto-load list or configured to auto-load
                     if self.should_auto_load_plugin(&plugin_id).await {
                         if let Err(e) = self.load_plugin(&plugin_id).await {
                             tracing::error!("Failed to auto-load discovered plugin {}: {}", plugin_id, e);
@@ -561,6 +563,8 @@ impl PluginManager {
                             tracing::info!("Auto-loaded discovered plugin: {}", plugin_id);
                         }
                     }
+                } else {
+                    tracing::debug!("Discovered plugin {} already loaded, skipping", plugin_id);
                 }
             }
         }

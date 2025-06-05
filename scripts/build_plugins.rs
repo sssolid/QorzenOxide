@@ -1,5 +1,5 @@
 // scripts/build_plugins.rs - Plugin Build Helper Script
-
+#![cfg(not(target_arch = "wasm32"))]
 /*!
 Plugin Build Helper
 

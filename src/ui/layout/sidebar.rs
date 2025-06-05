@@ -425,6 +425,16 @@ async fn get_plugin_menu_items() -> Result<Vec<crate::plugin::MenuItem>, String>
 fn get_navigation_items() -> Vec<NavItem> {
     vec![
         NavItem {
+            id: "logs".to_string(),
+            label: "Logs".to_string(),
+            icon: "🧩".to_string(),
+            route: Some(Route::Logs {}),
+            children: vec![],
+            required_permission: None,
+            badge: None,
+            external_url: None,
+        },
+        NavItem {
             id: "dashboard".to_string(),
             label: "Dashboard".to_string(),
             icon: "📊".to_string(),

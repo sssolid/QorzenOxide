@@ -2,7 +2,7 @@
 
 #![allow(clippy::result_large_err)]
 #![cfg_attr(
-    all(target_os = "windows", not(target_arch = "wasm32")),
+    all(target_os = "windows", not(target_arch = "wasm32"), not(debug_assertions)),
     windows_subsystem = "windows"
 )]
 
@@ -19,15 +19,13 @@ use dioxus::prelude::Element;
 use qorzen_oxide::error::Result;
 use qorzen_oxide::ui::App;
 
+use qorzen_oxide::app::core::{set_application_core, get_application_core};
+
 #[cfg(not(target_arch = "wasm32"))]
 use qorzen_oxide::app::native::ApplicationCore;
 
 #[cfg(target_arch = "wasm32")]
 use qorzen_oxide::app::wasm::ApplicationCore;
-
-// Global state to share ApplicationCore with UI
-#[cfg(not(target_arch = "wasm32"))]
-static APP_CORE: std::sync::OnceLock<Arc<tokio::sync::RwLock<ApplicationCore>>> = std::sync::OnceLock::new();
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Parser)]
@@ -80,9 +78,9 @@ enum Commands {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     let cli = Cli::parse();
+    // Set up logging FIRST, before anything else
     setup_logging(&cli);
 
-    // Handle version information
     if cli.debug {
         print_system_info();
     }
@@ -153,16 +151,54 @@ fn setup_logging(cli: &Cli) {
     } else if cli.verbose {
         tracing::Level::INFO
     } else {
-        tracing::Level::WARN
+        tracing::Level::INFO
     };
 
-    tracing_subscriber::fmt()
-        .with_max_level(level)
-        .with_target(false)
-        .try_init()
-        .ok();
+    // Create logs directory
+    if let Err(e) = std::fs::create_dir_all("logs") {
+        eprintln!("Failed to create logs directory: {}", e);
+    }
 
-    tracing::info!("Logging initialized at level: {:?}", level);
+    // Set up file appender - fix: this doesn't return a Result
+    let file_appender = tracing_appender::rolling::daily("logs", "qorzen.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    // Fix: Use consistent subscriber initialization
+    use tracing_subscriber::prelude::*;
+
+    let result = tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(true)
+                .with_thread_ids(true)
+                .with_file(true)
+                .with_line_number(true)
+                .with_ansi(true)
+                .with_writer(std::io::stdout)
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(true)
+                .with_thread_ids(true)
+                .with_file(true)
+                .with_line_number(true)
+                .with_ansi(false)
+                .with_writer(non_blocking)
+        )
+        .with(tracing_subscriber::EnvFilter::from_default_env()
+            .add_directive(level.into()))
+        .try_init();
+
+    match result {
+        Ok(_) => {
+            println!("✅ Logging initialized at level: {:?}", level);
+            println!("📁 Logs will be written to: logs/qorzen.log");
+            tracing::info!("Qorzen Oxide v{} starting up", qorzen_oxide::VERSION);
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to initialize logging: {}", e);
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -193,21 +229,26 @@ fn print_system_info() {
 fn run_ui_application(cli: &Cli) {
     tracing::info!("Starting Qorzen Oxide v{} (Desktop UI)", qorzen_oxide::VERSION);
 
-    // Create and run the tokio runtime for initialization
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
-    // Initialize the ApplicationCore FIRST, then launch UI
     rt.block_on(async {
-        tracing::info!("Initializing ApplicationCore...");
+        // Initialize plugin registry early
+        tracing::info!("Initializing plugin registry...");
+        qorzen_oxide::plugin::PluginFactoryRegistry::initialize();
 
-        // Create ApplicationCore
+        if let Err(e) = qorzen_oxide::plugin::builtin::register_builtin_plugins().await {
+            tracing::warn!("Failed to register builtin plugins: {}", e);
+        } else {
+            tracing::info!("Successfully registered builtin plugins");
+        }
+
+        tracing::info!("Initializing ApplicationCore...");
         let mut app_core = if let Some(config_path) = &cli.config {
             ApplicationCore::with_config_file(config_path)
         } else {
             ApplicationCore::new()
         };
 
-        // Initialize the ApplicationCore completely
         if let Err(e) = app_core.initialize().await {
             tracing::error!("Failed to initialize ApplicationCore: {}", e);
             eprintln!("Failed to initialize application: {}", e);
@@ -216,23 +257,16 @@ fn run_ui_application(cli: &Cli) {
 
         tracing::info!("ApplicationCore initialized successfully");
 
-        // Store the ApplicationCore in global state so UI can access it
-        let app_core_arc = Arc::new(tokio::sync::RwLock::new(app_core));
-        if let Err(_) = APP_CORE.set(app_core_arc.clone()) {
-            tracing::error!("Failed to set global ApplicationCore");
-            process::exit(1);
-        }
-
+        // Use the core.rs function to store the ApplicationCore
+        set_application_core(app_core);
         tracing::info!("ApplicationCore stored globally, starting UI...");
     });
 
-    // Now launch the UI - the ApplicationCore is fully initialized
     dioxus::launch(AppWithDesktopCSS);
 
-    // After UI closes, shutdown the ApplicationCore
     rt.block_on(async {
         tracing::info!("UI closed, shutting down ApplicationCore...");
-        if let Some(app_core_arc) = APP_CORE.get() {
+        if let Some(app_core_arc) = get_application_core() {
             let mut app_core = app_core_arc.write().await;
             if let Err(e) = app_core.shutdown().await {
                 tracing::error!("Error during ApplicationCore shutdown: {}", e);
@@ -240,12 +274,6 @@ fn run_ui_application(cli: &Cli) {
         }
         tracing::info!("ApplicationCore shutdown complete");
     });
-}
-
-// Helper function to get the ApplicationCore from UI components
-#[cfg(not(target_arch = "wasm32"))]
-pub fn get_application_core() -> Option<Arc<tokio::sync::RwLock<ApplicationCore>>> {
-    APP_CORE.get().cloned()
 }
 
 // Wrapper component for desktop that includes CSS

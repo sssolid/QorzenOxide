@@ -14,6 +14,7 @@ default = []
 desktop = []
 web = []
 tracing-wasm = []
+native-only = []
 
 # Plugin features for WASM builds
 all-plugins = ["product_catalog", "advanced_analytics", "backup_manager"]
@@ -36,6 +37,7 @@ required-features = ["desktop"]
 [[bin]]
 name = "build_plugins"
 path = "scripts/build_plugins.rs"
+required-features = ["native-only"]
 
 [dependencies]
 # Core dependencies
@@ -82,6 +84,7 @@ tracing-appender = "0.2"
 reqwest = { version = "0.12", features = ["json"], default-features = false }
 sha2 = "0.10"
 num_cpus = "1.0"
+tracing = "0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Use only web features for WASM to avoid hydration issues

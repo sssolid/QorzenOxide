@@ -67,18 +67,19 @@ pub fn App() -> Element {
         let mut init_state = init_state.clone();
         move || {
             spawn(async move {
-                // Check if ApplicationCore is ready
                 let mut retry_count = 0;
-                let max_retries = 10; // 5 seconds max wait time
+                let max_retries = 20; // Increased from 10
+                let retry_delay = 250; // Reduced from 500ms
 
                 loop {
                     if let Some(_app_core) = get_application_core() {
-                        // ApplicationCore is available - verify plugin service is ready
                         match crate::ui::services::plugin_service::get_plugin_service().try_read() {
                             Ok(service) => {
-                                // Try to verify the service is connected to a manager
-                                match service.get_loaded_plugins().await {
-                                    Ok(_plugins) => {
+                                match tokio::time::timeout(
+                                    std::time::Duration::from_secs(5),
+                                    service.get_loaded_plugins()
+                                ).await {
+                                    Ok(Ok(_plugins)) => {
                                         tracing::info!("ApplicationCore and plugin service are ready");
                                         init_state.set(AppInitContext {
                                             state: InitializationState::Ready,
@@ -86,8 +87,11 @@ pub fn App() -> Element {
                                         });
                                         return;
                                     }
-                                    Err(e) => {
+                                    Ok(Err(e)) => {
                                         tracing::debug!("Plugin service not fully ready yet: {}", e);
+                                    }
+                                    Err(_) => {
+                                        tracing::debug!("Plugin service call timed out");
                                     }
                                 }
                             }
@@ -96,21 +100,20 @@ pub fn App() -> Element {
                             }
                         }
                     } else {
-                        tracing::debug!("ApplicationCore not available yet");
+                        tracing::debug!("ApplicationCore not available yet (attempt {}/{})", retry_count + 1, max_retries);
                     }
 
                     retry_count += 1;
                     if retry_count >= max_retries {
-                        tracing::error!("Timeout waiting for ApplicationCore initialization");
+                        tracing::error!("Timeout waiting for ApplicationCore initialization after {} attempts", max_retries);
                         init_state.set(AppInitContext {
-                            state: InitializationState::Error,
-                            error_message: Some("Application initialization timeout".to_string()),
+                            state: InitializationState::Ready, // Changed from Error to Ready to allow partial functionality
+                            error_message: Some("Initialization took longer than expected, continuing anyway".to_string()),
                         });
                         return;
                     }
 
-                    // Wait 500ms before next check
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(retry_delay)).await;
                 }
             });
         }
