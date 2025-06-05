@@ -1,0 +1,232 @@
+// src/ui/services/plugin_service.rs
+use dioxus::prelude::*;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use crate::error::{Error, Result};
+use crate::plugin::{PluginFactoryRegistry, PluginInfo, PluginManager};
+
+/// Plugin service that provides plugin management functionality to UI components
+#[derive(Clone)]
+pub struct PluginService {
+    plugin_manager: Option<Arc<RwLock<PluginManager>>>,
+}
+
+impl PluginService {
+    pub fn new() -> Self {
+        Self {
+            plugin_manager: None,
+        }
+    }
+
+    pub fn set_manager(&mut self, manager: Arc<RwLock<PluginManager>>) {
+        self.plugin_manager = Some(manager);
+    }
+
+    /// Install and load a plugin
+    pub async fn install_plugin(&self, plugin_id: &str) -> Result<String> {
+        tracing::info!("Installing and loading plugin: {}", plugin_id);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(manager) = &self.plugin_manager {
+                let manager = manager.read().await;
+
+                // Check if plugin directory exists
+                let plugin_dir = std::path::PathBuf::from("plugins").join(plugin_id);
+                if !plugin_dir.exists() {
+                    return Err(Error::plugin(
+                        plugin_id,
+                        format!("Plugin directory not found: {}", plugin_dir.display())
+                    ));
+                }
+
+                // Load the plugin into the running system
+                manager.load_plugin(plugin_id).await.map_err(|e| {
+                    Error::plugin(plugin_id, format!("Failed to load plugin: {}", e))
+                        .severity(crate::error::ErrorSeverity::High)
+                })?;
+
+                tracing::info!("Plugin {} loaded successfully", plugin_id);
+                Ok(format!("Plugin '{}' installed and loaded successfully", plugin_id))
+            } else {
+                Err(Error::platform(
+                    "plugin_service",
+                    "manager_access",
+                    "Plugin manager not available"
+                ).severity(crate::error::ErrorSeverity::Critical))
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            // For WASM, try to load from factory registry
+            if PluginFactoryRegistry::is_registered(plugin_id).await {
+                Ok(format!("Plugin '{}' is already available in WASM build", plugin_id))
+            } else {
+                Err(Error::plugin(
+                    plugin_id,
+                    "Plugin not found in WASM build. Plugins must be compiled in."
+                ).severity(crate::error::ErrorSeverity::Medium))
+            }
+        }
+    }
+
+    /// Unload a plugin
+    pub async fn uninstall_plugin(&self, plugin_id: &str) -> Result<()> {
+        tracing::info!("Unloading plugin: {}", plugin_id);
+
+        if let Some(manager) = &self.plugin_manager {
+            let manager = manager.read().await;
+            manager.stop_plugin(plugin_id).await.map_err(|e| {
+                Error::plugin(plugin_id, format!("Failed to unload plugin: {}", e))
+                    .severity(crate::error::ErrorSeverity::High)
+            })?;
+
+            tracing::info!("Plugin {} unloaded successfully", plugin_id);
+            Ok(())
+        } else {
+            Err(Error::platform(
+                "plugin_service",
+                "manager_access",
+                "Plugin manager not available"
+            ).severity(crate::error::ErrorSeverity::Critical))
+        }
+    }
+
+    /// Reload a plugin (for hot reloading)
+    pub async fn reload_plugin(&self, plugin_id: &str) -> Result<()> {
+        tracing::info!("Reloading plugin: {}", plugin_id);
+
+        if let Some(manager) = &self.plugin_manager {
+            let manager = manager.read().await;
+
+            // Stop the plugin first
+            if let Err(e) = manager.stop_plugin(plugin_id).await {
+                tracing::warn!("Failed to stop plugin {} during reload: {}", plugin_id, e);
+            }
+
+            // Reload the plugin
+            manager.load_plugin(plugin_id).await.map_err(|e| {
+                Error::plugin(plugin_id, format!("Failed to reload plugin: {}", e))
+                    .severity(crate::error::ErrorSeverity::High)
+            })?;
+
+            tracing::info!("Plugin {} reloaded successfully", plugin_id);
+            Ok(())
+        } else {
+            Err(Error::platform(
+                "plugin_service",
+                "manager_access",
+                "Plugin manager not available"
+            ).severity(crate::error::ErrorSeverity::Critical))
+        }
+    }
+
+    /// Get plugin status
+    pub async fn get_plugin_status(&self, plugin_id: &str) -> Result<String> {
+        if let Some(manager) = &self.plugin_manager {
+            let manager = manager.read().await;
+            let status = if manager.is_plugin_loaded(plugin_id).await {
+                "loaded".to_string()
+            } else {
+                "unloaded".to_string()
+            };
+            Ok(status)
+        } else {
+            // Check factory registry as fallback
+            if PluginFactoryRegistry::is_registered(plugin_id).await {
+                Ok("available".to_string())
+            } else {
+                Ok("not_found".to_string())
+            }
+        }
+    }
+
+    /// Get all loaded plugins
+    pub async fn get_loaded_plugins(&self) -> Result<Vec<PluginInfo>> {
+        if let Some(manager) = &self.plugin_manager {
+            let manager = manager.read().await;
+            Ok(manager.get_loaded_plugins().await)
+        } else {
+            // Fallback to factory registry for compiled-in plugins
+            Ok(PluginFactoryRegistry::get_all_plugin_info().await)
+        }
+    }
+
+    /// Discover new plugins in the filesystem
+    pub async fn discover_plugins(&self) -> Result<usize> {
+        if let Some(manager) = &self.plugin_manager {
+            let manager = manager.read().await;
+            let discovered = manager.refresh_plugins().await.map_err(|e| {
+                Error::platform(
+                    "filesystem",
+                    "plugin_discovery",
+                    format!("Failed to discover plugins: {}", e)
+                ).severity(crate::error::ErrorSeverity::Medium)
+            })?;
+            Ok(discovered.len())
+        } else {
+            Ok(0) // No discovery in WASM
+        }
+    }
+}
+
+impl Default for PluginService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// Global plugin service instance
+static PLUGIN_SERVICE: std::sync::OnceLock<Arc<RwLock<PluginService>>> = std::sync::OnceLock::new();
+
+pub fn get_plugin_service() -> Arc<RwLock<PluginService>> {
+    PLUGIN_SERVICE.get_or_init(|| Arc::new(RwLock::new(PluginService::new()))).clone()
+}
+
+pub async fn initialize_plugin_service(plugin_manager: Arc<RwLock<PluginManager>>) {
+    let service = get_plugin_service();
+    let mut service = service.write().await;
+    service.set_manager(plugin_manager);
+}
+
+/// Context provider for plugin service
+#[component]
+pub fn PluginServiceProvider(children: Element) -> Element {
+    let plugin_service = use_signal(|| get_plugin_service());
+
+    use_context_provider(|| plugin_service);
+
+    rsx! {
+        {children}
+    }
+}
+
+/// Hook to access the plugin service
+/// Hook to access the plugin service
+pub fn use_plugin_service() -> Arc<RwLock<PluginService>> {
+    // Try to get from context first, fallback to global
+    if let Some(signal) = try_use_context::<Signal<Arc<RwLock<PluginService>>>>() {
+        signal()
+    } else {
+        get_plugin_service()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_plugin_service_creation() {
+        let service = PluginService::new();
+        assert!(service.plugin_manager.is_none());
+    }
+
+    #[test]
+    fn test_get_global_service() {
+        let service1 = get_plugin_service();
+        let service2 = get_plugin_service();
+        assert!(Arc::ptr_eq(&service1, &service2));
+    }
+}

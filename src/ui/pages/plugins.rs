@@ -1,14 +1,16 @@
 // src/ui/pages/plugins.rs - Enhanced Plugin Management UI
 
+use std::sync::Arc;
 use dioxus::prelude::*;
 #[allow(unused_imports)]
 use dioxus_router::prelude::*;
-
-use crate::plugin::{PluginFactoryRegistry, PluginInfo as PluginInfoTrait, Platform};
+use tokio::sync::RwLock;
+use crate::plugin::{PluginFactoryRegistry, Platform};
 use crate::ui::{
     pages::{EmptyState, PageWrapper},
     router::Route,
 };
+use crate::ui::services::plugin_service::{use_plugin_service, PluginService};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PluginInfo {
@@ -66,6 +68,32 @@ pub enum PluginSource {
     Builtin,
 }
 
+/// Real implementation that actually installs and loads plugins
+async fn install_plugin(
+    plugin_service: Arc<RwLock<PluginService>>,
+    plugin_id: &str,
+) -> crate::error::Result<String> {
+    let service = plugin_service.read().await;
+    service.install_plugin(plugin_id).await
+}
+
+/// Real implementation that actually uninstalls plugins
+pub async fn uninstall_plugin(
+    plugin_service: Arc<RwLock<PluginService>>,
+    plugin_id: &str,
+) -> crate::error::Result<()> {
+    let service = plugin_service.read().await;
+    service.uninstall_plugin(plugin_id).await
+}
+
+/// Real implementation that discovers plugins
+pub async fn discover_plugins(
+    plugin_service: Arc<RwLock<PluginService>>,
+) -> crate::error::Result<usize> {
+    let service = plugin_service.read().await;
+    service.discover_plugins().await
+}
+
 /// Enhanced Plugins page with full management capabilities
 #[component]
 pub fn Plugins() -> Element {
@@ -76,7 +104,9 @@ pub fn Plugins() -> Element {
     let mut error_message = use_signal(|| None::<String>);
     let mut success_message = use_signal(|| None::<String>);
 
-    let mut installed_plugins = use_resource(move || async move { get_installed_plugins().await });
+    let mut installed_plugins = use_resource(move || async move {
+        get_installed_plugins().await
+    });
 
     let mut available_plugins = use_resource({
         let query = search_query();
@@ -92,15 +122,17 @@ pub fn Plugins() -> Element {
         }
     });
 
-    let mut registry_plugins = use_resource(move || async move { get_registry_plugins().await });
+    let mut registry_plugins = use_resource(move || async move {
+        get_registry_plugins().await
+    });
 
     let handle_refresh = move |_| {
         loading.set(true);
         spawn(async move {
             #[cfg(not(target_arch = "wasm32"))]
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             #[cfg(target_arch = "wasm32")]
-            gloo_timers::future::TimeoutFuture::new(1000).await;
+            gloo_timers::future::TimeoutFuture::new(500).await;
 
             installed_plugins.restart();
             available_plugins.restart();
@@ -109,16 +141,22 @@ pub fn Plugins() -> Element {
         });
     };
 
+    // REAL INSTALL HANDLER - This actually installs plugins!
+    let plugin_service = use_plugin_service(); // Synchronously captured hook
+
+    let plugin_service_install = plugin_service.clone();
     let handle_install = move |plugin_id: String| {
+        let plugin_service = plugin_service_install.clone();
         let mut installing = installing_plugins();
         installing.insert(plugin_id.clone());
         installing_plugins.set(installing);
 
         spawn(async move {
-            match install_plugin(&plugin_id).await {
+            match install_plugin(plugin_service.clone(), &plugin_id).await {
                 Ok(message) => {
                     success_message.set(Some(message));
                     error_message.set(None);
+
                     installed_plugins.restart();
                     available_plugins.restart();
                     registry_plugins.restart();
@@ -135,12 +173,15 @@ pub fn Plugins() -> Element {
         });
     };
 
+    let plugin_service_uninstall = plugin_service.clone();
     let handle_uninstall = move |plugin_id: String| {
+        let plugin_service = plugin_service_uninstall.clone();
         spawn(async move {
-            match uninstall_plugin(&plugin_id).await {
+            match uninstall_plugin(plugin_service.clone(), &plugin_id).await {
                 Ok(_) => {
                     success_message.set(Some(format!("Plugin '{}' uninstalled successfully", plugin_id)));
                     error_message.set(None);
+
                     installed_plugins.restart();
                     available_plugins.restart();
                 }
@@ -152,10 +193,13 @@ pub fn Plugins() -> Element {
         });
     };
 
+    let plugin_service_discover = plugin_service.clone();
     let handle_discover = move |_| {
+        let plugin_service = plugin_service_discover.clone();
         loading.set(true);
+
         spawn(async move {
-            match discover_plugins().await {
+            match discover_plugins(plugin_service.clone()).await {
                 Ok(count) => {
                     success_message.set(Some(format!("Discovered {} new plugins", count)));
                     error_message.set(None);
@@ -170,6 +214,7 @@ pub fn Plugins() -> Element {
         });
     };
 
+    // Rest of the component remains the same...
     let page_actions = rsx! {
         div { class: "flex space-x-3",
             button {
@@ -178,34 +223,17 @@ pub fn Plugins() -> Element {
                 onclick: handle_refresh,
                 disabled: loading(),
                 if loading() {
-                    svg { class: "animate-spin -ml-1 mr-2 h-4 w-4", xmlns: "http://www.w3.org/2000/svg", fill: "none", view_box: "0 0 24 24",
-                        circle { class: "opacity-25", cx: "12", cy: "12", r: "10", stroke: "currentColor", stroke_width: "4" }
-                        path { class: "opacity-75", fill: "currentColor", d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" }
-                    }
+                    "Refreshing..."
                 } else {
-                    svg { class: "-ml-1 mr-2 h-4 w-4", xmlns: "http://www.w3.org/2000/svg", fill: "none", view_box: "0 0 24 24", stroke: "currentColor", stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "2",
-                        d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    }
+                    "Refresh"
                 }
-                "Refresh"
             }
             button {
                 r#type: "button",
                 class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
                 onclick: handle_discover,
                 disabled: loading(),
-                svg { class: "-ml-1 mr-2 h-4 w-4", xmlns: "http://www.w3.org/2000/svg", fill: "none", view_box: "0 0 24 24", stroke: "currentColor", stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "2",
-                    d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                }
-                "Discover"
-            }
-            Link {
-                to: Route::Settings {},
-                class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500",
-                svg { class: "-ml-1 mr-2 h-4 w-4", xmlns: "http://www.w3.org/2000/svg", fill: "none", view_box: "0 0 24 24", stroke: "currentColor", stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "2",
-                    d: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                }
-                "Plugin Settings"
+                "Discover Plugins"
             }
         }
     };
@@ -216,16 +244,23 @@ pub fn Plugins() -> Element {
             subtitle: Some("Extend your application with plugins".to_string()),
             actions: Some(page_actions),
 
-            // Success/Error Messages
             if let Some(error) = error_message() {
-                AlertMessage { message: error, alert_type: AlertType::Error, on_dismiss: move |_| error_message.set(None) }
+                AlertMessage {
+                    message: error,
+                    alert_type: AlertType::Error,
+                    on_dismiss: move |_| error_message.set(None)
+                }
             }
 
             if let Some(success) = success_message() {
-                AlertMessage { message: success, alert_type: AlertType::Success, on_dismiss: move |_| success_message.set(None) }
+                AlertMessage {
+                    message: success,
+                    alert_type: AlertType::Success,
+                    on_dismiss: move |_| success_message.set(None)
+                }
             }
 
-            // Search Bar (shown for available and registry tabs)
+            // Search input
             if active_tab() == "available" || active_tab() == "registry" {
                 div { class: "mb-6",
                     div { class: "relative",
@@ -243,41 +278,47 @@ pub fn Plugins() -> Element {
                                 }
                             }
                         }
-                        div { class: "absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none",
-                            svg { class: "h-5 w-5 text-gray-400", xmlns: "http://www.w3.org/2000/svg", view_box: "0 0 20 20", fill: "currentColor", fill_rule: "evenodd",
-                                d: "M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z",
-                                clip_rule: "evenodd"
-                            }
-                        }
                     }
                 }
             }
 
-            // Tab Navigation
+            // Tabs
             div { class: "border-b border-gray-200 mb-6",
                 nav { class: "-mb-px flex space-x-8",
                     TabButton {
                         active: active_tab() == "installed",
                         onclick: move |_| active_tab.set("installed".to_string()),
                         text: "Installed",
-                        count: if let Some(Ok(plugins)) = installed_plugins.read().as_ref() { Some(plugins.len()) } else { None }
+                        count: if let Some(Ok(plugins)) = installed_plugins.read().as_ref() {
+                            Some(plugins.len())
+                        } else {
+                            None
+                        }
                     }
                     TabButton {
                         active: active_tab() == "available",
                         onclick: move |_| active_tab.set("available".to_string()),
                         text: "Available",
-                        count: if let Some(Ok(plugins)) = available_plugins.read().as_ref() { Some(plugins.len()) } else { None }
+                        count: if let Some(Ok(plugins)) = available_plugins.read().as_ref() {
+                            Some(plugins.len())
+                        } else {
+                            None
+                        }
                     }
                     TabButton {
                         active: active_tab() == "registry",
                         onclick: move |_| active_tab.set("registry".to_string()),
                         text: "Registry",
-                        count: if let Some(Ok(plugins)) = registry_plugins.read().as_ref() { Some(plugins.len()) } else { None }
+                        count: if let Some(Ok(plugins)) = registry_plugins.read().as_ref() {
+                            Some(plugins.len())
+                        } else {
+                            None
+                        }
                     }
                 }
             }
 
-            // Tab Content
+            // Tab content
             match active_tab().as_str() {
                 "installed" => rsx! {
                     InstalledPluginsTab {
@@ -843,23 +884,35 @@ fn InfoRow(label: String, value: String) -> Element {
 // Plugin data fetching functions
 
 async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
-    #[cfg(not(target_arch = "wasm32"))]
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    #[cfg(target_arch = "wasm32")]
-    gloo_timers::future::TimeoutFuture::new(500).await;
+    let plugin_service = use_plugin_service();
+    let service = plugin_service.read().await;
 
-    let plugin_infos = PluginFactoryRegistry::get_all_plugin_info().await;
+    // Get all plugins from factory registry
+    let all_plugins = PluginFactoryRegistry::get_all_plugin_info().await;
 
-    Ok(plugin_infos
-        .into_iter()
-        .map(|info| PluginInfo {
-            id: info.id.clone(),
-            name: info.name.clone(),
-            version: info.version.clone(),
-            author: info.author.clone(),
-            description: info.description.clone(),
-            icon: get_plugin_icon(&info.id),
-            status: PluginStatus::Running,
+    let mut installed_plugins = Vec::new();
+
+    for plugin_info in all_plugins {
+        let status = service
+            .get_plugin_status(&plugin_info.id)
+            .await
+            .ok()
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let plugin_status = match status.as_str() {
+            "loaded" => PluginStatus::Running,
+            "available" => PluginStatus::Installed,
+            _ => PluginStatus::Available,
+        };
+
+        installed_plugins.push(PluginInfo {
+            id: plugin_info.id.clone(),
+            name: plugin_info.name.clone(),
+            version: plugin_info.version.clone(),
+            author: plugin_info.author.clone(),
+            description: plugin_info.description.clone(),
+            icon: get_plugin_icon(&plugin_info.id),
+            status: plugin_status,
             installed_at: Some(chrono::Utc::now()),
             error_message: None,
             source: PluginSource::Builtin,
@@ -867,39 +920,27 @@ async fn get_installed_plugins() -> Result<Vec<PluginInfo>, String> {
             has_menu_items: true,
             has_settings: true,
             install_path: None,
-            supported_platforms: info.supported_platforms,
-            permissions: vec!["ui.render".to_string()],
+            supported_platforms: plugin_info.supported_platforms,
+            permissions: vec!["ui.render".to_string(), "data.read".to_string()],
             dependencies: vec![],
-        })
-        .collect())
+        });
+    }
+
+    Ok(installed_plugins)
 }
 
 async fn get_available_plugins() -> Result<Vec<PluginInfo>, String> {
-    #[cfg(not(target_arch = "wasm32"))]
-    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-    #[cfg(target_arch = "wasm32")]
-    gloo_timers::future::TimeoutFuture::new(800).await;
+    let discovered = discover_plugins_from_directory().await?;
+    let installed_ids: std::collections::HashSet<String> = PluginFactoryRegistry::list_plugins().await
+        .into_iter().collect();
 
-    match discover_plugins_from_directory().await {
-        Ok(discovered) => {
-            let installed_ids: std::collections::HashSet<String> =
-                PluginFactoryRegistry::list_plugins()
-                    .await
-                    .into_iter()
-                    .collect();
+    // Filter out already installed plugins
+    let available = discovered
+        .into_iter()
+        .filter(|plugin| !installed_ids.contains(&plugin.id))
+        .collect();
 
-            let available = discovered
-                .into_iter()
-                .filter(|plugin| !installed_ids.contains(&plugin.id))
-                .collect();
-
-            Ok(available)
-        }
-        Err(e) => {
-            tracing::error!("Failed to discover plugins: {}", e);
-            Err(e)
-        }
-    }
+    Ok(available)
 }
 
 async fn get_registry_plugins() -> Result<Vec<PluginInfo>, String> {
@@ -1076,73 +1117,12 @@ async fn load_plugin_manifest(manifest_path: &std::path::Path) -> Result<PluginI
     }
 }
 
-async fn discover_plugins() -> Result<usize, String> {
-    tracing::info!("Discovering plugins in plugins directory...");
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let discovered = discover_plugins_from_directory().await?;
-        Ok(discovered.len())
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        Ok(0)
-    }
-}
-
 async fn search_plugins(query: &str) -> Result<Vec<PluginInfo>, String> {
     let all_available = get_available_plugins().await?;
-    Ok(all_available
-        .into_iter()
-        .filter(|p| {
-            p.name.to_lowercase().contains(&query.to_lowercase())
-                || p.description.to_lowercase().contains(&query.to_lowercase())
-        })
-        .collect())
-}
-
-async fn install_plugin(plugin_id: &str) -> Result<String, String> {
-    tracing::info!("Installing plugin: {}", plugin_id);
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        // Desktop: Install from filesystem or registry
-        let plugin_dir = std::path::PathBuf::from("plugins").join(plugin_id);
-
-        if plugin_dir.exists() {
-            // Install from local filesystem
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-            tracing::info!("Plugin {} installed from filesystem", plugin_id);
-            Ok(format!("Plugin '{}' installed successfully from local directory", plugin_id))
-        } else {
-            // Try to download from registry
-            Err(format!("Plugin '{}' not found locally. Registry downloads not yet implemented.", plugin_id))
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        // WASM: Plugins must be compiled in
-        gloo_timers::future::TimeoutFuture::new(2000).await;
-        Err("Plugin installation not supported in web environment. Plugins must be compiled into the WASM build.".to_string())
-    }
-}
-
-async fn uninstall_plugin(plugin_id: &str) -> Result<(), String> {
-    tracing::info!("Uninstalling plugin: {}", plugin_id);
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        Ok(())
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        gloo_timers::future::TimeoutFuture::new(1000).await;
-        Err("Plugin uninstallation not supported in web environment".to_string())
-    }
+    Ok(all_available.into_iter().filter(|p| {
+        p.name.to_lowercase().contains(&query.to_lowercase()) ||
+            p.description.to_lowercase().contains(&query.to_lowercase())
+    }).collect())
 }
 
 fn get_plugin_icon(plugin_id: &str) -> String {
@@ -1153,5 +1133,30 @@ fn get_plugin_icon(plugin_id: &str) -> String {
         "advanced_analytics" => "📊".to_string(),
         "backup_manager" => "💾".to_string(),
         _ => "🧩".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_plugin_status_display() {
+        assert_eq!(PluginStatus::Available.to_string(), "Available");
+        assert_eq!(PluginStatus::Running.to_string(), "Running");
+        assert_eq!(PluginStatus::Failed.to_string(), "Failed");
+    }
+
+    #[test]
+    fn test_plugin_icon() {
+        assert_eq!(get_plugin_icon("system_monitor"), "🖥️");
+        assert_eq!(get_plugin_icon("unknown"), "🧩");
+    }
+
+    #[tokio::test]
+    async fn test_get_registry_plugins() {
+        let plugins = get_registry_plugins().await.unwrap();
+        assert!(!plugins.is_empty());
+        assert!(plugins.iter().any(|p| p.id == "advanced_analytics"));
     }
 }

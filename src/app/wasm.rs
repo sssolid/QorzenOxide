@@ -1,4 +1,4 @@
-// src/app/wasm.rs - Fixed WASM-specific application core
+// src/app/wasm.rs - Fixed WASM-specific application core with proper plugin integration
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use tokio::sync::RwLock;
 
 use crate::auth::{
     AccountManager, MemorySessionStore, MemoryUserStore, SecurityPolicy, User, UserSession,
@@ -17,6 +18,7 @@ use crate::manager::{HealthStatus, ManagedState, Manager, ManagerState};
 use crate::platform::PlatformManager;
 use crate::plugin::{PluginManager, PluginManagerConfig};
 use crate::ui::UILayoutManager;
+use crate::ui::services::plugin_service::initialize_plugin_service;
 use crate::utils::Time;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,6 +81,7 @@ impl SystemInfo {
 
 pub struct ApplicationCore {
     state: ManagedState,
+    app_state: ApplicationState,
     started_at: f64,
 
     // Core managers for web
@@ -86,8 +89,7 @@ pub struct ApplicationCore {
     config_manager: Option<TieredConfigManager>,
     event_bus_manager: Option<Arc<EventBusManager>>,
     account_manager: Option<AccountManager>,
-    plugin_manager: Option<PluginManager>,
-    plugin_contexts: HashMap<String, crate::plugin::PluginContext>,
+    plugin_manager: Option<Arc<RwLock<PluginManager>>>,
     ui_layout_manager: Option<UILayoutManager>,
 
     // Current user context
@@ -102,6 +104,7 @@ impl std::fmt::Debug for ApplicationCore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ApplicationCore")
             .field("started_at", &self.started_at)
+            .field("app_state", &self.app_state)
             .field("system_info", &self.system_info)
             .finish()
     }
@@ -111,13 +114,13 @@ impl ApplicationCore {
     pub fn new() -> Self {
         Self {
             state: ManagedState::new(Uuid::new_v4(), "application_core"),
+            app_state: ApplicationState::Created,
             started_at: Time::now_millis() as f64,
             platform_manager: None,
             config_manager: None,
             event_bus_manager: None,
             account_manager: None,
             plugin_manager: None,
-            plugin_contexts: HashMap::new(),
             ui_layout_manager: None,
             current_user: None,
             current_session: None,
@@ -131,44 +134,52 @@ impl ApplicationCore {
     }
 
     pub async fn initialize(&mut self) -> Result<()> {
+        self.app_state = ApplicationState::Initializing;
         self.state.set_state(ManagerState::Initializing).await;
 
-        web_sys::console::log_1(&"Starting Qorzen web application initialization".into());
+        web_sys::console::log_1(&"Starting Qorzen WASM application initialization".into());
 
         // 1. Initialize platform manager
         if let Err(e) = self.init_platform_manager().await {
             web_sys::console::error_1(&format!("Platform manager init failed: {}", e).into());
+            self.app_state = ApplicationState::Error;
             return Err(e);
         }
 
         if let Err(e) = self.init_config_manager().await {
             web_sys::console::error_1(&format!("Config manager init failed: {}", e).into());
+            self.app_state = ApplicationState::Error;
             return Err(e);
         }
 
         if let Err(e) = self.init_event_bus_manager().await {
             web_sys::console::error_1(&format!("Event Bus manager init failed: {}", e).into());
+            self.app_state = ApplicationState::Error;
             return Err(e);
         }
 
         if let Err(e) = self.init_account_manager().await {
             web_sys::console::error_1(&format!("Account manager init failed: {}", e).into());
+            self.app_state = ApplicationState::Error;
             return Err(e);
         }
 
         if let Err(e) = self.init_ui_layout_manager().await {
             web_sys::console::error_1(&format!("UI Layout manager init failed: {}", e).into());
+            self.app_state = ApplicationState::Error;
             return Err(e);
         }
 
         if let Err(e) = self.init_plugin_manager().await {
             web_sys::console::error_1(&format!("Plugin manager init failed: {}", e).into());
+            self.app_state = ApplicationState::Error;
             return Err(e);
         }
 
+        self.app_state = ApplicationState::Running;
         self.state.set_state(ManagerState::Running).await;
 
-        web_sys::console::log_1(&"Qorzen web application initialization complete".into());
+        web_sys::console::log_1(&"Qorzen WASM application initialization complete".into());
         Ok(())
     }
 
@@ -239,12 +250,6 @@ impl ApplicationCore {
     async fn init_plugin_manager(&mut self) -> Result<()> {
         web_sys::console::log_1(&"Initializing plugin manager".into());
 
-        // Initialize plugin factory registry first
-        crate::plugin::PluginFactoryRegistry::initialize();
-
-        // Register builtin plugins
-        crate::plugin::builtin::register_builtin_plugins().await?;
-
         // Create plugin manager with proper config
         let plugin_config = PluginManagerConfig::default();
         let mut plugin_manager = PluginManager::new(plugin_config);
@@ -261,66 +266,34 @@ impl ApplicationCore {
         // Initialize the plugin manager
         plugin_manager.initialize().await?;
 
-        // Load default plugins
-        let default_plugins = ["system_monitor", "notifications"];
+        // Register and load built-in plugins
+        plugin_manager.register_builtin_plugins().await?;
+        plugin_manager.auto_load_plugins().await?;
 
-        #[cfg(feature = "example_plugin")]
-        let default_plugins = ["system_monitor", "notifications"];
+        web_sys::console::log_1(&"Plugin manager initialized, registering with service".into());
 
-        for plugin_id in default_plugins {
-            match self.simulate_plugin_installation(&mut plugin_manager, plugin_id).await {
-                Ok(_) => {
-                    web_sys::console::log_1(&format!("Successfully loaded plugin: {}", plugin_id).into());
-                }
-                Err(e) => {
-                    web_sys::console::warn_1(&format!("Failed to load plugin {}: {}", plugin_id, e).into());
-                }
-            }
-        }
+        // Wrap in Arc for sharing with the plugin service
+        let manager_arc = Arc::new(RwLock::new(plugin_manager));
 
-        self.plugin_manager = Some(plugin_manager);
-        web_sys::console::log_1(&"Plugin manager initialized successfully".into());
-        Ok(())
-    }
+        // Initialize the plugin service with the real plugin manager
+        initialize_plugin_service(manager_arc.clone()).await;
 
-    async fn simulate_plugin_installation(
-        &mut self,
-        plugin_manager: &mut PluginManager,
-        plugin_id: &str
-    ) -> Result<()> {
-        // For WASM, we simulate the installation process since plugins are compiled in
-        web_sys::console::log_1(&format!("Simulating installation of plugin: {}", plugin_id).into());
+        // Store the manager
+        self.plugin_manager = Some(manager_arc);
 
-        // Create simulated installation request
-        let install_request = crate::plugin::PluginInstallRequest {
-            source: crate::plugin::InstallationSource::Registry {
-                url: "builtin".to_string(),
-                plugin_id: plugin_id.to_string(),
-                version: None,
-            },
-            force_reinstall: false,
-            auto_enable: true,
-        };
-
-        // Simulate installation
-        if let Err(e) = plugin_manager.install_plugin(install_request).await {
-            web_sys::console::warn_1(&format!("Plugin install simulation failed: {}", e).into());
-        }
-
-        // Load the plugin
-        plugin_manager.load_plugin(plugin_id).await?;
-
+        web_sys::console::log_1(&"Plugin manager and service integration complete".into());
         Ok(())
     }
 
     // Add method to access plugin manager for UI
-    pub fn get_plugin_manager(&self) -> Option<&PluginManager> {
-        self.plugin_manager.as_ref()
+    pub fn get_plugin_manager(&self) -> Option<Arc<RwLock<PluginManager>>> {
+        self.plugin_manager.clone()
     }
 
     // Add method to get plugin statistics for UI
     pub async fn get_plugin_stats(&self) -> Option<crate::plugin::PluginStats> {
-        if let Some(ref plugin_manager) = self.plugin_manager {
+        if let Some(ref plugin_manager_arc) = self.plugin_manager {
+            let plugin_manager = plugin_manager_arc.read().await;
             Some(plugin_manager.get_plugin_stats().await)
         } else {
             None
@@ -328,13 +301,17 @@ impl ApplicationCore {
     }
 
     pub async fn shutdown(&mut self) -> Result<()> {
+        self.app_state = ApplicationState::ShuttingDown;
         self.state.set_state(ManagerState::ShuttingDown).await;
 
-        web_sys::console::log_1(&"Shutting down Qorzen web application".into());
+        web_sys::console::log_1(&"Shutting down Qorzen WASM application".into());
 
-        // Shutdown all managers
-        if let Some(mut plugin_manager) = self.plugin_manager.take() {
-            let _ = plugin_manager.shutdown().await;
+        // Shutdown all managers in reverse order
+        if let Some(plugin_manager) = self.plugin_manager.take() {
+            if let Ok(mut manager) = Arc::try_unwrap(plugin_manager) {
+                let mut manager = manager.into_inner();
+                let _ = manager.shutdown().await;
+            }
         }
 
         if let Some(mut ui_layout_manager) = self.ui_layout_manager.take() {
@@ -361,9 +338,10 @@ impl ApplicationCore {
             }
         }
 
+        self.app_state = ApplicationState::Shutdown;
         self.state.set_state(ManagerState::Shutdown).await;
 
-        web_sys::console::log_1(&"Qorzen web application shutdown complete".into());
+        web_sys::console::log_1(&"Qorzen WASM application shutdown complete".into());
         Ok(())
     }
 
@@ -386,7 +364,11 @@ impl ApplicationCore {
             manager_health.insert("platform_manager".to_string(), health);
         }
 
-        // Check other managers...
+        // Check plugin manager
+        if let Some(plugin_manager_arc) = &self.plugin_manager {
+            // For WASM, we'll assume it's healthy if it exists
+            manager_health.insert("plugin_manager".to_string(), HealthStatus::Healthy);
+        }
 
         let overall_status = if overall_healthy {
             HealthStatus::Healthy
@@ -414,8 +396,8 @@ impl ApplicationCore {
             version: crate::VERSION.to_string(),
             started_at: self.started_at,
             uptime: uptime,
-            state: ApplicationState::Running, // Simplified
-            manager_count: 6,                 // Approximate count
+            state: self.app_state,
+            manager_count: 6, // Approximate count
             initialized_managers: 6,
             failed_managers: 0,
             memory_usage_bytes: 0, // Not available in web
@@ -433,12 +415,85 @@ impl ApplicationCore {
     }
 
     pub async fn get_state(&self) -> ApplicationState {
-        ApplicationState::Running // Simplified for WASM
+        self.app_state
     }
 }
 
 impl Default for ApplicationCore {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// WASM doesn't need the full Manager trait implementation since it's simpler
+// But we can provide a basic one for consistency
+
+#[async_trait::async_trait(?Send)]
+impl Manager for ApplicationCore {
+    fn name(&self) -> &str {
+        "application_core"
+    }
+
+    fn id(&self) -> Uuid {
+        self.state.id()
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
+        // Main initialization is handled by the public initialize method
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        // Main shutdown is handled by the public shutdown method
+        Ok(())
+    }
+
+    async fn status(&self) -> crate::manager::ManagerStatus {
+        let mut status = self.state.status().await;
+        let app_stats = self.get_stats().await;
+
+        status.add_metadata(
+            "app_state",
+            serde_json::Value::String(format!("{:?}", app_stats.state)),
+        );
+        status.add_metadata(
+            "uptime_seconds",
+            serde_json::Value::from(app_stats.uptime.as_secs()),
+        );
+        status.add_metadata(
+            "manager_count",
+            serde_json::Value::from(app_stats.manager_count),
+        );
+        status.add_metadata("version", serde_json::Value::String(app_stats.version));
+
+        status
+    }
+
+    async fn health_check(&self) -> HealthStatus {
+        let health = self.get_health().await;
+        health.status
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_wasm_application_lifecycle() {
+        let mut app = ApplicationCore::new();
+
+        assert_eq!(app.get_state().await, ApplicationState::Created);
+
+        // Note: Full initialization might fail in test environment
+        // due to missing web APIs, but we can test the structure
+        assert!(app.get_stats().await.version == crate::VERSION);
+    }
+
+    #[test]
+    fn test_system_info() {
+        let info = SystemInfo::collect();
+        assert_eq!(info.os_name, "web");
+        assert_eq!(info.arch, "wasm32");
     }
 }

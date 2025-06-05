@@ -3753,6 +3753,7 @@ dependencies = [
  "log",
  "notify",
  "num_cpus",
+ "once_cell",
  "parking_lot",
  "rand 0.8.5",
  "reqwest",

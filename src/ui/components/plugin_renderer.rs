@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use crate::plugin::PluginFactoryRegistry;
-use crate::ui::state::use_app_state;
+use crate::ui::services::plugin_service::use_plugin_service;
 
 /// Renders a plugin component dynamically
 #[component]
@@ -10,8 +10,6 @@ pub fn PluginComponentRenderer(
     #[props(default = serde_json::Value::Object(serde_json::Map::new()))]
     props: serde_json::Value,
 ) -> Element {
-    let app_state = use_app_state();
-
     let component_content = use_resource({
         let plugin_id = plugin_id.clone();
         let component_id = component_id.clone();
@@ -88,28 +86,70 @@ async fn render_plugin_component(
 /// Wrapper for plugin pages
 #[component]
 pub fn PluginPageWrapper(plugin_id: String, page: Option<String>) -> Element {
+    let plugin_service = use_plugin_service();
+
     let plugin_info = use_resource({
         let plugin_id = plugin_id.clone();
         move || {
             let plugin_id = plugin_id.clone();
-            async move { PluginFactoryRegistry::get_plugin_info(&plugin_id).await }
+            async move {
+                PluginFactoryRegistry::get_plugin_info(&plugin_id).await
+            }
+        }
+    });
+
+    let mut plugin_status = use_resource({
+        let plugin_id = plugin_id.clone();
+        let plugin_service = plugin_service.clone();
+        move || {
+            let plugin_id = plugin_id.clone();
+            let plugin_service = plugin_service.clone();
+            async move {
+                let service = plugin_service.read().await;
+                service.get_plugin_status(&plugin_id).await
+            }
         }
     });
 
     match &*plugin_info.read_unchecked() {
         Some(Some(info)) => {
-            // Get the first available component from the plugin, or use a default
-            let component_id = match plugin_id.as_str() {
-                "system_monitor" => "system_metrics",     // Matches the plugin's component
-                "notifications" => "notification_center", // Matches the plugin's component  
-                _ => {
-                    // For other plugins, try to get the first component they declare
-                    "main" // We'll need to query the actual plugin for this
-                }
+            let is_loaded = match plugin_status.read_unchecked().as_ref() {
+                Some(Ok(status)) => status == "loaded",
+                _ => false,
             };
 
+            if !is_loaded {
+                return rsx! {
+                    div { class: "text-center py-12",
+                        div { class: "text-6xl text-yellow-500 mb-4", "⚠️" }
+                        h2 { class: "text-2xl font-bold text-gray-900 mb-2", "Plugin Not Loaded" }
+                        p { class: "text-gray-600", "The plugin '{plugin_id}' is not currently loaded." }
+                        button {
+                            class: "mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700",
+                            onclick: move |_| {
+                                let plugin_service = plugin_service.clone();
+                                let plugin_id = plugin_id.clone();
+                                spawn(async move {
+                                    let service = plugin_service.read().await;
+                                    if let Err(e) = service.install_plugin(&plugin_id).await {
+                                        tracing::error!("Failed to load plugin: {}", e);
+                                    }
+                                    plugin_status.restart();
+                                });
+                            },
+                            "Load Plugin"
+                        }
+                    }
+                };
+            }
+
+            // Get available components from the plugin
+            let component_id = get_plugin_component_id(&plugin_id, page.as_deref());
+
             rsx! {
-                div { class: "plugin-page p-6",
+                div {
+                    class: "plugin-page p-6",
+                    key: "{plugin_id}-{component_id}", // Force re-render when plugin changes
                     PluginComponentRenderer {
                         plugin_id: plugin_id.clone(),
                         component_id: component_id.to_string(),
@@ -136,5 +176,52 @@ pub fn PluginPageWrapper(plugin_id: String, page: Option<String>) -> Element {
                 p { class: "mt-4 text-gray-600", "Loading plugin..." }
             }
         },
+    }
+}
+
+/// Get the appropriate component ID for a plugin
+fn get_plugin_component_id(plugin_id: &str, page: Option<&str>) -> &'static str {
+    match plugin_id {
+        "system_monitor" => "system_metrics",
+        "notifications" => "notification_center",
+        "product_catalog" => match page {
+            Some("products") => "product_list",
+            Some("categories") => "product_categories",
+            _ => "product_list",
+        },
+        _ => "main", // Default component
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_plugin_component_id() {
+        assert_eq!(get_plugin_component_id("system_monitor", None), "system_metrics");
+        assert_eq!(get_plugin_component_id("notifications", None), "notification_center");
+        assert_eq!(
+            get_plugin_component_id("product_catalog", Some("products")),
+            "product_list"
+        );
+        assert_eq!(
+            get_plugin_component_id("product_catalog", Some("categories")),
+            "product_categories"
+        );
+        assert_eq!(get_plugin_component_id("unknown", None), "main");
+    }
+
+    #[tokio::test]
+    async fn test_render_plugin_component() {
+        let result = render_plugin_component(
+            "test_plugin".to_string(),
+            "test_component".to_string(),
+            serde_json::json!({}),
+        ).await;
+
+        // Should return an error since the plugin doesn't exist
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Plugin 'test_plugin' not found"));
     }
 }

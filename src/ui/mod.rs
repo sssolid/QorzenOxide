@@ -23,6 +23,7 @@ pub mod layout;
 pub mod pages;
 pub mod router;
 pub mod state;
+pub mod services;
 
 // Re-exports for convenience
 pub use components::*;

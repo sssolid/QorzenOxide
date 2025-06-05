@@ -1,4 +1,4 @@
-// src/main.rs - Fixed application entry point with plugin initialization for UI
+// src/main.rs - Fixed application entry point with proper ApplicationCore integration
 
 #![allow(clippy::result_large_err)]
 #![cfg_attr(
@@ -10,6 +10,8 @@
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Arc;
 
 #[cfg(not(target_arch = "wasm32"))]
 use clap::{Parser, Subcommand};
@@ -20,7 +22,9 @@ use qorzen_oxide::ui::App;
 #[cfg(not(target_arch = "wasm32"))]
 use qorzen_oxide::app::ApplicationCore;
 
-use qorzen_oxide::plugin::config::BuiltinPluginRegistry;
+// Global state to share ApplicationCore with UI
+#[cfg(not(target_arch = "wasm32"))]
+static APP_CORE: std::sync::OnceLock<Arc<tokio::sync::RwLock<ApplicationCore>>> = std::sync::OnceLock::new();
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Parser)]
@@ -112,6 +116,33 @@ fn main() {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    // Setup panic hook for better error reporting
+    console_error_panic_hook::set_once();
+
+    // Initialize tracing for WASM
+    wasm_logger::init(wasm_logger::Config::default());
+
+    tracing::info!("Starting Qorzen Oxide WASM application");
+
+    // Initialize plugin system for WASM
+    wasm_bindgen_futures::spawn_local(async {
+        // Initialize the plugin factory registry
+        qorzen_oxide::plugin::PluginFactoryRegistry::initialize();
+
+        // Register builtin plugins
+        if let Err(e) = qorzen_oxide::plugin::builtin::register_builtin_plugins().await {
+            web_sys::console::error_1(&format!("Failed to register builtin plugins: {}", e).into());
+        } else {
+            web_sys::console::log_1(&"Successfully registered builtin plugins".into());
+        }
+    });
+
+    // Launch the UI - WASM plugins are compiled in so they're always available
+    dioxus::web::launch(App);
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn setup_logging(cli: &Cli) {
     let level = if cli.debug {
@@ -156,24 +187,62 @@ fn print_system_info() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn run_ui_application(_cli: &Cli) {
+fn run_ui_application(cli: &Cli) {
     tracing::info!("Starting Qorzen Oxide v{} (Desktop UI)", qorzen_oxide::VERSION);
 
-    // Initialize plugin registry first, then register builtins
+    // Create and run the tokio runtime for initialization
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-    rt.block_on(async {
-        // Initialize the plugin factory registry
-        qorzen_oxide::plugin::PluginFactoryRegistry::initialize();
 
-        // Register builtin plugins once
-        if let Err(e) = qorzen_oxide::plugin::builtin::register_builtin_plugins().await {
-            tracing::error!("Failed to register builtin plugins: {}", e);
+    // Initialize the ApplicationCore FIRST, then launch UI
+    rt.block_on(async {
+        tracing::info!("Initializing ApplicationCore...");
+
+        // Create ApplicationCore
+        let mut app_core = if let Some(config_path) = &cli.config {
+            ApplicationCore::with_config_file(config_path)
         } else {
-            tracing::info!("Successfully registered builtin plugins");
+            ApplicationCore::new()
+        };
+
+        // Initialize the ApplicationCore completely
+        if let Err(e) = app_core.initialize().await {
+            tracing::error!("Failed to initialize ApplicationCore: {}", e);
+            eprintln!("Failed to initialize application: {}", e);
+            process::exit(1);
         }
+
+        tracing::info!("ApplicationCore initialized successfully");
+
+        // Store the ApplicationCore in global state so UI can access it
+        let app_core_arc = Arc::new(tokio::sync::RwLock::new(app_core));
+        if let Err(_) = APP_CORE.set(app_core_arc.clone()) {
+            tracing::error!("Failed to set global ApplicationCore");
+            process::exit(1);
+        }
+
+        tracing::info!("ApplicationCore stored globally, starting UI...");
     });
 
+    // Now launch the UI - the ApplicationCore is fully initialized
     dioxus::launch(AppWithDesktopCSS);
+
+    // After UI closes, shutdown the ApplicationCore
+    rt.block_on(async {
+        tracing::info!("UI closed, shutting down ApplicationCore...");
+        if let Some(app_core_arc) = APP_CORE.get() {
+            let mut app_core = app_core_arc.write().await;
+            if let Err(e) = app_core.shutdown().await {
+                tracing::error!("Error during ApplicationCore shutdown: {}", e);
+            }
+        }
+        tracing::info!("ApplicationCore shutdown complete");
+    });
+}
+
+// Helper function to get the ApplicationCore from UI components
+#[cfg(not(target_arch = "wasm32"))]
+pub fn get_application_core() -> Option<Arc<tokio::sync::RwLock<ApplicationCore>>> {
+    APP_CORE.get().cloned()
 }
 
 // Wrapper component for desktop that includes CSS
@@ -255,7 +324,7 @@ fn run_dev_server(port: u16, host: String) {
     println!("Open http://{}:{} in your browser", host, port);
 
     // Launch desktop app for now
-    dioxus::launch(AppWithDesktopCSS);
+    run_ui_application(&Cli::parse());
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -274,6 +343,11 @@ fn show_status() -> Result<()> {
         println!("Uptime: {:?}", stats.uptime);
         println!("Managers: {}", stats.manager_count);
 
+        // Show plugin stats
+        if let Some(plugin_stats) = app.get_plugin_stats().await {
+            println!("Plugins: {}/{} active", plugin_stats.active_plugins, plugin_stats.total_plugins);
+        }
+
         app.shutdown().await?;
         Ok(())
     })
@@ -290,6 +364,11 @@ fn check_health() -> Result<()> {
         println!("Qorzen Oxide Health Check");
         println!("========================");
         println!("Overall status: {:?}", health.status);
+
+        // Show individual manager health
+        for (manager, status) in &health.managers {
+            println!("{}: {:?}", manager, status);
+        }
 
         // Exit with appropriate code based on health
         let exit_code = match health.status {
@@ -356,5 +435,18 @@ mod tests {
         // Test with subcommand
         let cli = Cli::try_parse_from(&["qorzen-oxide", "status"]).unwrap();
         assert!(matches!(cli.command, Some(Commands::Status)));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_application_core_integration() {
+        // Test that we can initialize and access the ApplicationCore
+        let mut app = ApplicationCore::new();
+        assert!(app.initialize().await.is_ok());
+
+        // Test plugin manager access
+        assert!(app.get_plugin_manager().is_some());
+
+        assert!(app.shutdown().await.is_ok());
     }
 }

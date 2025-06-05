@@ -1,4 +1,4 @@
-// src/app/native.rs - Enhanced application core with all systems integrated
+// src/app/native.rs - Fixed application core with proper plugin manager integration
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -29,6 +29,7 @@ use crate::platform::PlatformManager;
 use crate::plugin::{PluginManager, PluginManagerConfig};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::task::TaskManager;
+use crate::ui::services::plugin_service::initialize_plugin_service;
 use crate::ui::UILayoutManager;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,8 +115,8 @@ pub struct ApplicationCore {
     concurrency_manager: Option<ConcurrencyManager>,
     task_manager: Option<TaskManager>,
 
-    // New systems
-    plugin_manager: Option<PluginManager>,
+    // New systems - store the real plugin manager
+    plugin_manager: Option<Arc<RwLock<PluginManager>>>,
     ui_layout_manager: Option<UILayoutManager>,
 
     // Application lifecycle
@@ -397,8 +398,7 @@ impl ApplicationCore {
         tracing::info!("Initializing plugin manager");
 
         let config = if let Some(config_manager) = &self.config_manager {
-            config_manager.lock().await
-                .get::<PluginManagerConfig>("plugins").await
+            config_manager.lock().await.get::<PluginManagerConfig>("plugins").await
                 .unwrap_or(None)
                 .unwrap_or_else(PluginManagerConfig::default)
         } else {
@@ -415,18 +415,22 @@ impl ApplicationCore {
             plugin_manager.set_platform_manager(Arc::clone(platform_manager));
         }
 
-        // Load plugin configuration if exists
         plugin_manager.load_config(Some("plugins.toml")).await?;
-
         plugin_manager.initialize().await?;
-
-        // Register builtin plugins (minimal set for desktop)
         plugin_manager.register_builtin_plugins().await?;
-
-        // Auto-load plugins from config and filesystem
         plugin_manager.auto_load_plugins().await?;
 
-        self.plugin_manager = Some(plugin_manager);
+        // Store the real plugin manager in an Arc
+        let manager_arc = Arc::new(RwLock::new(plugin_manager));
+
+        // Initialize the plugin service with the real plugin manager
+        tracing::info!("Connecting plugin manager to UI service");
+        initialize_plugin_service(manager_arc.clone()).await;
+
+        // Store the Arc for our use
+        self.plugin_manager = Some(manager_arc);
+
+        tracing::info!("Plugin manager initialization complete");
         Ok(())
     }
 
@@ -534,8 +538,11 @@ impl ApplicationCore {
         tracing::info!("Shutting down Qorzen application");
 
         // Shutdown in reverse dependency order
-        if let Some(mut plugin_manager) = self.plugin_manager.take() {
-            let _ = timeout(Duration::from_secs(10), plugin_manager.shutdown()).await;
+        if let Some(plugin_manager) = self.plugin_manager.take() {
+            if let Ok(mut manager) = Arc::try_unwrap(plugin_manager) {
+                let mut manager = manager.into_inner();
+                let _ = timeout(Duration::from_secs(10), manager.shutdown()).await;
+            }
         }
 
         if let Some(mut ui_layout_manager) = self.ui_layout_manager.take() {
@@ -676,13 +683,14 @@ impl ApplicationCore {
     }
 
     /// Get access to the plugin manager for UI integration
-    pub fn get_plugin_manager(&self) -> Option<&PluginManager> {
-        self.plugin_manager.as_ref()
+    pub fn get_plugin_manager(&self) -> Option<Arc<RwLock<PluginManager>>> {
+        self.plugin_manager.clone()
     }
 
     /// Get plugin statistics for UI display
     pub async fn get_plugin_stats(&self) -> Option<crate::plugin::PluginStats> {
-        if let Some(ref plugin_manager) = self.plugin_manager {
+        if let Some(ref plugin_manager_arc) = self.plugin_manager {
+            let plugin_manager = plugin_manager_arc.read().await;
             Some(plugin_manager.get_plugin_stats().await)
         } else {
             None
@@ -743,6 +751,24 @@ impl Manager for ApplicationCore {
     }
 }
 
+/// Application entry point that ensures proper initialization
+pub async fn run_application() -> Result<()> {
+    let mut app = ApplicationCore::new();
+
+    // Initialize the application core first
+    app.initialize().await?;
+
+    tracing::info!("Application initialized successfully, starting UI...");
+
+    // The UI can now safely use the plugin service as it's properly initialized
+    app.wait_for_shutdown().await?;
+
+    // Graceful shutdown
+    app.shutdown().await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -782,6 +808,21 @@ mod tests {
         let stats = app.get_stats().await;
         assert_eq!(stats.version, crate::VERSION);
         assert_eq!(stats.state, ApplicationState::Running);
+
+        app.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_plugin_manager_integration() {
+        let mut app = ApplicationCore::new();
+        app.initialize().await.unwrap();
+
+        // Check that plugin manager is available
+        assert!(app.get_plugin_manager().is_some());
+
+        // Check that plugin stats are available
+        let stats = app.get_plugin_stats().await;
+        assert!(stats.is_some());
 
         app.shutdown().await.unwrap();
     }

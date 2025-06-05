@@ -187,10 +187,21 @@ fn AccessDenied() -> Element {
 
 #[component]
 pub fn Plugin(plugin_id: String) -> Element {
+    let mut current_plugin = use_signal(|| plugin_id.clone());
+
+    let plugin_id_for_effect = plugin_id.clone(); // break borrow
+
+    use_effect(move || {
+        if current_plugin() != plugin_id_for_effect {
+            current_plugin.set(plugin_id_for_effect.clone());
+        }
+    });
+
     rsx! {
         AuthenticatedLayout {
+            key: "{plugin_id}", // key from original prop
             crate::ui::components::plugin_renderer::PluginPageWrapper {
-                plugin_id: plugin_id,
+                plugin_id: current_plugin(),
                 page: None
             }
         }
@@ -199,11 +210,25 @@ pub fn Plugin(plugin_id: String) -> Element {
 
 #[component]
 pub fn PluginPage(plugin_id: String, page: String) -> Element {
+    let mut current_plugin = use_signal(|| plugin_id.clone());
+    let mut current_page = use_signal(|| page.clone());
+
+    let plugin_id_for_effect = plugin_id.clone();
+    let page_for_effect = page.clone();
+
+    use_effect(move || {
+        if current_plugin() != plugin_id_for_effect || current_page() != page_for_effect {
+            current_plugin.set(plugin_id_for_effect.clone());
+            current_page.set(page_for_effect.clone());
+        }
+    });
+
     rsx! {
         AuthenticatedLayout {
+            key: "{plugin_id}-{page}", // key from props
             crate::ui::components::plugin_renderer::PluginPageWrapper {
-                plugin_id,
-                page: Some(page)
+                plugin_id: current_plugin(),
+                page: Some(current_page())
             }
         }
     }

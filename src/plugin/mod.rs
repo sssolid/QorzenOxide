@@ -7,6 +7,7 @@ mod manifest;
 mod registry;
 mod sdk;
 pub mod search;
+pub mod hot_reload;
 
 // Re-export core types and traits with specific imports to avoid conflicts
 pub use config::*;
