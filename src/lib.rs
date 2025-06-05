@@ -22,15 +22,15 @@ pub fn main() {
     web_sys::console::log_1(&"🚀 WASM ENTRY POINT CALLED".into());
     tracing::info!("🚀 TRACING INFO LOG");
 
-    // Initialize plugin registry for WASM
     wasm_bindgen_futures::spawn_local(async {
         plugin::PluginFactoryRegistry::initialize();
 
+        // Register plugins based on feature flags
         if let Err(e) = plugin::builtin::register_builtin_plugins().await {
             tracing::error!("Failed to register builtin plugins: {}", e);
             web_sys::console::error_1(&format!("Plugin registration failed: {}", e).into());
         } else {
-            tracing::info!("Successfully registered builtin plugins");
+            tracing::info!("Successfully registered builtin plugins for WASM");
         }
     });
 

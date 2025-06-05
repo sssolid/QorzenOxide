@@ -5,10 +5,11 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use tokio::sync::RwLock;
 
-use crate::plugin::{Plugin, PluginInfo, Platform, PluginContext};
 use crate::error::{Error, Result};
+use crate::plugin::{Platform, Plugin, PluginContext, PluginInfo};
 
-static PLUGIN_FACTORIES: OnceLock<RwLock<HashMap<String, Box<dyn PluginFactory>>>> = OnceLock::new();
+static PLUGIN_FACTORIES: OnceLock<RwLock<HashMap<String, Box<dyn PluginFactory>>>> =
+    OnceLock::new();
 
 /// Plugin factory trait for creating plugin instances
 pub trait PluginFactory: Send + Sync {
@@ -74,7 +75,10 @@ impl PluginFactoryRegistry {
 
         // Check if already registered and return Ok instead of error
         if factories.contains_key(&plugin_id) {
-            tracing::debug!("Plugin factory '{}' already registered, skipping", plugin_id);
+            tracing::debug!(
+                "Plugin factory '{}' already registered, skipping",
+                plugin_id
+            );
             return Ok(());
         }
 
@@ -148,9 +152,7 @@ macro_rules! register_plugin {
             use $crate::plugin::registry::*;
 
             tokio::runtime::Handle::try_current()
-                .unwrap_or_else(|| {
-                    tokio::runtime::Runtime::new().unwrap().handle().clone()
-                })
+                .unwrap_or_else(|| tokio::runtime::Runtime::new().unwrap().handle().clone())
                 .spawn(async move {
                     let factory = SimplePluginFactory::<$plugin_type>::new($info);
                     if let Err(e) = PluginFactoryRegistry::register(factory).await {
@@ -164,11 +166,11 @@ macro_rules! register_plugin {
 /// Built-in plugins module
 pub mod builtin {
     use super::*;
-    use crate::plugin::*;
     use crate::auth::{Permission, PermissionScope};
     use crate::config::SettingsSchema;
     use crate::error::Result;
     use crate::event::Event;
+    use crate::plugin::*;
     use dioxus::prelude::*;
     use serde_json::Value;
 
@@ -394,7 +396,11 @@ pub mod builtin {
             }
         }
 
-        async fn handle_api_request(&self, route_id: &str, _request: ApiRequest) -> Result<ApiResponse> {
+        async fn handle_api_request(
+            &self,
+            route_id: &str,
+            _request: ApiRequest,
+        ) -> Result<ApiResponse> {
             match route_id {
                 "get_system_metrics" => {
                     let metrics = serde_json::json!({
@@ -439,7 +445,8 @@ pub mod builtin {
                 id: "notifications".to_string(),
                 name: "Smart Notifications".to_string(),
                 version: "1.0.0".to_string(),
-                description: "Advanced notification system with multiple delivery channels".to_string(),
+                description: "Advanced notification system with multiple delivery channels"
+                    .to_string(),
                 author: "Qorzen Team".to_string(),
                 license: "MIT".to_string(),
                 homepage: Some("https://qorzen.com/plugins/notifications".to_string()),
@@ -637,7 +644,11 @@ pub mod builtin {
             }
         }
 
-        async fn handle_api_request(&self, route_id: &str, request: ApiRequest) -> Result<ApiResponse> {
+        async fn handle_api_request(
+            &self,
+            route_id: &str,
+            request: ApiRequest,
+        ) -> Result<ApiResponse> {
             match route_id {
                 "send_notification" => {
                     let notification_id = uuid::Uuid::new_v4().to_string();
@@ -659,7 +670,8 @@ pub mod builtin {
         async fn handle_event(&self, handler_id: &str, event: &dyn Event) -> Result<()> {
             match handler_id {
                 "process_event_notification" => {
-                    if event.event_type().contains("error") || event.event_type().contains("alert") {
+                    if event.event_type().contains("error") || event.event_type().contains("alert")
+                    {
                         tracing::info!("Processing notification for event: {}", event.event_type());
                     }
                     Ok(())
@@ -671,19 +683,45 @@ pub mod builtin {
 
     /// Register all built-in plugins
     pub async fn register_builtin_plugins() -> Result<()> {
-        // Register System Monitor
-        let system_monitor_factory = SimplePluginFactory::<SystemMonitorPlugin>::new(
-            SystemMonitorPlugin::default().info()
-        );
-        PluginFactoryRegistry::register(system_monitor_factory).await?;
+        PluginFactoryRegistry::initialize();
 
-        // Register Notifications
-        let notification_factory = SimplePluginFactory::<NotificationPlugin>::new(
-            NotificationPlugin::default().info()
-        );
-        PluginFactoryRegistry::register(notification_factory).await?;
+        #[cfg(target_arch = "wasm32")]
+        {
+            // WASM: Register all compiled-in plugins
+            tracing::info!("Registering builtin plugins for WASM");
 
-        tracing::info!("Registered all built-in plugins");
+            let system_monitor_factory = SimplePluginFactory::<SystemMonitorPlugin>::new(
+                SystemMonitorPlugin::default().info(),
+            );
+            PluginFactoryRegistry::register(system_monitor_factory).await?;
+
+            let notification_factory = SimplePluginFactory::<NotificationPlugin>::new(
+                NotificationPlugin::default().info(),
+            );
+            PluginFactoryRegistry::register(notification_factory).await?;
+
+            tracing::info!("Registered all built-in plugins for WASM");
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Desktop: Only register essential system plugins, everything else loaded dynamically
+            tracing::info!("Registering minimal builtin plugins for desktop");
+
+            // Only register core system plugins that must always be available
+            let system_monitor_factory = SimplePluginFactory::<SystemMonitorPlugin>::new(
+                SystemMonitorPlugin::default().info(),
+            );
+            PluginFactoryRegistry::register(system_monitor_factory).await?;
+
+            let notification_factory = SimplePluginFactory::<NotificationPlugin>::new(
+                NotificationPlugin::default().info(),
+            );
+            PluginFactoryRegistry::register(notification_factory).await?;
+
+            tracing::info!("Registered core system plugins for desktop - other plugins will be loaded dynamically");
+        }
+
         Ok(())
     }
 }
@@ -696,9 +734,8 @@ mod tests {
     async fn test_plugin_factory_registry() {
         use builtin::SystemMonitorPlugin;
 
-        let factory = SimplePluginFactory::<SystemMonitorPlugin>::new(
-            SystemMonitorPlugin::default().info()
-        );
+        let factory =
+            SimplePluginFactory::<SystemMonitorPlugin>::new(SystemMonitorPlugin::default().info());
         PluginFactoryRegistry::register(factory).await.unwrap();
 
         let plugins = PluginFactoryRegistry::list_plugins().await;

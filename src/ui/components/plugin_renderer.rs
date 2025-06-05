@@ -56,67 +56,67 @@ pub fn PluginComponentRenderer(
 async fn render_plugin_component(
     plugin_id: String,
     component_id: String,
-    props: serde_json::Value
+    props: serde_json::Value,
 ) -> Result<String, String> {
     match PluginFactoryRegistry::create_plugin(&plugin_id).await {
         Some(plugin) => {
             match plugin.render_component(&component_id, props) {
-                Ok(vnode) => {
-                    // Convert VNode to HTML string
-                    // This is a simplified implementation - in practice, you'd need
-                    // a proper VNode to HTML serializer
-                    Ok(format!("<div>Plugin component: {} - {}</div>", plugin_id, component_id))
+                Ok(_vnode) => {
+                    // For now, return HTML that represents the component
+                    // In a full implementation, we'd convert VNode to HTML
+                    Ok(format!(
+                        r#"<div class="plugin-component-{}" data-plugin-id="{}">
+                            <h3>Plugin Component: {}</h3>
+                            <p>Component ID: {}</p>
+                            <div class="plugin-content">
+                                <!-- Plugin {} component content would render here -->
+                                <div class="bg-blue-50 p-4 rounded-lg">
+                                    <p class="text-blue-800">🔌 {} component is active</p>
+                                </div>
+                            </div>
+                        </div>"#,
+                        component_id, plugin_id, plugin_id, component_id, plugin_id, component_id
+                    ))
                 }
-                Err(e) => Err(format!("Failed to render component: {}", e))
+                Err(e) => Err(format!("Failed to render component: {}", e)),
             }
         }
-        None => Err(format!("Plugin '{}' not found", plugin_id))
+        None => Err(format!("Plugin '{}' not found", plugin_id)),
     }
 }
 
 /// Wrapper for plugin pages
 #[component]
-pub fn PluginPageWrapper(
-    plugin_id: String,
-    page: Option<String>,
-) -> Element {
-    let app_state = use_app_state();
-
+pub fn PluginPageWrapper(plugin_id: String, page: Option<String>) -> Element {
     let plugin_info = use_resource({
         let plugin_id = plugin_id.clone();
         move || {
             let plugin_id = plugin_id.clone();
-            async move {
-                PluginFactoryRegistry::get_plugin_info(&plugin_id).await
-            }
+            async move { PluginFactoryRegistry::get_plugin_info(&plugin_id).await }
         }
     });
 
     match &*plugin_info.read_unchecked() {
         Some(Some(info)) => {
-            let page_component_id = page.as_deref().unwrap_or("main");
+            // Get the first available component from the plugin, or use a default
+            let component_id = match plugin_id.as_str() {
+                "system_monitor" => "system_metrics",     // Matches the plugin's component
+                "notifications" => "notification_center", // Matches the plugin's component  
+                _ => {
+                    // For other plugins, try to get the first component they declare
+                    "main" // We'll need to query the actual plugin for this
+                }
+            };
 
             rsx! {
-                div { class: "plugin-page",
-                    // Plugin header
-                    div { class: "mb-6 bg-white shadow rounded-lg p-6",
-                        div { class: "flex items-center",
-                            span { class: "text-4xl mr-4", "🧩" }
-                            div {
-                                h1 { class: "text-2xl font-bold text-gray-900", "{info.name}" }
-                                p { class: "text-gray-600", "v{info.version} by {info.author}" }
-                                p { class: "text-sm text-gray-500 mt-1", "{info.description}" }
-                            }
-                        }
-                    }
-
-                    // Plugin component content
+                div { class: "plugin-page p-6",
                     PluginComponentRenderer {
                         plugin_id: plugin_id.clone(),
-                        component_id: page_component_id.to_string(),
+                        component_id: component_id.to_string(),
                         props: serde_json::json!({
                             "plugin_id": plugin_id,
-                            "page": page
+                            "page": page,
+                            "full_page": true
                         })
                     }
                 }
@@ -127,6 +127,7 @@ pub fn PluginPageWrapper(
                 div { class: "text-6xl text-gray-400 mb-4", "🧩" }
                 h2 { class: "text-2xl font-bold text-gray-900 mb-2", "Plugin Not Found" }
                 p { class: "text-gray-600", "The plugin '{plugin_id}' could not be found." }
+                p { class: "text-sm text-gray-500 mt-4", "Make sure the plugin is installed and loaded." }
             }
         },
         None => rsx! {
@@ -134,6 +135,6 @@ pub fn PluginPageWrapper(
                 div { class: "animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" }
                 p { class: "mt-4 text-gray-600", "Loading plugin..." }
             }
-        }
+        },
     }
 }

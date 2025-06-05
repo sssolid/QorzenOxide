@@ -15,6 +15,15 @@ desktop = []
 web = []
 tracing-wasm = []
 
+# Plugin features for WASM builds
+all-plugins = ["product_catalog", "advanced_analytics", "backup_manager"]
+product_catalog = []
+advanced_analytics = []
+backup_manager = []
+
+# Development features
+plugin_registration = []
+
 [lib]
 name = "qorzen_oxide"
 crate-type = ["cdylib", "rlib"]

@@ -1107,20 +1107,25 @@ async fn install_plugin(plugin_id: &str) -> Result<String, String> {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
+        // Desktop: Install from filesystem or registry
         let plugin_dir = std::path::PathBuf::from("plugins").join(plugin_id);
-        if !plugin_dir.exists() {
-            return Err(format!("Plugin directory not found: {}", plugin_dir.display()));
-        }
 
-        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-        tracing::info!("Plugin {} installed successfully", plugin_id);
-        Ok(format!("Plugin '{}' installed successfully", plugin_id))
+        if plugin_dir.exists() {
+            // Install from local filesystem
+            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            tracing::info!("Plugin {} installed from filesystem", plugin_id);
+            Ok(format!("Plugin '{}' installed successfully from local directory", plugin_id))
+        } else {
+            // Try to download from registry
+            Err(format!("Plugin '{}' not found locally. Registry downloads not yet implemented.", plugin_id))
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
     {
+        // WASM: Plugins must be compiled in
         gloo_timers::future::TimeoutFuture::new(2000).await;
-        Err("Plugin installation not supported in web environment".to_string())
+        Err("Plugin installation not supported in web environment. Plugins must be compiled into the WASM build.".to_string())
     }
 }
 

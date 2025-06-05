@@ -48,6 +48,9 @@ pub enum Route {
     #[route("/plugin/:plugin_id/:page")]
     PluginPage { plugin_id: String, page: String },
 
+    #[route("/plugin/:plugin_id/settings")]
+    PluginSettings { plugin_id: String },
+
     #[route("/plugins/:plugin_id/component/:component_id")]
     PluginComponent { plugin_id: String, component_id: String },
 
@@ -186,8 +189,9 @@ fn AccessDenied() -> Element {
 pub fn Plugin(plugin_id: String) -> Element {
     rsx! {
         AuthenticatedLayout {
-            crate::ui::pages::PluginView {
-                plugin_id: plugin_id
+            crate::ui::components::plugin_renderer::PluginPageWrapper {
+                plugin_id: plugin_id,
+                page: None
             }
         }
     }
@@ -214,6 +218,15 @@ pub fn PluginComponent(plugin_id: String, component_id: String) -> Element {
                 component_id,
                 props: serde_json::json!({})
             }
+        }
+    }
+}
+
+#[component]
+pub fn PluginSettings(plugin_id: String) -> Element {
+    rsx! {
+        AuthenticatedLayout {
+            crate::ui::pages::PluginView { plugin_id: plugin_id }
         }
     }
 }
@@ -339,6 +352,7 @@ pub mod nav {
             Route::Plugin { .. } => "Plugin",
             Route::PluginPage { .. } => "Plugin Page",
             Route::PluginComponent { .. } => "Plugin Component",
+            Route::PluginSettings { .. } => "Plugin Settings",
             Route::NotFound { .. } => "Not Found",
         }
     }
@@ -356,6 +370,7 @@ pub mod nav {
             Route::Plugin { .. } => "🔌",
             Route::PluginPage { .. } => "📄",
             Route::PluginComponent { .. } => "🧩",
+            Route::PluginSettings { .. } => "⚙️",
             Route::NotFound { .. } => "❓",
         }
     }

@@ -523,34 +523,73 @@ impl PluginManager {
             return Ok(());
         }
 
-        // Load default plugins from config
-        for plugin_id in &self.config.default_plugins {
-            if let Err(e) = self.load_plugin(plugin_id).await {
-                tracing::error!("Failed to auto-load plugin {}: {}", plugin_id, e);
+        #[cfg(target_arch = "wasm32")]
+        {
+            // For WASM, only load from factory registry (already registered)
+            tracing::info!("WASM: Loading plugins from factory registry");
+            for plugin_id in &self.config.default_plugins {
+                if let Err(e) = self.load_plugin(plugin_id).await {
+                    tracing::error!("Failed to auto-load plugin {}: {}", plugin_id, e);
+                }
             }
         }
 
-        // Discover and load filesystem plugins (native only)
         #[cfg(not(target_arch = "wasm32"))]
         {
+            // For desktop, first load from factory registry, then discover and load from filesystem
+            tracing::info!("Desktop: Loading plugins from config and filesystem");
+
+            // Load configured default plugins (may be builtin or from filesystem)
+            for plugin_id in &self.config.default_plugins {
+                if let Err(e) = self.load_plugin(plugin_id).await {
+                    tracing::error!("Failed to auto-load configured plugin {}: {}", plugin_id, e);
+                }
+            }
+
+            // Discover and load plugins from filesystem
             let installation_manager = self.installation_manager.lock().await;
             let discovered = installation_manager.discover_plugins().await?;
             drop(installation_manager);
 
             for plugin_id in discovered {
                 if !self.active_plugins.read().await.contains_key(&plugin_id) {
-                    if let Err(e) = self.load_plugin(&plugin_id).await {
-                        tracing::error!(
-                            "Failed to auto-load discovered plugin {}: {}",
-                            plugin_id,
-                            e
-                        );
+                    // Check if this plugin is in auto-load list or configured to auto-load
+                    if self.should_auto_load_plugin(&plugin_id).await {
+                        if let Err(e) = self.load_plugin(&plugin_id).await {
+                            tracing::error!("Failed to auto-load discovered plugin {}: {}", plugin_id, e);
+                        } else {
+                            tracing::info!("Auto-loaded discovered plugin: {}", plugin_id);
+                        }
                     }
                 }
             }
         }
 
         Ok(())
+    }
+
+    // Add helper method
+    async fn should_auto_load_plugin(&self, plugin_id: &str) -> bool {
+        // Check if plugin is in default list
+        if self.config.default_plugins.contains(&plugin_id.to_string()) {
+            return true;
+        }
+
+        // Check plugin manifest for auto-load flag
+        if let Ok(installation_manager) = self.installation_manager.try_lock() {
+            if let Some(installation) = installation_manager.get_installation(plugin_id).await {
+                // Check if plugin manifest has auto_load: true
+                if let Some(auto_load) = installation.manifest.settings
+                    .as_ref()
+                    .and_then(|s| s.get("auto_load"))
+                    .and_then(|v| v.as_bool())
+                {
+                    return auto_load;
+                }
+            }
+        }
+
+        false
     }
 
     /// Stop a running plugin

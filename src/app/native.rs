@@ -396,38 +396,35 @@ impl ApplicationCore {
     async fn init_plugin_manager(&mut self) -> Result<()> {
         tracing::info!("Initializing plugin manager");
 
-        // Initialize the plugin factory registry first
-        crate::plugin::PluginFactoryRegistry::initialize();
+        let config = if let Some(config_manager) = &self.config_manager {
+            config_manager.lock().await
+                .get::<PluginManagerConfig>("plugins").await
+                .unwrap_or(None)
+                .unwrap_or_else(PluginManagerConfig::default)
+        } else {
+            PluginManagerConfig::default()
+        };
 
-        // Register built-in plugins
-        crate::plugin::builtin::register_builtin_plugins().await?;
+        let mut plugin_manager = PluginManager::new(config);
 
-        // Create plugin manager with proper configuration
-        let plugin_config = PluginManagerConfig::default();
-        let mut plugin_manager = PluginManager::new(plugin_config);
-
-        // Set up dependencies
-        if let Some(ref event_bus) = self.event_bus_manager {
+        if let Some(event_bus) = &self.event_bus_manager {
             plugin_manager.set_event_bus(Arc::clone(event_bus));
         }
 
-        if let Some(ref platform_manager) = self.platform_manager {
+        if let Some(platform_manager) = &self.platform_manager {
             plugin_manager.set_platform_manager(Arc::clone(platform_manager));
         }
 
-        // Initialize the plugin manager
+        // Load plugin configuration if exists
+        plugin_manager.load_config(Some("plugins.toml")).await?;
+
         plugin_manager.initialize().await?;
 
-        // Load default plugins
-        let default_plugins = ["system_monitor", "notifications"];
+        // Register builtin plugins (minimal set for desktop)
+        plugin_manager.register_builtin_plugins().await?;
 
-        for plugin_id in default_plugins {
-            if let Err(e) = plugin_manager.load_plugin(plugin_id).await {
-                tracing::warn!("Failed to load plugin {}: {}", plugin_id, e);
-            } else {
-                tracing::info!("Successfully loaded plugin: {}", plugin_id);
-            }
-        }
+        // Auto-load plugins from config and filesystem
+        plugin_manager.auto_load_plugins().await?;
 
         self.plugin_manager = Some(plugin_manager);
         Ok(())

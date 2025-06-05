@@ -356,16 +356,32 @@ fn PluginMenuItem(
     let icon = get_plugin_icon(&plugin_info.id);
 
     rsx! {
-        Link {
-            to: Route::Plugin { plugin_id: plugin_info.id.clone() },
-            class: "group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-            onclick: move |e| {
-                if let Some(callback) = &on_click {
-                    callback.call(e);
-                }
-            },
-            span { class: "text-lg mr-3", "{icon}" }
-            "{plugin_info.name}"
+        div { class: "space-y-1",
+            // Main plugin link (goes to content)
+            Link {
+                to: Route::Plugin { plugin_id: plugin_info.id.clone() },
+                class: "group flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                onclick: move |e| {
+                    if let Some(callback) = &on_click {
+                        callback.call(e);
+                    }
+                },
+                span { class: "text-lg mr-3", "{icon}" }
+                "{plugin_info.name}"
+            }
+
+            // Settings link (smaller, indented)
+            Link {
+                to: Route::PluginSettings { plugin_id: plugin_info.id.clone() },
+                class: "group flex items-center px-8 py-1 text-xs font-medium rounded-md text-gray-500 hover:bg-gray-50 hover:text-gray-700",
+                onclick: move |e| {
+                    if let Some(callback) = &on_click {
+                        callback.call(e);
+                    }
+                },
+                span { class: "text-sm mr-2", "⚙️" }
+                "Settings"
+            }
         }
     }
 }
