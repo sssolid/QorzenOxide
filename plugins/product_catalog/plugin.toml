@@ -7,31 +7,44 @@ author = "Qorzen Team"
 license = "MIT"
 homepage = "https://github.com/qorzen/plugins/product-catalog"
 repository = "https://github.com/qorzen/plugins"
+keywords = ["products", "catalog", "ecommerce", "search"]
+categories = ["business", "management"]
 minimum_core_version = "0.1.0"
 api_version = "0.1.0"
 
 [build]
 entry = "src/lib.rs"
-library_name = "product_catalog"
-target = "native"
+sources = ["src/**/*.rs"]
+features = ["default"]
+hot_reload = true
+build_dependencies = {}
 
-[[permissions.required]]
-resource = "products"
-action = "read"
-scope = "Global"
+[targets.web]
+platform = "web"
+arch = ["wasm32"]
+features = ["web"]
+settings = {}
 
-[[permissions.required]]
-resource = "search"
-action = "provide"
-scope = "Global"
+[targets.desktop]
+platform = "desktop"
+arch = ["x86_64", "aarch64"]
+os = ["windows", "macos", "linux"]
+features = ["desktop"]
+settings = {}
 
-[[permissions.required]]
-resource = "ui"
-action = "render"
-scope = "Global"
+[dependencies]
 
-[settings]
-api_endpoint = { type = "string", default = "https://api.example.com/products" }
-cache_duration_secs = { type = "integer", default = 300 }
-search_enabled = { type = "boolean", default = true }
-max_results = { type = "integer", default = 100 }
+permissions = [
+    "data.read",
+    "ui.render"
+]
+
+provides = [
+    "search.provide",
+    "api.routes"
+]
+
+requires = [
+    "database.query",
+    "http.client"
+]
