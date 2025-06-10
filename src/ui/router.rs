@@ -1,74 +1,55 @@
-// src/ui/router.rs - Routing configuration with authentication guards
-
-use dioxus::prelude::*;
-#[allow(unused_imports)]
-use dioxus_router::prelude::*;
-
+// src/ui/router.rs
 use crate::ui::{
+    components::plugin_renderer::{PluginPageWrapper, PluginSettingsWrapper},
     layout::Layout,
     pages::{
-        Dashboard as DashboardPage, Login as LoginPage, NotFound as NotFoundPage,
+        Dashboard as DashboardPage, Login as LoginPage, NotFound as NotFoundPage, PluginView,
         Plugins as PluginsPage, Profile as ProfilePage, Settings as SettingPage,
     },
     state::use_app_state,
 };
+use dioxus::prelude::*;
+#[allow(unused_imports)]
+use dioxus_router::prelude::*;
 
-/// Application routes with authentication and authorization
-#[derive(Clone, Routable, Debug, PartialEq)]
+#[derive(Clone,Routable,Debug,PartialEq)]
 #[rustfmt::skip]
-pub enum Route {
-    // Public routes
+pub enum Route{
     #[route("/login")]
-    Login {},
-
-    // Protected routes (require authentication)
+    Login{},
     #[route("/")]
-    #[redirect("/dashboard", || Route::Dashboard {})]
-    Home {},
-
+    #[redirect("/dashboard",||Route::Dashboard{})]
+    Home{},
     #[route("/dashboard")]
-    Dashboard {},
-
+    Dashboard{},
     #[route("/profile")]
-    Profile {},
-
+    Profile{},
     #[route("/plugins")]
-    Plugins {},
-
+    Plugins{},
     #[route("/settings")]
-    Settings {},
-
+    Settings{},
     #[route("/admin")]
-    Admin {},
-    
+    Admin{},
     #[route("/logs")]
-    Logs {},
-
-    // Plugin routes (dynamically loaded)
+    Logs{},
     #[route("/plugin/:plugin_id")]
-    Plugin { plugin_id: String },
-
+    Plugin{plugin_id:String},
     #[route("/plugin/:plugin_id/:page")]
-    PluginPage { plugin_id: String, page: String },
-
+    PluginPage{plugin_id:String,page:String},
     #[route("/plugin/:plugin_id/settings")]
-    PluginSettings { plugin_id: String },
-
+    PluginSettings{plugin_id:String},
     #[route("/plugins/:plugin_id/component/:component_id")]
-    PluginComponent { plugin_id: String, component_id: String },
-
-    // Catch-all for 404
+    PluginComponent{plugin_id:String,component_id:String},
     #[route("/:..segments")]
-    NotFound { segments: Vec<String> },
+    NotFound{segments:Vec<String>},
 }
 
-/// Route component implementations
 #[component]
 pub fn Login() -> Element {
     rsx! {
-        div {
-            class: "min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8",
-            LoginPage {}
+        div{
+            class:"min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8",
+            LoginPage{}
         }
     }
 }
@@ -76,8 +57,8 @@ pub fn Login() -> Element {
 #[component]
 pub fn Home() -> Element {
     rsx! {
-        AuthenticatedLayout {
-            DashboardPage {}
+        AuthenticatedLayout{
+            DashboardPage{}
         }
     }
 }
@@ -85,8 +66,8 @@ pub fn Home() -> Element {
 #[component]
 pub fn Dashboard() -> Element {
     rsx! {
-        AuthenticatedLayout {
-            DashboardPage {}
+        AuthenticatedLayout{
+            DashboardPage{}
         }
     }
 }
@@ -94,8 +75,8 @@ pub fn Dashboard() -> Element {
 #[component]
 pub fn Profile() -> Element {
     rsx! {
-        AuthenticatedLayout {
-            ProfilePage {}
+        AuthenticatedLayout{
+            ProfilePage{}
         }
     }
 }
@@ -103,8 +84,8 @@ pub fn Profile() -> Element {
 #[component]
 pub fn Plugins() -> Element {
     rsx! {
-        AuthenticatedLayout {
-            PluginsPage {}
+        AuthenticatedLayout{
+            PluginsPage{}
         }
     }
 }
@@ -112,8 +93,8 @@ pub fn Plugins() -> Element {
 #[component]
 pub fn Settings() -> Element {
     rsx! {
-        AuthenticatedLayout {
-            SettingPage {}
+        AuthenticatedLayout{
+            SettingPage{}
         }
     }
 }
@@ -121,8 +102,8 @@ pub fn Settings() -> Element {
 #[component]
 pub fn Admin() -> Element {
     rsx! {
-        AuthenticatedLayout {
-            AdminPageWithPermissionCheck {}
+        AuthenticatedLayout{
+            AdminPageWithPermissionCheck{}
         }
     }
 }
@@ -130,16 +111,14 @@ pub fn Admin() -> Element {
 #[component]
 pub fn Logs() -> Element {
     rsx! {
-        AuthenticatedLayout {
-            LogsPage {}
+        AuthenticatedLayout{
+            LogsPage{}
         }
     }
 }
 
-/// Admin page with permission checking
 #[component]
 fn AdminPageWithPermissionCheck() -> Element {
-    // Check if user has admin permissions
     let app_state = use_app_state();
 
     match &app_state.current_user {
@@ -153,19 +132,13 @@ fn AdminPageWithPermissionCheck() -> Element {
             });
 
             if has_admin_permission {
-                rsx! {
-                    crate::ui::pages::Admin {}
-                }
+                rsx! {crate::ui::pages::Admin{}}
             } else {
-                rsx! {
-                    AccessDenied {}
-                }
+                rsx! {AccessDenied{}}
             }
         }
         None => {
-            rsx! {
-                AccessDenied {}
-            }
+            rsx! {AccessDenied{}}
         }
     }
 }
@@ -173,106 +146,82 @@ fn AdminPageWithPermissionCheck() -> Element {
 #[component]
 pub fn LogsPage() -> Element {
     rsx! {
-        AuthenticatedLayout {
-            crate::ui::pages::Logs { }
+        AuthenticatedLayout{
+            crate::ui::pages::Logs{}
         }
     }
 }
 
-/// Access denied component
 #[component]
 fn AccessDenied() -> Element {
     rsx! {
-        div {
-            class: "text-center py-12",
-            div {
-                class: "text-6xl text-red-500 mb-4",
-                "🚫"
-            }
-            h1 {
-                class: "text-2xl font-bold text-gray-900 mb-2",
-                "Access Denied"
-            }
-            p {
-                class: "text-gray-600 mb-6",
-                "You don't have permission to access this page."
-            }
-            Link {
-                to: Route::Dashboard {},
-                class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+        div{class:"text-center py-12",
+            div{class:"text-6xl text-red-500 mb-4","🚫"}
+            h1{class:"text-2xl font-bold text-gray-900 mb-2","Access Denied"}
+            p{class:"text-gray-600 mb-6","You don't have permission to access this page."}
+            Link{
+                to:Route::Dashboard{},
+                class:"inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
                 "Go to Dashboard"
             }
         }
     }
 }
 
+/// Plugin content page - shows the main plugin interface
 #[component]
 pub fn Plugin(plugin_id: String) -> Element {
-    let mut current_plugin = use_signal(|| plugin_id.clone());
-
-    let plugin_id_for_effect = plugin_id.clone(); // break borrow
-
-    use_effect(move || {
-        if current_plugin() != plugin_id_for_effect {
-            current_plugin.set(plugin_id_for_effect.clone());
-        }
-    });
-
+    let key = format!("{}-content", plugin_id);
     rsx! {
-        AuthenticatedLayout {
-            key: "{plugin_id}", // key from original prop
-            crate::ui::components::plugin_renderer::PluginPageWrapper {
-                plugin_id: current_plugin(),
-                page: None
+        AuthenticatedLayout{
+            key: key,
+            PluginPageWrapper{
+                plugin_id:plugin_id,
+                page:None
             }
         }
     }
 }
 
+/// Plugin page with specific page parameter
 #[component]
 pub fn PluginPage(plugin_id: String, page: String) -> Element {
-    let mut current_plugin = use_signal(|| plugin_id.clone());
-    let mut current_page = use_signal(|| page.clone());
-
-    let plugin_id_for_effect = plugin_id.clone();
-    let page_for_effect = page.clone();
-
-    use_effect(move || {
-        if current_plugin() != plugin_id_for_effect || current_page() != page_for_effect {
-            current_plugin.set(plugin_id_for_effect.clone());
-            current_page.set(page_for_effect.clone());
-        }
-    });
-
+    let key = format!("{}-page", plugin_id);
     rsx! {
-        AuthenticatedLayout {
-            key: "{plugin_id}-{page}", // key from props
-            crate::ui::components::plugin_renderer::PluginPageWrapper {
-                plugin_id: current_plugin(),
-                page: Some(current_page())
+        AuthenticatedLayout{
+            key: key,
+            PluginPageWrapper{
+                plugin_id:plugin_id,
+                page:Some(page)
             }
         }
     }
 }
 
+/// Plugin component renderer
 #[component]
 pub fn PluginComponent(plugin_id: String, component_id: String) -> Element {
     rsx! {
-        AuthenticatedLayout {
-            crate::ui::components::plugin_renderer::PluginComponentRenderer {
+        AuthenticatedLayout{
+            crate::ui::components::plugin_renderer::PluginComponentRenderer{
                 plugin_id,
                 component_id,
-                props: serde_json::json!({})
+                props:serde_json::json!({})
             }
         }
     }
 }
 
+/// Plugin settings page - shows configuration interface
 #[component]
 pub fn PluginSettings(plugin_id: String) -> Element {
+    let key = format!("{}-settings", plugin_id);
     rsx! {
-        AuthenticatedLayout {
-            crate::ui::pages::PluginView { plugin_id: plugin_id }
+        AuthenticatedLayout{
+            key: key,
+            PluginSettingsWrapper{
+                plugin_id:plugin_id
+            }
         }
     }
 }
@@ -282,48 +231,35 @@ pub fn NotFound(segments: Vec<String>) -> Element {
     let path = segments.join("/");
 
     rsx! {
-        div {
-            class: "min-h-screen flex items-center justify-center bg-gray-50",
-            NotFoundPage {
-                path: path
-            }
+        div{
+            class:"min-h-screen flex items-center justify-center bg-gray-50",
+            NotFoundPage{path:path}
         }
     }
 }
 
-/// Authenticated layout wrapper that checks authentication before rendering
 #[component]
 pub fn AuthenticatedLayout(children: Element) -> Element {
     let app_state = use_app_state();
     let navigator = use_navigator();
 
-    // Check if user is authenticated
     if let Some(_user) = &app_state.current_user {
         rsx! {
-            Layout {
+            Layout{
                 {children}
             }
         }
     } else {
-        // Redirect to login immediately (not in an effect)
         navigator.push(Route::Login {});
-
         rsx! {
-            div {
-                class: "min-h-screen flex items-center justify-center bg-gray-50",
-                div {
-                    class: "animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"
-                }
-                p {
-                    class: "mt-4 text-gray-600",
-                    "Redirecting to login..."
-                }
+            div{class:"min-h-screen flex items-center justify-center bg-gray-50",
+                div{class:"animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"}
+                p{class:"mt-4 text-gray-600","Redirecting to login..."}
             }
         }
     }
 }
 
-/// Permission guard component
 #[component]
 pub fn PermissionGuard(
     resource: String,
@@ -335,13 +271,11 @@ pub fn PermissionGuard(
 
     let has_permission = match &app_state.current_user {
         Some(user) => {
-            // Check direct permissions
             let direct_permission = user.permissions.iter().any(|perm| {
                 (perm.resource == resource || perm.resource == "*")
                     && (perm.action == action || perm.action == "*")
             });
 
-            // Check role permissions
             let role_permission = user.roles.iter().any(|role| {
                 role.permissions.iter().any(|perm| {
                     (perm.resource == resource || perm.resource == "*")
@@ -355,37 +289,27 @@ pub fn PermissionGuard(
     };
 
     if has_permission {
-        rsx! { {children} }
+        rsx! {{children}}
     } else {
         match fallback {
-            Some(fallback_element) => rsx! { {fallback_element} },
+            Some(fallback_element) => rsx! {{fallback_element}},
             None => rsx! {
-                div {
-                    class: "text-center py-8",
-                    div {
-                        class: "text-4xl text-gray-400 mb-2",
-                        "🔒"
-                    }
-                    p {
-                        class: "text-gray-600",
-                        "Insufficient permissions"
-                    }
+                div{class:"text-center py-8",
+                    div{class:"text-4xl text-gray-400 mb-2","🔒"}
+                    p{class:"text-gray-600","Insufficient permissions"}
                 }
             },
         }
     }
 }
 
-/// Navigation utilities
 pub mod nav {
     use super::*;
 
-    /// Check if current route matches the given route
     pub fn is_active_route(current: &Route, target: &Route) -> bool {
         std::mem::discriminant(current) == std::mem::discriminant(target)
     }
 
-    /// Get route title for display
     pub fn route_title(route: &Route) -> &'static str {
         match route {
             Route::Login { .. } => "Login",
@@ -404,7 +328,6 @@ pub mod nav {
         }
     }
 
-    /// Get route icon (for navigation menus)
     pub fn route_icon(route: &Route) -> &'static str {
         match route {
             Route::Login { .. } => "🔐",
@@ -414,7 +337,7 @@ pub mod nav {
             Route::Plugins { .. } => "🧩",
             Route::Settings { .. } => "⚙️",
             Route::Admin { .. } => "👑",
-            Route::Logs { .. } => "❓",
+            Route::Logs { .. } => "📋",
             Route::Plugin { .. } => "🔌",
             Route::PluginPage { .. } => "📄",
             Route::PluginComponent { .. } => "🧩",
