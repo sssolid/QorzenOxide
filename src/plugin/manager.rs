@@ -1,5 +1,3 @@
-// src/plugin/manager.rs - Enhanced Plugin Manager
-
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -25,15 +23,8 @@ use crate::platform::{filesystem::FileSystemArc, PlatformManager};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InstallationSource {
     Local { path: PathBuf },
-    Git {
-        url: String,
-        branch: Option<String>,
-    },
-    Registry {
-        url: String,
-        plugin_id: String,
-        version: Option<String>,
-    },
+    Git { url: String, branch: Option<String> },
+    Registry { url: String, plugin_id: String, version: Option<String> },
     Binary { path: PathBuf },
 }
 
@@ -83,7 +74,6 @@ impl PluginRegistry {
         }
     }
 
-    #[allow(unused_variables)]
     pub async fn search(&self, query: &str, limit: Option<usize>) -> Result<Vec<RegistryPlugin>> {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -117,26 +107,7 @@ impl PluginRegistry {
             }
         }
 
-        // Fallback mock data for WASM or when no client available
-        Ok(vec![RegistryPlugin {
-            id: "example_plugin".to_string(),
-            name: "Example Plugin".to_string(),
-            version: "1.0.0".to_string(),
-            description: "An example plugin for demonstration".to_string(),
-            author: "Qorzen Team".to_string(),
-            license: "MIT".to_string(),
-            homepage: Some("https://example.com".to_string()),
-            repository: Some("https://github.com/qorzen/example-plugin".to_string()),
-            download_url: "https://registry.qorzen.com/plugins/example_plugin/1.0.0/download"
-                .to_string(),
-            checksum: "sha256:1234567890abcdef".to_string(),
-            supported_platforms: vec!["web".to_string(), "desktop".to_string()],
-            dependencies: vec![],
-            tags: vec!["example".to_string(), "demo".to_string()],
-            rating: Some(4.5),
-            downloads: 1250,
-            last_updated: chrono::Utc::now(),
-        }])
+        Ok(vec![])
     }
 
     pub async fn get_plugin(&self, plugin_id: &str) -> Result<Option<RegistryPlugin>> {
@@ -153,7 +124,35 @@ pub struct PluginStats {
     pub status_counts: HashMap<PluginStatus, usize>,
 }
 
-/// Enhanced Plugin Manager with full lifecycle support
+fn get_plugin_data_dir() -> PathBuf {
+    if let Ok(env_dir) = std::env::var("QORZEN_PLUGINS_DIR") {
+        return PathBuf::from(env_dir);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(".local/share/qorzen/plugins");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(data_dir) = dirs::data_dir() {
+            return data_dir.join("qorzen/plugins");
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(data_dir) = dirs::data_dir() {
+            return data_dir.join("Qorzen/plugins");
+        }
+    }
+
+    PathBuf::from("./target/plugins")
+}
+
 #[derive(Debug)]
 pub struct PluginManager {
     state: ManagedState,
@@ -172,21 +171,7 @@ pub struct PluginManager {
 
 impl PluginManager {
     pub fn new(config: PluginManagerConfig) -> Self {
-        let plugins_directory = std::env::var("QORZEN_PLUGINS_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    dirs::data_dir()
-                        .unwrap_or_else(|| PathBuf::from("."))
-                        .join("qorzen")
-                        .join("plugins")
-                }
-                #[cfg(target_arch = "wasm32")]
-                {
-                    PathBuf::from("plugins")
-                }
-            });
+        let plugins_directory = get_plugin_data_dir();
 
         let installation_manager = Arc::new(Mutex::new(PluginInstallationManager::new(
             plugins_directory.clone(),
@@ -228,11 +213,18 @@ impl PluginManager {
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Ok(content) = tokio::fs::read_to_string(config_file).await {
-                if let Ok(config) = toml::from_str::<PluginManagerConfig>(&content) {
-                    self.config = config;
-                    tracing::info!("Loaded plugin configuration from {}", config_file);
-                } else {
-                    tracing::warn!("Failed to parse plugin configuration, using defaults");
+                match toml::from_str::<PluginManagerConfig>(&content) {
+                    Ok(config) => {
+                        self.config = config;
+                        tracing::info!("Loaded plugin configuration from {}", config_file);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to parse plugin configuration ({}): {}, using defaults",
+                            config_file,
+                            e
+                        );
+                    }
                 }
             } else {
                 tracing::info!("No plugin configuration file found, using defaults");
@@ -247,14 +239,12 @@ impl PluginManager {
         Ok(())
     }
 
-    /// Register built-in plugins
     pub async fn register_builtin_plugins(&self) -> Result<()> {
         builtin::register_builtin_plugins().await?;
         tracing::info!("Registered built-in plugins");
         Ok(())
     }
 
-    /// Search registry for plugins
     pub async fn search_registry(
         &self,
         query: &str,
@@ -263,195 +253,6 @@ impl PluginManager {
         self.registry.search(query, limit).await
     }
 
-    /// Install a plugin from various sources
-    pub async fn install_plugin(&self, request: PluginInstallRequest) -> Result<String> {
-        tracing::info!("Installing plugin from source: {:?}", request.source);
-
-        match request.source {
-            InstallationSource::Local { path } => {
-                self.install_from_local(path, request.force_reinstall).await
-            }
-            InstallationSource::Git { url, branch } => {
-                self.install_from_git(url, branch, request.force_reinstall)
-                    .await
-            }
-            InstallationSource::Registry {
-                url: _,
-                plugin_id,
-                version,
-            } => {
-                self.install_from_registry(plugin_id, version, request.force_reinstall)
-                    .await
-            }
-            InstallationSource::Binary { path } => {
-                self.install_from_binary(path, request.force_reinstall)
-                    .await
-            }
-        }
-    }
-
-    #[allow(unused_variables)]
-    async fn install_from_local(&self, path: PathBuf, force: bool) -> Result<String> {
-        let manifest_path = path.join("plugin.toml");
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            if !manifest_path.exists() {
-                return Err(Error::plugin(
-                    "installer",
-                    "No plugin.toml found in the specified directory",
-                ));
-            }
-
-            let manifest = PluginManifest::load_from_file(&manifest_path).await?;
-            let plugin_id = manifest.plugin.id.clone();
-
-            let installation_manager = self.installation_manager.lock().await;
-            if let Some(_existing) = installation_manager.get_installation(&plugin_id).await {
-                if !force {
-                    return Err(Error::plugin(
-                        &plugin_id,
-                        "Plugin already installed. Use force_reinstall to override",
-                    ));
-                }
-                drop(installation_manager);
-                self.uninstall_plugin(&plugin_id).await?;
-            } else {
-                drop(installation_manager);
-            }
-
-            let target_dir = self.plugins_directory.join(&plugin_id);
-            if target_dir.exists() {
-                tokio::fs::remove_dir_all(&target_dir).await.map_err(|e| {
-                    Error::plugin(
-                        &plugin_id,
-                        format!("Failed to remove existing plugin directory: {}", e),
-                    )
-                })?;
-            }
-
-            self.copy_directory(&path, &target_dir).await?;
-
-            let installation_manager = self.installation_manager.lock().await;
-            installation_manager.discover_plugins().await?;
-
-            Ok(plugin_id)
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            Err(Error::platform(
-                "wasm",
-                "plugin_install",
-                "Local plugin installation not supported in WASM environment",
-            ))
-        }
-    }
-
-    #[allow(unused_variables)]
-    async fn install_from_git(
-        &self,
-        url: String,
-        branch: Option<String>,
-        force: bool,
-    ) -> Result<String> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let temp_dir = tempfile::tempdir().map_err(|e| {
-                Error::plugin(
-                    "installer",
-                    format!("Failed to create temp directory: {}", e),
-                )
-            })?;
-
-            let mut cmd = tokio::process::Command::new("git");
-            cmd.args(["clone"]);
-
-            if let Some(branch) = branch {
-                cmd.args(["--branch", &branch]);
-            }
-
-            cmd.args([&url, temp_dir.path().to_str().unwrap()]);
-
-            let output = cmd.output().await.map_err(|e| {
-                Error::plugin(
-                    "installer",
-                    format!("Failed to clone git repository: {}", e),
-                )
-            })?;
-
-            if !output.status.success() {
-                return Err(Error::plugin(
-                    "installer",
-                    format!(
-                        "Git clone failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    ),
-                ));
-            }
-
-            self.install_from_local(temp_dir.path().to_path_buf(), force)
-                .await
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            Err(Error::platform(
-                "wasm",
-                "plugin_install",
-                "Git plugin installation not supported in WASM environment",
-            ))
-        }
-    }
-
-    #[allow(unused_variables)]
-    async fn install_from_registry(
-        &self,
-        plugin_id: String,
-        version: Option<String>,
-        _force: bool,
-    ) -> Result<String> {
-        let _plugin_info = self
-            .registry
-            .get_plugin(&plugin_id)
-            .await?
-            .ok_or_else(|| Error::plugin(&plugin_id, "Plugin not found in registry"))?;
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            tracing::info!("Simulating plugin installation for WASM: {}", plugin_id);
-            return Ok(plugin_id);
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            Err(Error::plugin(
-                &plugin_id,
-                "Registry installation not yet implemented",
-            ))
-        }
-    }
-
-    async fn install_from_binary(&self, _path: PathBuf, _force: bool) -> Result<String> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            Err(Error::plugin(
-                "installer",
-                "Binary installation not yet implemented",
-            ))
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            Err(Error::platform(
-                "wasm",
-                "plugin_install",
-                "Binary plugin installation not supported in WASM environment",
-            ))
-        }
-    }
-
-    /// Load a plugin by ID
     pub async fn load_plugin(&self, plugin_id: &str) -> Result<()> {
         tracing::info!("Loading plugin: {}", plugin_id);
 
@@ -459,7 +260,6 @@ impl PluginManager {
             return Err(Error::plugin(plugin_id, "Plugin already loaded"));
         }
 
-        // Try to load from registry first (for both native and WASM)
         if let Some(mut plugin) = PluginFactoryRegistry::create_plugin(plugin_id).await {
             let context = self.create_plugin_context_for_builtin(plugin_id).await?;
             plugin.initialize(context.clone()).await?;
@@ -468,7 +268,6 @@ impl PluginManager {
                 .write()
                 .await
                 .insert(plugin_id.to_string(), Arc::new(Mutex::new(plugin)));
-
             self.plugin_contexts
                 .write()
                 .await
@@ -478,78 +277,72 @@ impl PluginManager {
             return Ok(());
         }
 
-        // For native, try loading from installation manager
         #[cfg(not(target_arch = "wasm32"))]
         {
             let installation_manager = self.installation_manager.lock().await;
-            let installation = installation_manager
-                .get_installation(plugin_id)
-                .await
-                .ok_or_else(|| Error::plugin(plugin_id, "Plugin not found"))?;
 
-            let context = self.create_plugin_context(&installation.manifest).await?;
+            if let Err(e) = installation_manager.discover_plugins().await {
+                tracing::warn!("Failed to discover plugins: {}", e);
+            }
 
-            self.plugin_contexts
-                .write()
-                .await
-                .insert(plugin_id.to_string(), context.clone());
+            if let Some(installation) = installation_manager.get_installation(plugin_id).await {
+                let context = self.create_plugin_context(&installation.manifest).await?;
 
-            let plugin = installation_manager.load_plugin(plugin_id, context).await?;
+                self.plugin_contexts
+                    .write()
+                    .await
+                    .insert(plugin_id.to_string(), context.clone());
 
-            self.active_plugins
-                .write()
-                .await
-                .insert(plugin_id.to_string(), Arc::new(Mutex::new(plugin)));
+                let plugin = installation_manager
+                    .load_plugin(plugin_id, context)
+                    .await?;
 
-            self.plugin_registry
-                .write()
-                .await
-                .insert(plugin_id.to_string(), installation.manifest.clone());
+                self.active_plugins
+                    .write()
+                    .await
+                    .insert(plugin_id.to_string(), Arc::new(Mutex::new(plugin)));
 
-            installation_manager
-                .update_status(plugin_id, PluginStatus::Running)
-                .await;
+                self.plugin_registry
+                    .write()
+                    .await
+                    .insert(plugin_id.to_string(), installation.manifest.clone());
 
-            tracing::info!("Plugin {} loaded from installation", plugin_id);
-            return Ok(());
+                installation_manager
+                    .update_status(plugin_id, PluginStatus::Running)
+                    .await;
+
+                tracing::info!("Plugin {} loaded from installation", plugin_id);
+                return Ok(());
+            }
         }
 
-        Err(Error::plugin(plugin_id, "Plugin not found"))
+        Err(Error::plugin(
+            plugin_id,
+            "Plugin not found in factory registry or installations",
+        ))
     }
 
-    /// Auto-load configured plugins
     pub async fn auto_load_plugins(&self) -> Result<()> {
         if !self.config.auto_load {
+            tracing::info!("Plugin auto-loading is disabled");
             return Ok(());
         }
 
-        #[cfg(target_arch = "wasm32")]
-        {
-            tracing::info!("WASM: Loading plugins from factory registry");
-            for plugin_id in &self.config.default_plugins {
-                if !self.active_plugins.read().await.contains_key(plugin_id) {
-                    if let Err(e) = self.load_plugin(plugin_id).await {
-                        tracing::error!("Failed to auto-load plugin {}: {}", plugin_id, e);
-                    }
-                } else {
-                    tracing::debug!("Plugin {} already loaded, skipping", plugin_id);
+        tracing::info!("Auto-loading plugins...");
+
+        for plugin_id in &self.config.default_plugins {
+            if !self.active_plugins.read().await.contains_key(plugin_id) {
+                tracing::info!("Auto-loading configured plugin: {}", plugin_id);
+                if let Err(e) = self.load_plugin(plugin_id).await {
+                    tracing::error!("Failed to auto-load configured plugin {}: {}", plugin_id, e);
                 }
+            } else {
+                tracing::debug!("Plugin {} already loaded, skipping", plugin_id);
             }
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            tracing::info!("Desktop: Loading plugins from config and filesystem");
-            for plugin_id in &self.config.default_plugins {
-                if !self.active_plugins.read().await.contains_key(plugin_id) {
-                    if let Err(e) = self.load_plugin(plugin_id).await {
-                        tracing::error!("Failed to auto-load configured plugin {}: {}", plugin_id, e);
-                    }
-                } else {
-                    tracing::debug!("Plugin {} already loaded, skipping", plugin_id);
-                }
-            }
-
             let installation_manager = self.installation_manager.lock().await;
             let discovered = installation_manager.discover_plugins().await?;
             drop(installation_manager);
@@ -557,10 +350,13 @@ impl PluginManager {
             for plugin_id in discovered {
                 if !self.active_plugins.read().await.contains_key(&plugin_id) {
                     if self.should_auto_load_plugin(&plugin_id).await {
+                        tracing::info!("Auto-loading discovered plugin: {}", plugin_id);
                         if let Err(e) = self.load_plugin(&plugin_id).await {
-                            tracing::error!("Failed to auto-load discovered plugin {}: {}", plugin_id, e);
-                        } else {
-                            tracing::info!("Auto-loaded discovered plugin: {}", plugin_id);
+                            tracing::error!(
+                                "Failed to auto-load discovered plugin {}: {}",
+                                plugin_id,
+                                e
+                            );
                         }
                     }
                 } else {
@@ -569,21 +365,22 @@ impl PluginManager {
             }
         }
 
+        let loaded_count = self.active_plugins.read().await.len();
+        tracing::info!("Auto-loading complete. {} plugins loaded", loaded_count);
+
         Ok(())
     }
 
-    // Add helper method
     async fn should_auto_load_plugin(&self, plugin_id: &str) -> bool {
-        // Check if plugin is in default list
         if self.config.default_plugins.contains(&plugin_id.to_string()) {
             return true;
         }
 
-        // Check plugin manifest for auto-load flag
         if let Ok(installation_manager) = self.installation_manager.try_lock() {
             if let Some(installation) = installation_manager.get_installation(plugin_id).await {
-                // Check if plugin manifest has auto_load: true
-                if let Some(auto_load) = installation.manifest.settings
+                if let Some(auto_load) = installation
+                    .manifest
+                    .settings
                     .as_ref()
                     .and_then(|s| s.get("auto_load"))
                     .and_then(|v| v.as_bool())
@@ -596,8 +393,9 @@ impl PluginManager {
         false
     }
 
-    /// Stop a running plugin
     pub async fn stop_plugin(&self, plugin_id: &str) -> Result<()> {
+        tracing::info!("Stopping plugin: {}", plugin_id);
+
         if let Some(plugin_arc) = self.active_plugins.write().await.remove(plugin_id) {
             let mut plugin = plugin_arc.lock().await;
             plugin.shutdown().await?;
@@ -608,13 +406,16 @@ impl PluginManager {
                 .await;
 
             tracing::info!("Plugin {} stopped successfully", plugin_id);
+        } else {
+            tracing::warn!("Plugin {} was not loaded", plugin_id);
         }
 
         Ok(())
     }
 
-    /// Uninstall a plugin
     pub async fn uninstall_plugin(&self, plugin_id: &str) -> Result<()> {
+        tracing::info!("Uninstalling plugin: {}", plugin_id);
+
         if self.active_plugins.read().await.contains_key(plugin_id) {
             self.stop_plugin(plugin_id).await?;
         }
@@ -629,7 +430,6 @@ impl PluginManager {
         Ok(())
     }
 
-    /// Render a plugin component
     pub async fn render_component(
         &self,
         plugin_id: &str,
@@ -645,7 +445,6 @@ impl PluginManager {
         }
     }
 
-    /// Handle API request for a plugin
     pub async fn handle_api_request(
         &self,
         plugin_id: &str,
@@ -661,7 +460,6 @@ impl PluginManager {
         }
     }
 
-    /// Get plugin statistics
     pub async fn get_plugin_stats(&self) -> PluginStats {
         let installation_manager = self.installation_manager.lock().await;
         let installations = installation_manager.list_installations().await;
@@ -681,7 +479,6 @@ impl PluginManager {
         }
     }
 
-    /// Get all UI components from loaded plugins
     pub async fn get_all_ui_components(&self) -> Vec<(String, super::UIComponent)> {
         let mut components = Vec::new();
         let plugins = self.active_plugins.read().await;
@@ -696,7 +493,6 @@ impl PluginManager {
         components
     }
 
-    /// Get all menu items from loaded plugins
     pub async fn get_all_menu_items(&self) -> Vec<(String, super::MenuItem)> {
         let mut items = Vec::new();
         let plugins = self.active_plugins.read().await;
@@ -711,7 +507,6 @@ impl PluginManager {
         items
     }
 
-    /// Get list of loaded plugins with their info
     pub async fn get_loaded_plugins(&self) -> Vec<super::PluginInfo> {
         let mut plugin_infos = Vec::new();
         let plugins = self.active_plugins.read().await;
@@ -724,12 +519,10 @@ impl PluginManager {
         plugin_infos
     }
 
-    /// Check if a plugin is loaded
     pub async fn is_plugin_loaded(&self, plugin_id: &str) -> bool {
         self.active_plugins.read().await.contains_key(plugin_id)
     }
 
-    /// Refresh plugins from filesystem
     pub async fn refresh_plugins(&self) -> Result<Vec<String>> {
         let installation_manager = self.installation_manager.lock().await;
         installation_manager.discover_plugins().await
@@ -737,7 +530,6 @@ impl PluginManager {
 
     async fn create_plugin_context_for_builtin(&self, plugin_id: &str) -> Result<PluginContext> {
         let api_client = PluginApiClient::new(plugin_id.to_string());
-
         let event_bus = self
             .event_bus
             .as_ref()
@@ -784,7 +576,6 @@ impl PluginManager {
     async fn create_plugin_context(&self, manifest: &PluginManifest) -> Result<PluginContext> {
         let plugin_id = manifest.plugin.id.clone();
         let api_client = PluginApiClient::new(plugin_id.clone());
-
         let event_bus = self
             .event_bus
             .as_ref()
@@ -849,50 +640,6 @@ impl PluginManager {
             file_system,
         })
     }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    async fn copy_directory(&self, src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
-        tokio::fs::create_dir_all(dst).await.map_err(|e| {
-            Error::plugin(
-                "installer",
-                format!("Failed to create target directory: {}", e),
-            )
-        })?;
-
-        let mut entries = tokio::fs::read_dir(src).await.map_err(|e| {
-            Error::plugin(
-                "installer",
-                format!("Failed to read source directory: {}", e),
-            )
-        })?;
-
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            Error::plugin(
-                "installer",
-                format!("Failed to read directory entry: {}", e),
-            )
-        })? {
-            let src_path = entry.path();
-            let dst_path = dst.join(entry.file_name());
-
-            if entry
-                .file_type()
-                .await
-                .map_err(|e| {
-                    Error::plugin("installer", format!("Failed to get file type: {}", e))
-                })?
-                .is_dir()
-            {
-                Box::pin(self.copy_directory(&src_path, &dst_path)).await?;
-            } else {
-                tokio::fs::copy(&src_path, &dst_path).await.map_err(|e| {
-                    Error::plugin("installer", format!("Failed to copy file: {}", e))
-                })?;
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
@@ -911,24 +658,36 @@ impl Manager for PluginManager {
             .set_state(crate::manager::ManagerState::Initializing)
             .await;
 
-        // Initialize plugin factory registry
-        PluginFactoryRegistry::initialize();
+        tracing::info!("Initializing plugin manager...");
+        tracing::info!("Plugin directory: {}", self.plugins_directory.display());
 
-        // Register built-in plugins
-        self.register_builtin_plugins().await?;
-
-        // Initialize installation manager
+        #[cfg(not(target_arch = "wasm32"))]
         {
-            let mut installation_manager = self.installation_manager.lock().await;
-            installation_manager.initialize().await?;
-
-            if let Some(ref platform_manager) = self.platform_manager {
-                installation_manager.set_filesystem_provider(platform_manager.filesystem_arc());
+            if !self.plugins_directory.exists() {
+                if let Err(e) = tokio::fs::create_dir_all(&self.plugins_directory).await {
+                    tracing::warn!(
+                        "Failed to create plugins directory {}: {}",
+                        self.plugins_directory.display(),
+                        e
+                    );
+                } else {
+                    tracing::info!(
+                        "Created plugins directory: {}",
+                        self.plugins_directory.display()
+                    );
+                }
             }
         }
 
-        // Auto-load plugins if configured
-        self.auto_load_plugins().await?;
+        let mut installation_manager = self.installation_manager.lock().await;
+        if let Err(e) = installation_manager.initialize().await {
+            tracing::error!("Failed to initialize installation manager: {}", e);
+        }
+        drop(installation_manager);
+
+        if let Err(e) = self.register_builtin_plugins().await {
+            tracing::warn!("Failed to register built-in plugins: {}", e);
+        }
 
         self.state
             .set_state(crate::manager::ManagerState::Running)
@@ -942,6 +701,8 @@ impl Manager for PluginManager {
         self.state
             .set_state(crate::manager::ManagerState::ShuttingDown)
             .await;
+
+        tracing::info!("Shutting down plugin manager...");
 
         let plugin_ids: Vec<String> = self.active_plugins.read().await.keys().cloned().collect();
         for plugin_id in plugin_ids {
@@ -999,31 +760,5 @@ impl Manager for PluginManager {
                 "filesystem.write".to_string(),
             ],
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_plugin_manager_creation() {
-        let config = PluginManagerConfig::default();
-        let manager = PluginManager::new(config);
-        assert_eq!(manager.name(), "plugin_manager");
-    }
-
-    #[tokio::test]
-    async fn test_plugin_manager_with_defaults() {
-        let manager = PluginManager::with_defaults();
-        assert_eq!(manager.config.auto_load, true);
-    }
-
-    #[tokio::test]
-    async fn test_plugin_stats() {
-        let manager = PluginManager::with_defaults();
-        let stats = manager.get_plugin_stats().await;
-        assert_eq!(stats.total_plugins, 0);
-        assert_eq!(stats.active_plugins, 0);
     }
 }

@@ -40,6 +40,14 @@ impl PluginService {
                     ));
                 }
 
+                // Refresh discovered plugins so the manager sees this one
+                manager.refresh_plugins().await.map_err(|e| {
+                    Error::plugin(
+                        plugin_id,
+                        format!("Plugin discovery failed: {}", e)
+                    ).severity(crate::error::ErrorSeverity::Medium)
+                })?;
+
                 // Load the plugin into the running system
                 manager.load_plugin(plugin_id).await.map_err(|e| {
                     Error::plugin(plugin_id, format!("Failed to load plugin: {}", e))

@@ -8,21 +8,27 @@ license = "MIT"
 homepage = "https://github.com/qorzen/plugins/product-catalog"
 repository = "https://github.com/qorzen/plugins"
 minimum_core_version = "0.1.0"
-supported_platforms = ["All"]
+api_version = "0.1.0"
 
 [build]
-target = "native"
+entry = "src/lib.rs"
 library_name = "product_catalog"
+target = "native"
 
-[dependencies]
-qorzen_oxide = "0.1.0"
+[[permissions.required]]
+resource = "products"
+action = "read"
+scope = "Global"
 
-[permissions]
-required = [
-    { resource = "products", action = "read", scope = "Global" },
-    { resource = "search", action = "provide", scope = "Global" },
-    { resource = "ui", action = "render", scope = "Global" }
-]
+[[permissions.required]]
+resource = "search"
+action = "provide"
+scope = "Global"
+
+[[permissions.required]]
+resource = "ui"
+action = "render"
+scope = "Global"
 
 [settings]
 api_endpoint = { type = "string", default = "https://api.example.com/products" }

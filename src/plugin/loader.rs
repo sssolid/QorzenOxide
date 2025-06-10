@@ -1,5 +1,3 @@
-// src/plugin/loader.rs - Enhanced Plugin Loader
-
 use std::any::Any;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -60,7 +58,6 @@ pub struct PluginInstallation {
 
 pub type PluginFactory = fn() -> Box<dyn Plugin>;
 
-/// Plugin loader trait for different environments
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait PluginLoader: Send + Sync + std::fmt::Debug {
@@ -72,7 +69,6 @@ pub trait PluginLoader: Send + Sync + std::fmt::Debug {
     fn as_any(&self) -> &dyn Any;
 }
 
-/// Safe plugin loader for compile-time registered plugins
 #[derive(Debug)]
 pub struct SafePluginLoader {
     registered_plugins: Arc<Mutex<HashMap<String, PluginFactory>>>,
@@ -117,7 +113,10 @@ impl PluginLoader for SafePluginLoader {
             tracing::info!("Loaded plugin using factory: {}", installation.id);
             Ok(plugin)
         } else {
-            Err(Error::plugin(&installation.id, "Plugin factory not found. Plugin must be registered at compile time."))
+            Err(Error::plugin(
+                &installation.id,
+                "Plugin factory not found. Plugin must be registered at compile time.",
+            ))
         }
     }
 
@@ -177,7 +176,10 @@ impl PluginLoader for SafePluginLoader {
     }
 
     async fn hot_reload_plugin(&self, plugin_id: &str) -> Result<Box<dyn Plugin>> {
-        Err(Error::plugin(plugin_id, "Hot reload not supported with safe plugin loading"))
+        Err(Error::plugin(
+            plugin_id,
+            "Hot reload not supported with safe plugin loading",
+        ))
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -185,7 +187,6 @@ impl PluginLoader for SafePluginLoader {
     }
 }
 
-/// Dynamic plugin loader for native environments
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug)]
 pub struct DynamicPluginLoader {
@@ -204,6 +205,7 @@ impl DynamicPluginLoader {
 
     fn find_plugin_library(&self, installation: &PluginInstallation) -> Result<PathBuf> {
         let install_path = &installation.install_path;
+        let plugin_name = &installation.id;
 
         let extensions = if cfg!(windows) {
             vec!["dll"]
@@ -214,20 +216,27 @@ impl DynamicPluginLoader {
         };
 
         for extension in extensions {
-            let lib_name = format!("lib{}.{}", installation.id, extension);
-            let lib_path = install_path.join(&lib_name);
-            if lib_path.exists() {
-                return Ok(lib_path);
-            }
+            let lib_patterns = [
+                format!("lib{}.{}", plugin_name, extension),
+                format!("{}.{}", plugin_name, extension),
+            ];
 
-            let lib_name = format!("{}.{}", installation.id, extension);
-            let lib_path = install_path.join(&lib_name);
-            if lib_path.exists() {
-                return Ok(lib_path);
+            for pattern in &lib_patterns {
+                let lib_path = install_path.join(pattern);
+                if lib_path.exists() {
+                    tracing::debug!("Found plugin library: {}", lib_path.display());
+                    return Ok(lib_path);
+                }
             }
         }
 
-        Err(Error::plugin(&installation.id, "No plugin library found in installation directory"))
+        Err(Error::plugin(
+            &installation.id,
+            format!(
+                "No plugin library found in installation directory: {}",
+                install_path.display()
+            ),
+        ))
     }
 }
 
@@ -238,23 +247,37 @@ impl PluginLoader for DynamicPluginLoader {
     async fn load_plugin(&self, installation: &PluginInstallation) -> Result<Box<dyn Plugin>> {
         let lib_path = self.find_plugin_library(installation)?;
 
+        tracing::info!("Loading dynamic plugin library: {}", lib_path.display());
+
         let library = unsafe {
             libloading::Library::new(&lib_path).map_err(|e| {
-                Error::plugin(&installation.id, format!("Failed to load plugin library: {}", e))
+                Error::plugin(
+                    &installation.id,
+                    format!("Failed to load plugin library: {}", e),
+                )
             })?
         };
 
         let create_plugin: libloading::Symbol<extern "C" fn() -> *mut dyn Plugin> = unsafe {
             library.get(b"create_plugin").map_err(|e| {
-                Error::plugin(&installation.id, format!("Failed to find create_plugin symbol: {}", e))
+                Error::plugin(
+                    &installation.id,
+                    format!("Failed to find create_plugin symbol: {}", e),
+                )
             })?
         };
 
         let plugin_ptr = create_plugin();
-        let plugin = unsafe { Box::from_raw(plugin_ptr) }; // SAFETY: create_plugin returns a valid boxed plugin
+        let plugin = unsafe { Box::from_raw(plugin_ptr) };
 
-        self.loaded_libraries.lock().await.insert(installation.id.clone(), library);
-        self.loaded_plugins.lock().await.insert(installation.id.clone(), installation.id.clone());
+        self.loaded_libraries
+            .lock()
+            .await
+            .insert(installation.id.clone(), library);
+        self.loaded_plugins
+            .lock()
+            .await
+            .insert(installation.id.clone(), installation.id.clone());
 
         tracing::info!("Dynamically loaded plugin: {}", installation.id);
         Ok(plugin)
@@ -291,7 +314,6 @@ impl PluginLoader for DynamicPluginLoader {
     async fn unload_plugin(&self, plugin_id: &str) -> Result<()> {
         self.loaded_plugins.lock().await.remove(plugin_id);
         if let Some(_library) = self.loaded_libraries.lock().await.remove(plugin_id) {
-            // Library will be dropped automatically
             tracing::info!("Unloaded dynamic plugin: {}", plugin_id);
         }
         Ok(())
@@ -303,7 +325,10 @@ impl PluginLoader for DynamicPluginLoader {
 
     async fn hot_reload_plugin(&self, plugin_id: &str) -> Result<Box<dyn Plugin>> {
         self.unload_plugin(plugin_id).await?;
-        Err(Error::plugin(plugin_id, "Hot reload requires installation context"))
+        Err(Error::plugin(
+            plugin_id,
+            "Hot reload requires installation context",
+        ))
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -311,7 +336,6 @@ impl PluginLoader for DynamicPluginLoader {
     }
 }
 
-/// WASM plugin loader
 #[cfg(target_arch = "wasm32")]
 #[derive(Debug)]
 pub struct WasmPluginLoader {
@@ -354,7 +378,10 @@ impl PluginLoader for WasmPluginLoader {
             tracing::info!("Loaded WASM plugin: {}", installation.id);
             Ok(plugin)
         } else {
-            Err(Error::plugin(&installation.id, "Plugin factory not found for WASM environment"))
+            Err(Error::plugin(
+                &installation.id,
+                "Plugin factory not found for WASM environment",
+            ))
         }
     }
 
@@ -369,7 +396,10 @@ impl PluginLoader for WasmPluginLoader {
         } else {
             Ok(ValidationResult {
                 is_valid: false,
-                errors: vec![format!("Plugin '{}' not registered for WASM", installation.id)],
+                errors: vec![format!(
+                    "Plugin '{}' not registered for WASM",
+                    installation.id
+                )],
                 warnings: vec![],
             })
         }
@@ -395,7 +425,35 @@ impl PluginLoader for WasmPluginLoader {
     }
 }
 
-/// Plugin installation manager
+fn get_plugin_data_dir() -> PathBuf {
+    if let Ok(env_dir) = std::env::var("QORZEN_PLUGINS_DIR") {
+        return PathBuf::from(env_dir);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(".local/share/qorzen/plugins");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(data_dir) = dirs::data_dir() {
+            return data_dir.join("qorzen/plugins");
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(data_dir) = dirs::data_dir() {
+            return data_dir.join("Qorzen/plugins");
+        }
+    }
+
+    PathBuf::from("./target/plugins")
+}
+
 #[derive(Debug)]
 pub struct PluginInstallationManager {
     state: ManagedState,
@@ -409,7 +467,6 @@ pub struct PluginInstallationManager {
 
 impl PluginInstallationManager {
     pub fn new(plugins_directory: PathBuf) -> Self {
-        // Choose appropriate loader based on environment and configuration
         #[cfg(not(target_arch = "wasm32"))]
         let loader: Arc<dyn PluginLoader> = if std::env::var("QORZEN_SAFE_PLUGINS").is_ok() {
             Arc::new(SafePluginLoader::new())
@@ -435,7 +492,6 @@ impl PluginInstallationManager {
         self.filesystem_provider = Some(provider);
     }
 
-    /// Discover plugins in the plugins directory
     pub async fn discover_plugins(&self) -> Result<Vec<String>> {
         let mut discovered = Vec::new();
 
@@ -460,6 +516,10 @@ impl PluginInstallationManager {
         let mut discovered = Vec::new();
 
         if !self.plugins_directory.exists() {
+            tracing::info!(
+                "Creating plugins directory: {}",
+                self.plugins_directory.display()
+            );
             fs::create_dir_all(&self.plugins_directory).await.map_err(|e| {
                 Error::file(
                     self.plugins_directory.display().to_string(),
@@ -501,7 +561,9 @@ impl PluginInstallationManager {
                 let manifest_path = plugin_dir.join("plugin.toml");
 
                 if manifest_path.exists() {
-                    match PluginManifest::load_from_file(&manifest_path).await {
+                    tracing::debug!("Found plugin manifest: {}", manifest_path.display());
+
+                    match self.load_manifest_from_path(&manifest_path).await {
                         Ok(manifest) => {
                             let installation = PluginInstallation {
                                 id: manifest.plugin.id.clone(),
@@ -529,6 +591,11 @@ impl PluginInstallationManager {
                             );
                         }
                     }
+                } else {
+                    tracing::debug!(
+                        "Skipping directory without manifest: {}",
+                        plugin_dir.display()
+                    );
                 }
             }
         }
@@ -536,63 +603,37 @@ impl PluginInstallationManager {
         Ok(discovered)
     }
 
-    #[cfg(target_arch = "wasm32")]
-    async fn discover_plugins_wasm(&self) -> Result<Vec<String>> {
-        // For WASM, plugins are compiled in, so we query the registry
-        if let Some(wasm_loader) = self.plugin_loader.as_any().downcast_ref::<WasmPluginLoader>() {
-            // This would require a method to list registered plugins
-            Ok(vec![])
-        } else {
-            Ok(vec![])
-        }
-    }
-
-    /// Set up file watching for hot reload
     #[cfg(not(target_arch = "wasm32"))]
-    pub async fn setup_hot_reload(&mut self) -> Result<()> {
-        if !self.plugin_loader.supports_hot_reload() {
-            return Ok(());
-        }
-
-        use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-        use std::sync::mpsc;
-
-        let (tx, rx) = mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default()).map_err(|e| {
-            Error::platform("native", "filesystem", format!("Failed to create file watcher: {}", e))
+    async fn load_manifest_from_path(&self, manifest_path: &std::path::Path) -> Result<PluginManifest> {
+        let content = tokio::fs::read_to_string(manifest_path).await.map_err(|e| {
+            Error::file(
+                manifest_path.display().to_string(),
+                crate::error::FileOperation::Read,
+                format!("Failed to read manifest file: {}", e),
+            )
         })?;
 
-        watcher
-            .watch(&self.plugins_directory, RecursiveMode::Recursive)
-            .map_err(|e| {
-                Error::platform("native", "filesystem", format!("Failed to watch plugins directory: {}", e))
-            })?;
+        let manifest: PluginManifest = toml::from_str(&content).map_err(|e| {
+            Error::new(
+                crate::error::ErrorKind::Serialization,
+                format!("Failed to parse manifest TOML: {}", e),
+            )
+        })?;
 
-        self.file_watcher = Some(watcher);
-
-        // Spawn task to handle file change events
-        let installations = Arc::clone(&self.installations);
-        tokio::spawn(async move {
-            while let Ok(event) = rx.recv() {
-                match event {
-                    Ok(notify::Event { kind: notify::EventKind::Modify(_), paths, .. }) => {
-                        for path in paths {
-                            if path.extension().map_or(false, |ext| ext == "toml") {
-                                tracing::info!("Plugin manifest changed: {:?}", path);
-                                // Trigger reload for this plugin
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        });
-
-        Ok(())
+        manifest.validate()?;
+        Ok(manifest)
     }
 
-    /// Load a plugin with the given context
-    pub async fn load_plugin(&self, plugin_id: &str, context: PluginContext) -> Result<Box<dyn Plugin>> {
+    #[cfg(target_arch = "wasm32")]
+    async fn discover_plugins_wasm(&self) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
+
+    pub async fn load_plugin(
+        &self,
+        plugin_id: &str,
+        context: PluginContext,
+    ) -> Result<Box<dyn Plugin>> {
         let mut installations = self.installations.write().await;
         if let Some(installation) = installations.get_mut(plugin_id) {
             installation.status = PluginStatus::Loading;
@@ -626,25 +667,25 @@ impl PluginInstallationManager {
         }
     }
 
-    /// Get installation info for a plugin
     pub async fn get_installation(&self, plugin_id: &str) -> Option<PluginInstallation> {
         self.installations.read().await.get(plugin_id).cloned()
     }
 
-    /// List all plugin installations
     pub async fn list_installations(&self) -> Vec<PluginInstallation> {
         self.installations.read().await.values().cloned().collect()
     }
 
-    /// Update plugin status
     pub async fn update_status(&self, plugin_id: &str, status: PluginStatus) {
         if let Some(installation) = self.installations.write().await.get_mut(plugin_id) {
             installation.status = status;
         }
     }
 
-    /// Update plugin settings
-    pub async fn update_settings(&self, plugin_id: &str, settings: serde_json::Value) -> Result<()> {
+    pub async fn update_settings(
+        &self,
+        plugin_id: &str,
+        settings: serde_json::Value,
+    ) -> Result<()> {
         if let Some(installation) = self.installations.write().await.get_mut(plugin_id) {
             installation.settings = settings;
 
@@ -654,13 +695,19 @@ impl PluginInstallationManager {
             #[cfg(not(target_arch = "wasm32"))]
             {
                 let settings_path = installation.install_path.join("settings.json");
-                tokio::fs::write(settings_path, settings_json).await.map_err(|e| {
-                    Error::file(
-                        installation.install_path.join("settings.json").display().to_string(),
-                        crate::error::FileOperation::Write,
-                        format!("Failed to write settings: {}", e),
-                    )
-                })?;
+                tokio::fs::write(settings_path, settings_json)
+                    .await
+                    .map_err(|e| {
+                        Error::file(
+                            installation
+                                .install_path
+                                .join("settings.json")
+                                .display()
+                                .to_string(),
+                            crate::error::FileOperation::Write,
+                            format!("Failed to write settings: {}", e),
+                        )
+                    })?;
             }
 
             #[cfg(target_arch = "wasm32")]
@@ -686,7 +733,6 @@ impl PluginInstallationManager {
         }
     }
 
-    /// Uninstall a plugin
     pub async fn uninstall_plugin(&self, plugin_id: &str) -> Result<()> {
         let mut installations = self.installations.write().await;
         if let Some(installation) = installations.get_mut(plugin_id) {
@@ -736,26 +782,28 @@ impl Manager for PluginInstallationManager {
     }
 
     async fn initialize(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::Initializing).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Initializing)
+            .await;
 
-        // Discover existing plugins
-        self.discover_plugins().await?;
+        tracing::info!("Initializing plugin installation manager...");
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            // Set up hot reload if supported
-            if let Err(e) = self.setup_hot_reload().await {
-                tracing::warn!("Failed to set up hot reload: {}", e);
-            }
+        if let Err(e) = self.discover_plugins().await {
+            tracing::warn!("Failed to discover plugins during initialization: {}", e);
         }
 
-        self.state.set_state(crate::manager::ManagerState::Running).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Running)
+            .await;
+
         tracing::info!("Plugin installation manager initialized");
         Ok(())
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.state.set_state(crate::manager::ManagerState::ShuttingDown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::ShuttingDown)
+            .await;
 
         let plugin_ids: Vec<String> = self.installations.read().await.keys().cloned().collect();
         for plugin_id in plugin_ids {
@@ -764,7 +812,9 @@ impl Manager for PluginInstallationManager {
             }
         }
 
-        self.state.set_state(crate::manager::ManagerState::Shutdown).await;
+        self.state
+            .set_state(crate::manager::ManagerState::Shutdown)
+            .await;
         Ok(())
     }
 
@@ -786,130 +836,11 @@ impl Manager for PluginInstallationManager {
             .count();
         status.add_metadata("failed_plugins", serde_json::Value::from(failed_count));
 
+        status.add_metadata(
+            "plugins_directory",
+            serde_json::Value::String(self.plugins_directory.display().to_string()),
+        );
+
         status
-    }
-}
-
-// Plugin build instructions and structure
-/*
-PLUGIN DIRECTORY STRUCTURE:
-============================
-
-plugins/
-├── product_catalog/
-│   ├── plugin.toml          # Plugin manifest
-│   ├── Cargo.toml           # Rust project file
-│   ├── src/
-│   │   └── lib.rs           # Plugin implementation
-│   ├── target/              # Build artifacts (created during build)
-│   │   └── release/
-│   │       ├── libproduct_catalog.so     # Linux
-│   │       ├── libproduct_catalog.dylib  # macOS
-│   │       └── product_catalog.dll       # Windows
-│   └── settings.json        # Runtime settings (optional)
-│
-└── another_plugin/
-    ├── plugin.toml
-    ├── Cargo.toml
-    └── ...
-
-PLUGIN BUILD PROCESS:
-====================
-
-For Native (Desktop):
-1. cd plugins/product_catalog
-2. cargo build --release
-3. Copy built library to plugin directory root:
-   - Linux: cp target/release/libproduct_catalog.so .
-   - macOS: cp target/release/libproduct_catalog.dylib .
-   - Windows: cp target/release/product_catalog.dll .
-4. Restart Qorzen or use hot reload
-
-For WASM (Web):
-1. Add plugin to src/plugin/registry.rs builtin_plugins
-2. Rebuild entire application: cargo build --target wasm32-unknown-unknown
-3. Deploy updated WASM bundle
-
-PLUGIN MANIFEST (plugin.toml):
-==============================
-
-[plugin]
-id = "product_catalog"
-name = "Product Catalog"
-version = "1.0.0"
-description = "Product management with search"
-author = "Your Name"
-license = "MIT"
-api_version = "0.1.0"
-
-[build]
-entry = "src/lib.rs"
-library_name = "product_catalog"  # Will generate libproduct_catalog.so/.dylib/.dll
-
-[permissions]
-required = [
-    { resource = "products", action = "read", scope = "Global" },
-    { resource = "ui", action = "render", scope = "Global" }
-]
-
-PLUGIN IMPLEMENTATION:
-=====================
-
-Your plugin must:
-1. Implement the Plugin trait
-2. Use #[export_plugin!(YourPlugin)] macro
-3. Handle both WASM and native environments
-4. Include proper error handling
-
-Example plugin structure is in plugins/product_catalog/src/lib.rs
-*/
-
-// Register the product catalog plugin for WASM builds
-#[cfg(target_arch = "wasm32")]
-pub mod builtin_registrations {
-    use super::*;
-    use crate::plugin::registry::PluginFactoryRegistry;
-
-    pub async fn register_builtin_plugins() -> Result<()> {
-        // For WASM, we need to compile plugins into the binary
-        // This would typically be done via a build script or macro
-
-        // Example registration (would be generated by build script):
-        tracing::info!("WASM environment - plugins should be compiled in");
-
-        // TODO: Generate this automatically from plugins directory
-        // let factory = SimplePluginFactory::<ProductCatalogPlugin>::new(
-        //     ProductCatalogPlugin::default().info()
-        // );
-        // PluginFactoryRegistry::register(factory).await?;
-
-        Ok(())
-    }
-}
-
-// For native builds, plugins should be loaded dynamically
-#[cfg(not(target_arch = "wasm32"))]
-pub mod builtin_registrations {
-    use super::*;
-
-    pub async fn register_builtin_plugins() -> Result<()> {
-        // For native, we rely on dynamic loading from plugins directory
-        // If safe loading is enabled via QORZEN_SAFE_PLUGINS env var,
-        // plugins must be registered at compile time
-
-        if std::env::var("QORZEN_SAFE_PLUGINS").is_ok() {
-            tracing::info!("Safe plugin loading enabled - only compile-time registered plugins allowed");
-
-            // Register compile-time safe plugins here
-            // Example:
-            // let factory = SimplePluginFactory::<SomeBuiltinPlugin>::new(
-            //     SomeBuiltinPlugin::default().info()
-            // );
-            // PluginFactoryRegistry::register(factory).await?;
-        } else {
-            tracing::info!("Dynamic plugin loading enabled - plugins will be loaded from filesystem");
-        }
-
-        Ok(())
     }
 }

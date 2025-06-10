@@ -1,28 +1,12 @@
-// scripts/build_plugins.rs - Plugin Build Helper Script
 #![cfg(not(target_arch = "wasm32"))]
 /*!
-Plugin Build Helper
+Plugin Build Helper - Fixed Version
 
-This script helps build and manage plugins for the Qorzen framework.
-
-Usage:
-    cargo run --bin build_plugins [command] [options]
-
-Commands:
-    build [plugin_name]     - Build specific plugin or all plugins
-    clean [plugin_name]     - Clean build artifacts
-    list                    - List all discovered plugins
-    validate [plugin_name]  - Validate plugin manifest
-    init <plugin_name>      - Create new plugin template
-
-Examples:
-    cargo run --bin build_plugins build product_catalog
-    cargo run --bin build_plugins build  # Build all plugins
-    cargo run --bin build_plugins init my_plugin
+This script builds and manages plugins for the Qorzen framework.
+Now properly handles cross-platform paths and copies to correct locations.
 */
 
 use std::env;
-use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, exit};
@@ -59,6 +43,10 @@ fn main() {
                 exit(1);
             }
         }
+        "install" => {
+            let plugin_name = args.get(2);
+            install_plugins(plugin_name.map(|s| s.as_str()));
+        }
         "help" | "--help" | "-h" => {
             print_help();
         }
@@ -83,24 +71,53 @@ COMMANDS:
     list               List all discovered plugins
     validate [PLUGIN]  Validate plugin manifest(s)
     init <PLUGIN>      Create new plugin from template
+    install [PLUGIN]   Install plugin(s) to system directory
     help               Show this help message
 
 EXAMPLES:
     cargo run --bin build_plugins build product_catalog
     cargo run --bin build_plugins build
+    cargo run --bin build_plugins install product_catalog
     cargo run --bin build_plugins clean
     cargo run --bin build_plugins init my_new_plugin
     cargo run --bin build_plugins list
 "#);
 }
 
+fn get_plugin_data_dir() -> PathBuf {
+    if let Ok(env_dir) = std::env::var("QORZEN_PLUGINS_DIR") {
+        return PathBuf::from(env_dir);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(".local/share/qorzen/plugins");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(data_dir) = dirs::data_dir() {
+            return data_dir.join("qorzen/plugins");
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(data_dir) = dirs::data_dir() {
+            return data_dir.join("Qorzen/plugins");
+        }
+    }
+
+    PathBuf::from("./target/plugins")
+}
+
 fn get_target_dir() -> PathBuf {
-    // First try CARGO_TARGET_DIR env var
     if let Ok(env_path) = std::env::var("CARGO_TARGET_DIR") {
         return PathBuf::from(env_path);
     }
 
-    // Then try to load .cargo/config.toml manually
     let config_path = Path::new(".cargo").join("config.toml");
     if let Ok(contents) = std::fs::read_to_string(config_path) {
         if let Ok(toml_val) = contents.parse::<toml::Value>() {
@@ -114,8 +131,33 @@ fn get_target_dir() -> PathBuf {
         }
     }
 
-    // Fallback
     PathBuf::from("target")
+}
+
+fn get_library_patterns(plugin_name: &str) -> Vec<String> {
+    let mut patterns = Vec::new();
+
+    #[cfg(target_os = "windows")]
+    {
+        patterns.push(format!("{}.dll", plugin_name));
+        patterns.push(format!("lib{}.dll", plugin_name));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        patterns.push(format!("lib{}.dylib", plugin_name));
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        patterns.push(format!("lib{}.so", plugin_name));
+    }
+
+    patterns.push(format!("lib{}.so", plugin_name));
+    patterns.push(format!("lib{}.dylib", plugin_name));
+    patterns.push(format!("{}.dll", plugin_name));
+
+    patterns
 }
 
 fn build_plugins(plugin_name: Option<&str>) {
@@ -192,12 +234,16 @@ fn build_plugin_at_path(plugin_path: &Path) -> Result<(), Box<dyn std::error::Er
         return Err("No Cargo.toml found in plugin directory".into());
     }
 
+    let manifest_path = plugin_path.join("plugin.toml");
+    if manifest_path.exists() {
+        validate_manifest(&manifest_path)?;
+    }
+
     let mut cmd = Command::new("cargo");
     cmd.args(&["build", "--release"])
         .current_dir(plugin_path);
 
-    // Manually set the target dir if defined
-    cmd.env("CARGO_TARGET_DIR", get_target_dir());
+    // Don't override CARGO_TARGET_DIR - let each plugin build in its own target directory
 
     let output = cmd.output()?;
 
@@ -206,36 +252,163 @@ fn build_plugin_at_path(plugin_path: &Path) -> Result<(), Box<dyn std::error::Er
         return Err(format!("Cargo build failed:\n{}", stderr).into());
     }
 
-    // Copy built library to plugin directory
-    copy_built_library(plugin_path)?;
-
     Ok(())
 }
 
-fn copy_built_library(plugin_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn install_plugins(plugin_name: Option<&str>) {
+    match plugin_name {
+        Some(name) => install_single_plugin(name),
+        None => install_all_plugins(),
+    }
+}
+
+fn install_single_plugin(plugin_name: &str) {
+    let plugin_path = Path::new("plugins").join(plugin_name);
+
+    if !plugin_path.exists() {
+        eprintln!("Error: Plugin '{}' not found", plugin_name);
+        exit(1);
+    }
+
+    println!("Installing plugin: {}", plugin_name);
+
+    if let Err(e) = install_plugin_at_path(&plugin_path) {
+        eprintln!("Error installing plugin '{}': {}", plugin_name, e);
+        exit(1);
+    }
+
+    println!("Successfully installed plugin: {}", plugin_name);
+}
+
+fn install_all_plugins() {
+    let plugins_dir = Path::new("plugins");
+    let mut installed_count = 0;
+    let mut failed_count = 0;
+
+    for entry in fs::read_dir(plugins_dir).unwrap() {
+        let entry = entry.unwrap();
+        let plugin_path = entry.path();
+
+        if plugin_path.is_dir() {
+            let plugin_name = plugin_path.file_name().unwrap().to_string_lossy();
+            println!("Installing plugin: {}", plugin_name);
+
+            match install_plugin_at_path(&plugin_path) {
+                Ok(()) => {
+                    println!("✓ Successfully installed: {}", plugin_name);
+                    installed_count += 1;
+                }
+                Err(e) => {
+                    eprintln!("✗ Failed to install {}: {}", plugin_name, e);
+                    failed_count += 1;
+                }
+            }
+        }
+    }
+
+    println!("\nInstall Summary:");
+    println!("  Installed: {}", installed_count);
+    println!("  Failed: {}", failed_count);
+
+    if failed_count > 0 {
+        exit(1);
+    }
+}
+
+fn install_plugin_at_path(plugin_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let plugin_name = plugin_path.file_name().unwrap().to_string_lossy();
+    let data_dir = get_plugin_data_dir();
+    let plugin_data_dir = data_dir.join(&*plugin_name);
 
-    let target_base = get_target_dir();
+    fs::create_dir_all(&plugin_data_dir)?;
 
-    let target_release_dir = target_base.join("release");
+    let manifest_src = plugin_path.join("plugin.toml");
+    let manifest_dst = plugin_data_dir.join("plugin.toml");
 
-    let (prefix, extension) = if cfg!(target_os = "windows") {
-        ("", "dll")
-    } else if cfg!(target_os = "macos") {
-        ("lib", "dylib")
-    } else {
-        ("lib", "so")
-    };
+    if manifest_src.exists() {
+        fs::copy(&manifest_src, &manifest_dst)?;
+        println!("  Copied manifest: plugin.toml");
+    }
 
-    let lib_name = format!("{}{}.{}", prefix, plugin_name, extension);
-    let source_path = target_release_dir.join(&lib_name);
-    let dest_path = plugin_path.join(&lib_name);
+    copy_built_library_to_data_dir(&plugin_name, &plugin_data_dir)?;
 
-    if source_path.exists() {
-        std::fs::copy(&source_path, &dest_path)?;
-        println!("  Copied library: {}", lib_name);
-    } else {
-        return Err(format!("Built library not found: {}", source_path.display()).into());
+    for entry in ["README.md", "LICENSE", "assets/"] {
+        let src_path = plugin_path.join(entry);
+        let dst_path = plugin_data_dir.join(entry);
+
+        if src_path.exists() {
+            if src_path.is_dir() {
+                copy_dir_all(&src_path, &dst_path)?;
+            } else {
+                if let Some(parent) = dst_path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::copy(&src_path, &dst_path)?;
+            }
+            println!("  Copied: {}", entry);
+        }
+    }
+
+    println!("  Plugin installed to: {}", plugin_data_dir.display());
+    Ok(())
+}
+
+fn copy_built_library_to_data_dir(plugin_name: &str, plugin_data_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let patterns = get_library_patterns(plugin_name);
+    let mut tried_paths = Vec::new();
+
+    // First, try the plugin's own target directory
+    let plugin_target_dir = Path::new("plugins").join(plugin_name).join("target").join("release");
+    println!("  Looking for library in: {}", plugin_target_dir.display());
+
+    for pattern in &patterns {
+        let source_path = plugin_target_dir.join(pattern);
+        tried_paths.push(source_path.clone());
+        println!("  Checking: {}", source_path.display());
+        if source_path.exists() {
+            let dest_path = plugin_data_dir.join(pattern);
+            fs::copy(&source_path, &dest_path)?;
+            println!("  Copied library: {} (from plugin target dir)", pattern);
+            return Ok(());
+        }
+    }
+
+    // If not found, try the main project's target directory
+    let main_target_base = get_target_dir();
+    let main_target_release_dir = main_target_base.join("release");
+    println!("  Looking for library in: {}", main_target_release_dir.display());
+
+    for pattern in &patterns {
+        let source_path = main_target_release_dir.join(pattern);
+        tried_paths.push(source_path.clone());
+        println!("  Checking: {}", source_path.display());
+        if source_path.exists() {
+            let dest_path = plugin_data_dir.join(pattern);
+            fs::copy(&source_path, &dest_path)?;
+            println!("  Copied library: {} (from main target dir)", pattern);
+            return Ok(());
+        }
+    }
+
+    return Err(format!(
+        "Built library not found for plugin '{}'. Tried paths: {:?}",
+        plugin_name, tried_paths
+    ).into());
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    fs::create_dir_all(dst)?;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if src_path.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
     }
 
     Ok(())
@@ -271,30 +444,48 @@ fn clean_all_plugins() {
             clean_plugin_at_path(&plugin_path, &plugin_name);
         }
     }
+
+    let data_dir = get_plugin_data_dir();
+    if data_dir.exists() {
+        println!("Cleaning plugin data directory: {}", data_dir.display());
+        if let Err(e) = fs::remove_dir_all(&data_dir) {
+            eprintln!("Warning: Failed to remove plugin data directory: {}", e);
+        }
+    }
 }
 
 fn clean_plugin_at_path(plugin_path: &Path, plugin_name: &str) {
     println!("Cleaning plugin: {}", plugin_name);
 
-    // Clean cargo target directory
-    let target_base = get_target_dir();
+    let data_dir = get_plugin_data_dir();
+    let plugin_data_dir = data_dir.join(plugin_name);
 
-    if target_base.exists() {
-        if let Err(e) = fs::remove_dir_all(&target_base) {
-            eprintln!("Warning: Failed to remove target directory: {}", e);
+    if plugin_data_dir.exists() {
+        if let Err(e) = fs::remove_dir_all(&plugin_data_dir) {
+            eprintln!("Warning: Failed to remove plugin data directory: {}", e);
+        } else {
+            println!("  Removed data directory");
         }
     }
 
-    // Remove built libraries
-    let extensions = ["dll", "dylib", "so"];
-    for ext in &extensions {
-        let lib_patterns = [
-            format!("lib{}.{}", plugin_name, ext),
-            format!("{}.{}", plugin_name, ext),
-        ];
+    // Clean plugin's own target directory
+    let plugin_target_dir = plugin_path.join("target");
+    if plugin_target_dir.exists() {
+        if let Err(e) = fs::remove_dir_all(&plugin_target_dir) {
+            eprintln!("Warning: Failed to remove plugin target directory: {}", e);
+        } else {
+            println!("  Removed plugin target directory");
+        }
+    }
 
-        for pattern in &lib_patterns {
-            let lib_path = plugin_path.join(pattern);
+    // Clean libraries from main target directory
+    let main_target_base = get_target_dir();
+    if main_target_base.exists() {
+        let main_target_release_dir = main_target_base.join("release");
+        let patterns = get_library_patterns(plugin_name);
+
+        for pattern in &patterns {
+            let lib_path = main_target_release_dir.join(pattern);
             if lib_path.exists() {
                 if let Err(e) = fs::remove_file(&lib_path) {
                     eprintln!("Warning: Failed to remove {}: {}", pattern, e);
@@ -339,33 +530,86 @@ fn list_plugins() {
                 print!("✗ cargo ");
             }
 
-            // Check for built library
-            let has_library = check_for_built_library(&plugin_path);
+            let has_library = check_for_built_library(&plugin_name);
             if has_library {
-                print!("✓ built");
+                print!("✓ built ");
             } else {
-                print!("✗ built");
+                print!("✗ built ");
+            }
+
+            let data_dir = get_plugin_data_dir();
+            let plugin_data_dir = data_dir.join(&*plugin_name);
+            if plugin_data_dir.exists() {
+                print!("✓ installed");
+            } else {
+                print!("✗ installed");
             }
 
             println!();
         }
     }
+
+    let data_dir = get_plugin_data_dir();
+    if data_dir.exists() {
+        println!("\nInstalled plugins:");
+        for entry in fs::read_dir(&data_dir).unwrap_or_else(|_| fs::read_dir(".").unwrap()) {
+            if let Ok(entry) = entry {
+                let plugin_path = entry.path();
+                if plugin_path.is_dir() {
+                    let plugin_name = plugin_path.file_name().unwrap().to_string_lossy();
+                    let manifest_path = plugin_path.join("plugin.toml");
+
+                    print!("  {} ", plugin_name);
+
+                    if manifest_path.exists() {
+                        print!("✓ manifest ");
+                    } else {
+                        print!("✗ manifest ");
+                    }
+
+                    let has_library = check_for_installed_library(&plugin_path, &plugin_name);
+                    if has_library {
+                        print!("✓ library");
+                    } else {
+                        print!("✗ library");
+                    }
+
+                    println!();
+                }
+            }
+        }
+    }
 }
 
-fn check_for_built_library(plugin_path: &Path) -> bool {
-    let plugin_name = plugin_path.file_name().unwrap().to_string_lossy();
-    let extensions = ["dll", "dylib", "so"];
+fn check_for_built_library(plugin_name: &str) -> bool {
+    let patterns = get_library_patterns(plugin_name);
 
-    for ext in &extensions {
-        let lib_patterns = [
-            format!("lib{}.{}", plugin_name, ext),
-            format!("{}.{}", plugin_name, ext),
-        ];
+    // First check plugin's own target directory
+    let plugin_target_dir = Path::new("plugins").join(plugin_name).join("target").join("release");
+    for pattern in &patterns {
+        if plugin_target_dir.join(pattern).exists() {
+            return true;
+        }
+    }
 
-        for pattern in &lib_patterns {
-            if plugin_path.join(pattern).exists() {
-                return true;
-            }
+    // Then check main target directory
+    let main_target_base = get_target_dir();
+    let main_target_release_dir = main_target_base.join("release");
+    for pattern in &patterns {
+        if main_target_release_dir.join(pattern).exists() {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn check_for_installed_library(plugin_path: &Path, plugin_name: &str) -> bool {
+    let patterns = get_library_patterns(plugin_name);
+
+    for pattern in &patterns {
+        if plugin_path.join(pattern).exists() {
+            return true;
         }
     }
 
@@ -410,38 +654,38 @@ fn validate_plugin_at_path(plugin_path: &Path, plugin_name: &str) {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
 
-    // Check for required files
     let manifest_path = plugin_path.join("plugin.toml");
     let cargo_path = plugin_path.join("Cargo.toml");
     let src_path = plugin_path.join("src").join("lib.rs");
 
     if !manifest_path.exists() {
-        errors.push("Missing plugin.toml manifest file");
+        errors.push("Missing plugin.toml manifest file".to_string());
     }
 
     if !cargo_path.exists() {
-        errors.push("Missing Cargo.toml build file");
+        errors.push("Missing Cargo.toml build file".to_string());
     }
 
     if !src_path.exists() {
-        errors.push("Missing src/lib.rs source file");
+        errors.push("Missing src/lib.rs source file".to_string());
     }
 
-    let mut errors: Vec<String> = Vec::new();
-
-    // Validate manifest content if it exists
     if manifest_path.exists() {
         if let Err(e) = validate_manifest(&manifest_path) {
             errors.push(format!("Invalid manifest: {}", e));
         }
     }
 
-    // Check for built library
-    if !check_for_built_library(plugin_path) {
-        warnings.push("No built library found - run build command");
+    if !check_for_built_library(plugin_name) {
+        warnings.push("No built library found - run build command".to_string());
     }
 
-    // Print results
+    let data_dir = get_plugin_data_dir();
+    let plugin_data_dir = data_dir.join(plugin_name);
+    if !plugin_data_dir.exists() {
+        warnings.push("Plugin not installed - run install command".to_string());
+    }
+
     if errors.is_empty() && warnings.is_empty() {
         println!("  ✓ Plugin is valid");
     } else {
@@ -463,12 +707,22 @@ fn validate_manifest(manifest_path: &Path) -> Result<(), String> {
     let content = fs::read_to_string(manifest_path)
         .map_err(|e| format!("Failed to read manifest: {}", e))?;
 
-    // Basic validation - check for required fields
-    let required_fields = ["id", "name", "version"];
+    let parsed: toml::Value = content.parse()
+        .map_err(|e| format!("Invalid TOML syntax: {}", e))?;
 
+    let plugin_section = parsed.get("plugin")
+        .ok_or("Missing [plugin] section")?;
+
+    let required_fields = ["id", "name", "version"];
     for field in &required_fields {
-        if !content.contains(&format!("{} =", field)) {
-            return Err(format!("Missing required field: {}", field));
+        if !plugin_section.get(field).is_some() {
+            return Err(format!("Missing required field in [plugin]: {}", field));
+        }
+    }
+
+    if let Some(id) = plugin_section.get("id").and_then(|v| v.as_str()) {
+        if !id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+            return Err("Plugin ID must contain only alphanumeric characters, underscores, and hyphens".to_string());
         }
     }
 
@@ -485,11 +739,9 @@ fn init_plugin(plugin_name: &str) {
 
     println!("Creating plugin: {}", plugin_name);
 
-    // Create plugin directory
     fs::create_dir_all(&plugin_path).unwrap();
     fs::create_dir_all(plugin_path.join("src")).unwrap();
 
-    // Create Cargo.toml
     let cargo_toml = format!(r#"[package]
 name = "{}"
 version = "0.1.0"
@@ -509,11 +761,16 @@ tokio = {{ version = "1.0", features = ["macros", "rt", "sync"] }}
 chrono = {{ version = "0.4", features = ["serde"] }}
 uuid = {{ version = "1.0", features = ["v4", "serde"] }}
 tracing = "0.1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dirs = "5.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
 "#, plugin_name, plugin_name);
 
     fs::write(plugin_path.join("Cargo.toml"), cargo_toml).unwrap();
 
-    // Create plugin.toml
     let plugin_toml = format!(r#"[plugin]
 id = "{}"
 name = "{}"
@@ -527,16 +784,19 @@ api_version = "0.1.0"
 entry = "src/lib.rs"
 library_name = "{}"
 
-[permissions]
-required = [
-    {{ resource = "ui", action = "render", scope = "Global" }}
-]
+[[permissions.required]]
+resource = "ui"
+action = "render"
+scope = "Global"
 "#, plugin_name, plugin_name.replace('_', " ").replace('-', " "), plugin_name);
 
     fs::write(plugin_path.join("plugin.toml"), plugin_toml).unwrap();
 
-    // Create src/lib.rs
-    let lib_rs = format!(r#"use qorzen_oxide::plugin::*;
+    let lib_rs = format!(r#"//! {} Plugin
+//!
+//! A plugin for the Qorzen framework.
+
+use qorzen_oxide::plugin::*;
 use qorzen_oxide::{{plugin, export_plugin}};
 
 plugin! {{
@@ -595,13 +855,40 @@ plugin! {{
         }}
     }}
 }}
-"#, plugin_name, plugin_name.replace('_', " ").replace('-', " "), plugin_name, plugin_name);
+"#, plugin_name.replace('_', " ").replace('-', " "), plugin_name, plugin_name.replace('_', " ").replace('-', " "), plugin_name, plugin_name);
 
     fs::write(plugin_path.join("src").join("lib.rs"), lib_rs).unwrap();
+
+    let readme = format!(r#"# {}
+
+A plugin for the Qorzen framework.
+
+## Building
+
+```bash
+cargo run --bin build_plugins build {}
+```
+
+## Installing
+
+```bash
+cargo run --bin build_plugins install {}
+```
+
+## Development
+
+1. Make your changes to `src/lib.rs`
+2. Build the plugin: `cargo run --bin build_plugins build {}`
+3. Install the plugin: `cargo run --bin build_plugins install {}`
+4. Test the plugin in the main application
+"#, plugin_name.replace('_', " ").replace('-', " "), plugin_name, plugin_name, plugin_name, plugin_name);
+
+    fs::write(plugin_path.join("README.md"), readme).unwrap();
 
     println!("✓ Plugin '{}' created successfully", plugin_name);
     println!("  Next steps:");
     println!("    1. cd plugins/{}", plugin_name);
     println!("    2. Implement your plugin logic in src/lib.rs");
     println!("    3. cargo run --bin build_plugins build {}", plugin_name);
+    println!("    4. cargo run --bin build_plugins install {}", plugin_name);
 }
