@@ -17,22 +17,17 @@ entry = "src/lib.rs"
 sources = ["src/**/*.rs"]
 features = ["default"]
 hot_reload = true
-build_dependencies = {}
 
 [targets.web]
 platform = "web"
 arch = ["wasm32"]
 features = ["web"]
-settings = {}
 
 [targets.desktop]
 platform = "desktop"
 arch = ["x86_64", "aarch64"]
 os = ["windows", "macos", "linux"]
 features = ["desktop"]
-settings = {}
-
-[dependencies]
 
 permissions = [
     "data.read",

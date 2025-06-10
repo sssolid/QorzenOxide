@@ -3,13 +3,13 @@ set -euo pipefail
 
 echo "🧹 Cleaning build artifacts..."
 cargo clean
-cargo run --bin build_plugins --features native-only -- clean product_catalog
+cargo run --bin build_plugins --features native-only -- clean
 
-echo "🔨 Building plugin: product_catalog..."
-cargo run --bin build_plugins --features native-only -- build product_catalog
+echo "🔨 Building all plugins..."
+cargo run --bin build_plugins --features native-only -- build
 
-echo "📦 Installing plugin: product_catalog..."
-cargo run --bin build_plugins --features native-only -- install product_catalog
+echo "📦 Installing all plugins..."
+cargo run --bin build_plugins --features native-only -- install
 
 echo "📋 Listing installed plugins..."
 cargo run --bin build_plugins --features native-only -- list
