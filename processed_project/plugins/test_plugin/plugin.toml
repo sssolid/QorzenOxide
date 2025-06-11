@@ -1,0 +1,19 @@
+# plugins/test_plugin/plugin.toml
+[plugin]
+id = "test_plugin"
+name = "Test Plugin"
+version = "1.0.0"
+description = "A simple test plugin"
+author = "Test Author"
+license = "MIT"
+minimum_core_version = "0.1.0"
+api_version = "0.1.0"
+[build]
+entry = "src/lib.rs"
+sources = ["src/**/*.rs"]
+features = ["default"]
+hot_reload = false
+build_dependencies = {}
+permissions = []
+provides = []
+requires = []

@@ -1,0 +1,39 @@
+[plugin]
+id = "product_catalog"
+name = "Product Catalog"
+version = "1.0.0"
+description = "Product catalog management with search capabilities"
+author = "Qorzen Team"
+license = "MIT"
+homepage = "https://github.com/qorzen/plugins/product-catalog"
+repository = "https://github.com/qorzen/plugins"
+keywords = ["products", "catalog", "ecommerce", "search"]
+categories = ["business", "management"]
+minimum_core_version = "0.1.0"
+api_version = "0.1.0"
+[build]
+entry = "src/lib.rs"
+sources = ["src/**/*.rs"]
+features = ["default"]
+hot_reload = true
+[targets.web]
+platform = "web"
+arch = ["wasm32"]
+features = ["web"]
+[targets.desktop]
+platform = "desktop"
+arch = ["x86_64", "aarch64"]
+os = ["windows", "macos", "linux"]
+features = ["desktop"]
+permissions = [
+ "data.read",
+ "ui.render"
+]
+provides = [
+ "search.provide",
+ "api.routes"
+]
+requires = [
+ "database.query",
+ "http.client"
+]

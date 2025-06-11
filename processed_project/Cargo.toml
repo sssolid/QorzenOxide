@@ -1,0 +1,115 @@
+[package]
+name = "qorzen_oxide"
+version = "0.1.3"
+edition = "2021"
+# build = "build.rs"
+description = "A high-performance, modular plugin-based system built in Rust with comprehensive async core managers and type-safe architecture."
+license = "MIT OR Apache-2.0"
+documentation = "README.md"
+homepage = "https://www.qorzen.com"
+repository = "https://github.com/sssolid/QorzenOxide"
+[features]
+default = []
+desktop = []
+web = []
+tracing-wasm = []
+native-only = []
+# Plugin features for WASM builds
+all-plugins = ["product_catalog", "advanced_analytics", "backup_manager"]
+product_catalog = []
+advanced_analytics = []
+backup_manager = []
+# Development features
+plugin_registration = []
+[workspace]
+members = ["plugins/*"]
+[lib]
+name = "qorzen_oxide"
+crate-type = ["cdylib", "rlib"]
+[[bin]]
+name = "qorzen_desktop"
+path = "src/main.rs"
+required-features = ["desktop"]
+[[bin]]
+name = "build_plugins"
+path = "scripts/build_plugins.rs"
+required-features = ["native-only"]
+[dependencies]
+# Core dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde", "clock"], default-features = false }
+async-trait = "0.1"
+futures = "0.3"
+tracing = "0.1"
+parking_lot = "0.12"
+crossbeam = "0.8"
+uuid = { version = "1.0", features = ["v4", "serde", "js"] }
+dashmap = "5.0"
+rand = "0.8"
+wasm-bindgen = "0.2"
+# Configuration parsing
+serde_yaml = "0.9"
+toml = "0.8"
+log = "0.4.27"
+# Plugins
+libloading = "0.8.8"
+web-sys = { version = "0.3.77", features = ["console"] }
+urlencoding = "2.1"
+once_cell = "1.21.3"
+thiserror = "1.0.69"
+# Target-specific dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Use web features for desktop to avoid fullstack hydration issues
+dioxus = { version = "0.6", features = ["macro", "html", "desktop", "router"] }
+dioxus-router = "0.6"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "sync", "time", "signal", "fs", "rt", "process"] }
+tokio-util = "0.7"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+clap = { version = "4.0", features = ["derive"] }
+notify = "6.0"
+dirs = "5.0"
+hostname = "0.3"
+flate2 = "1.0"
+tempfile = "3.10"
+tracing-appender = "0.2"
+reqwest = { version = "0.12", features = ["json"], default-features = false }
+sha2 = "0.10"
+num_cpus = "1.0"
+tracing = "0.1"
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Use only web features for WASM to avoid hydration issues
+dioxus = { version = "0.6", features = ["macro", "html", "web", "router"] }
+dioxus-router = "0.6"
+tokio = { version = "1.0", features = ["sync", "macros", "rt", "time"], default-features = false }
+tokio-util = { version = "0.7", default-features = false }
+getrandom = { version = "0.2", features = ["js"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+ "console",
+ "Window",
+ "Navigator",
+ "Request",
+ "RequestInit",
+ "Response",
+ "Headers",
+ "Storage",
+ "Document",
+ "Element",
+ "HtmlElement",
+ "Location",
+ "History"
+] }
+js-sys = "0.3"
+wee_alloc = "0.4"
+gloo-timers = { version = "0.3.0", features = ["futures"] }
+tracing-wasm = "0.2"
+console_error_panic_hook = "0.1"
+[package.metadata.dioxus]
+assets = ["public"]
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.10"
